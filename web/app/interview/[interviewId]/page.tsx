@@ -179,34 +179,72 @@ export default function InterviewPage({
       <style jsx>{`
         :global(body) {
           margin: 0;
-          background: #0b0a0a;
+          background: #0b1220;
         }
         .stage {
           position: relative;
           width: 100%;
           height: 100%;
           overflow: hidden;
-          font-family: "Noto Sans JP", "Hiragino Sans", "Meiryo", sans-serif;
-          color: #f2f2f2;
-          --panel-bg: rgba(10, 12, 18, 0.7);
-          --panel-border: rgba(255, 255, 255, 0.1);
-          --accent: #f7b733;
-          --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+          font-family: "IBM Plex Sans", "Noto Sans JP", "Hiragino Sans", "Meiryo", sans-serif;
+          color: #e6edf5;
+          --panel-bg: rgba(15, 22, 36, 0.78);
+          --panel-border: rgba(255, 255, 255, 0.12);
+          --accent: #5aa2ff;
+          --accent-strong: #2f6fe0;
+          --shadow: 0 18px 45px rgba(5, 12, 26, 0.45);
+          --text-muted: rgba(230, 237, 245, 0.7);
+        }
+        .stage::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(
+              circle at 15% 15%,
+              rgba(90, 162, 255, 0.16),
+              transparent 45%
+            ),
+            radial-gradient(circle at 85% 20%, rgba(42, 98, 214, 0.12), transparent 40%),
+            linear-gradient(145deg, rgba(9, 16, 28, 0.95), rgba(13, 22, 40, 0.7));
+          z-index: 0;
         }
         .hero {
           position: absolute;
           inset: 0;
-          background-image: url("/interviewer.png");
-          background-size: cover;
-          background-position: center;
-          transform: scale(1.02);
-          filter: saturate(0.95) contrast(1.05);
+          background-image: linear-gradient(
+              120deg,
+              rgba(7, 14, 26, 0.75),
+              rgba(9, 19, 36, 0.25)
+            ),
+            url("/interviewer.png"),
+            repeating-linear-gradient(
+              90deg,
+              rgba(255, 255, 255, 0.035),
+              rgba(255, 255, 255, 0.035) 1px,
+              transparent 1px,
+              transparent 38px
+            ),
+            repeating-linear-gradient(
+              0deg,
+              rgba(255, 255, 255, 0.03),
+              rgba(255, 255, 255, 0.03) 1px,
+              transparent 1px,
+              transparent 34px
+            );
+          background-size: cover, cover, auto, auto;
+          background-position: center, center, top left, top left;
+          opacity: 0.68;
         }
         .overlay {
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at 20% 20%, rgba(0, 0, 0, 0.2), transparent 45%),
-            linear-gradient(120deg, rgba(4, 6, 10, 0.7), rgba(4, 6, 10, 0.2) 40%, rgba(4, 6, 10, 0.85));
+          background: linear-gradient(
+              180deg,
+              rgba(6, 12, 22, 0.25),
+              rgba(6, 12, 22, 0.7) 65%,
+              rgba(6, 12, 22, 0.95)
+            ),
+            radial-gradient(circle at 70% 10%, rgba(90, 162, 255, 0.2), transparent 40%);
         }
         .hud {
           position: absolute;
@@ -217,6 +255,7 @@ export default function InterviewPage({
           align-items: center;
           justify-content: space-between;
           z-index: 5;
+          animation: fadeDown 0.6s ease-out both;
         }
         .timer {
           padding: 10px 14px;
@@ -226,16 +265,32 @@ export default function InterviewPage({
           box-shadow: var(--shadow);
           font-weight: 600;
           letter-spacing: 0.02em;
+          color: var(--text-muted);
         }
         .end {
           padding: 10px 16px;
           border-radius: 12px;
-          background: ${ending ? "#5f5f5f" : "#d94141"};
-          border: none;
+          background: ${ending ? "#4b566b" : "#224aa7"};
+          border: 1px solid ${ending ? "rgba(255,255,255,0.08)" : "rgba(90, 162, 255, 0.45)"};
           color: #fff;
           font-weight: 700;
           cursor: ${ending ? "default" : "pointer"};
           box-shadow: var(--shadow);
+          transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .end:hover {
+          transform: ${ending ? "none" : "translateY(-1px)"};
+          background: ${ending ? "#4b566b" : "#2f6fe0"};
+        }
+        @keyframes fadeDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
       `}</style>
     </main>
@@ -330,13 +385,14 @@ function InterviewCanvas() {
           display: flex;
           flex-direction: column;
           gap: 12px;
+          animation: fadeUp 0.7s ease-out 0.1s both;
         }
         .chat-title {
           font-weight: 700;
           letter-spacing: 0.04em;
           text-transform: uppercase;
           color: var(--accent);
-          font-size: 12px;
+          font-size: 11px;
         }
         .chat-list {
           display: flex;
@@ -346,7 +402,7 @@ function InterviewCanvas() {
           padding-right: 6px;
         }
         .chat-empty {
-          color: rgba(255, 255, 255, 0.6);
+          color: var(--text-muted);
           font-size: 14px;
         }
         .chat-row {
@@ -362,14 +418,14 @@ function InterviewCanvas() {
           max-width: 85%;
           padding: 10px 12px;
           border-radius: 14px;
-          background: rgba(20, 24, 34, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(15, 22, 36, 0.92);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(6px);
           animation: rise 0.3s ease-out;
         }
         .chat-row.candidate .bubble {
-          background: rgba(247, 183, 51, 0.18);
-          border-color: rgba(247, 183, 51, 0.4);
+          background: rgba(90, 162, 255, 0.16);
+          border-color: rgba(90, 162, 255, 0.4);
         }
         .label {
           font-size: 11px;
@@ -389,10 +445,11 @@ function InterviewCanvas() {
           aspect-ratio: 16 / 9;
           border-radius: 16px;
           overflow: hidden;
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.16);
           box-shadow: var(--shadow);
-          background: rgba(0, 0, 0, 0.6);
+          background: rgba(7, 12, 20, 0.8);
           z-index: 4;
+          animation: fadeUp 0.7s ease-out 0.2s both;
         }
         .pip-video {
           width: 100%;
@@ -415,6 +472,16 @@ function InterviewCanvas() {
           to {
             transform: translateY(0);
             opacity: 1;
+          }
+        }
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
         @media (max-width: 900px) {
