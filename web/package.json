@@ -6,11 +6,14 @@
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
+    "postinstall": "prisma generate",
     "lint": "next lint"
   },
   "dependencies": {
     "@livekit/components-react": "^2.9.17",
     "@livekit/components-styles": "^1.2.0",
+    "@neondatabase/serverless": "^0.10.4",
+    "@prisma/adapter-neon": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "livekit-client": "^2.16.1",
     "livekit-server-sdk": "^2.15.0",
@@ -19,6 +22,7 @@
     "react-dom": "19.2.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -26,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
     "prisma": "^7.2.0",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5"
   }
 }
