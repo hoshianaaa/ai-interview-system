@@ -248,6 +248,7 @@ function InterviewCanvas() {
   const localTrack =
     tracks.find((t) => t.participant.isLocal) ?? tracks.find((t) => t.publication?.isLocal) ?? null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const chatListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!room) return;
@@ -280,11 +281,16 @@ function InterviewCanvas() {
     };
   }, [room]);
 
+  useEffect(() => {
+    if (!chatListRef.current) return;
+    chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+  }, [messages]);
+
   return (
     <>
       <div className="chat-panel">
         <div className="chat-title">Conversation</div>
-        <div className="chat-list">
+        <div className="chat-list" ref={chatListRef}>
           {messages.length === 0 ? (
             <div className="chat-empty">会話はここに表示されます</div>
           ) : (
@@ -336,7 +342,8 @@ function InterviewCanvas() {
           display: flex;
           flex-direction: column;
           gap: 10px;
-          overflow: hidden;
+          overflow: auto;
+          padding-right: 6px;
         }
         .chat-empty {
           color: rgba(255, 255, 255, 0.6);
