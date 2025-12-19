@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum InterviewStatus {
+  created
+  used
+  recording
+  ending
+  completed
+  failed
+}
+
+model Interview {
+  interviewId       String          @id
+  roomName          String          @unique
+  status            InterviewStatus @default(created)
+  durationSec       Int
+
+  candidateIdentity String
+  agentName         String
+
+  dispatchId        String?
+  egressId          String?
+
+  r2Bucket          String
+  r2ObjectKey       String?
+
+  createdAt         DateTime        @default(now())
+  usedAt            DateTime?
+  candidateJoinedAt DateTime?
+  endedAt           DateTime?
+  error             String?
+}
+
