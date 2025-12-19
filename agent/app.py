@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import os
 
@@ -103,6 +105,47 @@ async def entrypoint(ctx: JobContext):
         # vad=ctx.proc.userdata.get("vad"),
         preemptive_generation=True,
     )
+
+    def extract_text(message: object) -> str:
+        if isinstance(message, str):
+            return message
+        for key in ("text", "content", "message"):
+            value = getattr(message, key, None)
+            if isinstance(value, str):
+                return value
+        return str(message)
+
+    def publish_chat(role: str, message: object) -> None:
+        text = extract_text(message).strip()
+        if not text:
+            return
+        payload = json.dumps({"role": role, "text": text}, ensure_ascii=False).encode("utf-8")
+
+        async def _send() -> None:
+            try:
+                await ctx.room.local_participant.publish_data(payload, reliable=True)
+            except Exception as exc:
+                logger.warning("publish_data failed: %s", exc)
+
+        asyncio.create_task(_send())
+
+    if hasattr(session, "on"):
+        try:
+            def on_user_transcribed(ev) -> None:
+                if getattr(ev, "is_final", False):
+                    publish_chat("candidate", getattr(ev, "transcript", ""))
+
+            def on_conversation_item_added(ev) -> None:
+                item = getattr(ev, "item", None)
+                role = getattr(item, "role", None)
+                if role == "assistant":
+                    text = getattr(item, "text_content", None)
+                    publish_chat("interviewer", text or "")
+
+            session.on("user_input_transcribed", on_user_transcribed)
+            session.on("conversation_item_added", on_conversation_item_added)
+        except Exception as exc:
+            logger.warning("Failed to register transcript handlers: %s", exc)
 
     await session.start(
         agent=DefaultInterviewAgent(),
