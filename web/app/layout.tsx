@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 
 export const metadata: Metadata = {
   title: "AI Interview",
@@ -8,8 +9,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
-      <body>{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="ja">
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }

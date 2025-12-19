@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { UserButton } from "@clerk/nextjs";
 
 type InterviewRow = {
   interviewId: string;
@@ -69,6 +70,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           <p className="eyebrow">AI Interview Admin</p>
           <h1>面接管理ダッシュボード</h1>
           <p className="subtle">面接URLの発行、履歴確認、録画再生をまとめて管理します。</p>
+        </div>
+        <div className="user">
+          <UserButton />
         </div>
       </section>
 
@@ -176,6 +180,10 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           justify-content: space-between;
           gap: 24px;
           margin-bottom: 24px;
+        }
+        .user {
+          display: flex;
+          align-items: center;
         }
         h1 {
           margin: 4px 0 8px;
