@@ -1,0 +1,10 @@
+python-dotenv>=1.0.1
+
+# LiveKit Agents
+livekit>=0.20.0
+livekit-agents>=0.10.0
+
+# If you use plugins (silero VAD, etc.), add as needed
+# livekit-plugins-silero
+# livekit-plugins-noise-cancellation
+

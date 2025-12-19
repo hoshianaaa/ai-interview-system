@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { LiveKitRoom, VideoConference } from "@livekit/components-react";
 import "@livekit/components-styles";
 
@@ -8,12 +8,17 @@ type JoinResponse =
   | { livekitUrl: string; roomName: string; token: string; durationSec: number }
   | { error: string };
 
-export default function InterviewPage({ params }: { params: { interviewId: string } }) {
-  const interviewId = params.interviewId;
+export default function InterviewPage({
+  params
+}: {
+  params: Promise<{ interviewId: string }>;
+}) {
+  const { interviewId } = use(params);
 
   const [join, setJoin] = useState<JoinResponse | null>(null);
   const [ending, setEnding] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +86,15 @@ export default function InterviewPage({ params }: { params: { interviewId: strin
     );
   }
 
+  if (typeof join.token !== "string") {
+    return (
+      <main style={{ padding: 24, fontFamily: "system-ui" }}>
+        <h1>Interview</h1>
+        <p>Invalid token response. Please refresh the page.</p>
+      </main>
+    );
+  }
+
   return (
     <main style={{ height: "100vh" }}>
       <div
@@ -126,8 +140,13 @@ export default function InterviewPage({ params }: { params: { interviewId: strin
         video={true}
         audio={true}
         style={{ height: "100%" }}
+        onConnected={() => setConnected(true)}
         onDisconnected={() => {
-          void endInterview();
+          if (connected) {
+            void endInterview();
+          } else {
+            setJoin({ error: "Connection failed. Please refresh the page." });
+          }
         }}
       >
         <VideoConference />

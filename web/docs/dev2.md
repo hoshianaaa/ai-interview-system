@@ -337,7 +337,11 @@ export function makeCandidateIdentity(interviewId: string) {
   return `candidate_${interviewId}`;
 }
 
-export function makeCandidateToken(params: { roomName: string; identity: string; ttlSeconds: number }) {
+export async function makeCandidateToken(params: {
+  roomName: string;
+  identity: string;
+  ttlSeconds: number;
+}) {
   const at = new AccessToken(env.livekitApiKey, env.livekitApiSecret, {
     identity: params.identity,
     ttl: params.ttlSeconds
@@ -351,8 +355,8 @@ export function makeCandidateToken(params: { roomName: string; identity: string;
     canPublishData: true
   };
 
-  at.addGrant({ video: grant });
-  return at.toJwt();
+  at.addGrant(grant);
+  return await at.toJwt();
 }
 
 export function clients() {
@@ -667,7 +671,7 @@ export async function POST(req: Request) {
     data: { dispatchId: dispatchInfo.id }
   });
 
-  const token = makeCandidateToken({
+  const token = await makeCandidateToken({
     roomName: updated.roomName,
     identity: updated.candidateIdentity,
     ttlSeconds: Math.max(updated.durationSec + 600, 1800)
@@ -827,4 +831,3 @@ curl -X POST http://localhost:3000/api/interview/create \
 ---
 
 必要なら次は **開発手順3**として「`agent/` の全ファイル（フォルダ構成ごと）」も同じ形式で出します。
-

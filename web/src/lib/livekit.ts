@@ -39,7 +39,11 @@ export function makeCandidateIdentity(interviewId: string) {
   return `candidate_${interviewId}`;
 }
 
-export function makeCandidateToken(params: { roomName: string; identity: string; ttlSeconds: number }) {
+export async function makeCandidateToken(params: {
+  roomName: string;
+  identity: string;
+  ttlSeconds: number;
+}) {
   const at = new AccessToken(env.livekitApiKey, env.livekitApiSecret, {
     identity: params.identity,
     ttl: params.ttlSeconds
@@ -53,8 +57,8 @@ export function makeCandidateToken(params: { roomName: string; identity: string;
     canPublishData: true
   };
 
-  at.addGrant({ video: grant });
-  return at.toJwt();
+  at.addGrant(grant);
+  return await at.toJwt();
 }
 
 export function clients() {

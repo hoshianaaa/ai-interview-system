@@ -44,11 +44,19 @@ export async function POST(req: Request) {
     data: { dispatchId: dispatchInfo.id }
   });
 
-  const token = makeCandidateToken({
+  const token = await makeCandidateToken({
     roomName: updated.roomName,
     identity: updated.candidateIdentity,
     ttlSeconds: Math.max(updated.durationSec + 600, 1800)
   });
+
+  if (typeof token !== "string" || token.length < 10) {
+    console.error("[interview/join] invalid token", {
+      type: typeof token,
+      length: typeof token === "string" ? token.length : null
+    });
+    return NextResponse.json({ error: "TOKEN_INVALID" }, { status: 500 });
+  }
 
   return NextResponse.json({
     livekitUrl: env.livekitUrl,
