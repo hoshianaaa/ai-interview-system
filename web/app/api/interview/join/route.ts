@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { clients, env, makeCandidateToken } from "@/lib/livekit";
+import {
+  clients,
+  env,
+  makeCandidateToken,
+  buildRoomCompositeOutput,
+  defaultCompositeOpts
+} from "@/lib/livekit";
+import { makeR2ObjectKey } from "@/lib/recordings";
 
 export const runtime = "nodejs";
 
@@ -11,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
   }
 
-  const { dispatch } = clients();
+  const { dispatch, room, egress } = clients();
 
   const updated = await prisma
     .$transaction(async (tx) => {
@@ -36,12 +43,41 @@ export async function POST(req: Request) {
   if (updated === "ALREADY_USED")
     return NextResponse.json({ error: "INTERVIEW_ALREADY_USED" }, { status: 409 });
 
+  try {
+    await room.createRoom({ name: updated.roomName });
+  } catch {}
+
   // Explicit dispatch: agent must be running and registered with matching agent_name
   const dispatchInfo = await dispatch.createDispatch(updated.roomName, updated.agentName);
 
   await prisma.interview.update({
     where: { interviewId },
     data: { dispatchId: dispatchInfo.id }
+  });
+
+  const objectKey = makeR2ObjectKey({
+    interviewId: updated.interviewId,
+    roomName: updated.roomName
+  });
+
+  let egressInfo: { egressId: string };
+  try {
+    egressInfo = await egress.startRoomCompositeEgress(
+      updated.roomName,
+      buildRoomCompositeOutput(objectKey),
+      defaultCompositeOpts
+    );
+  } catch (err) {
+    await prisma.interview.update({
+      where: { interviewId: updated.interviewId },
+      data: { status: "failed", error: `EGRESS_START_FAILED: ${String(err)}` }
+    });
+    return NextResponse.json({ error: "EGRESS_START_FAILED" }, { status: 500 });
+  }
+
+  await prisma.interview.update({
+    where: { interviewId: updated.interviewId },
+    data: { status: "recording", egressId: egressInfo.egressId, r2ObjectKey: objectKey }
   });
 
   const token = await makeCandidateToken({
