@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const durationSec = Number(body.durationSec ?? 600);
+  const candidateName =
+    typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
 
   const interviewId = crypto.randomUUID();
   const roomName = makeRoomName(interviewId);
@@ -17,11 +19,17 @@ export async function POST(req: Request) {
       roomName,
       durationSec,
       candidateIdentity: makeCandidateIdentity(interviewId),
+      candidateName,
       agentName: body.agentName ?? env.agentName,
       r2Bucket: env.r2Bucket
     }
   });
 
   const url = `${env.baseUrl}/interview/${interview.interviewId}`;
-  return NextResponse.json({ interviewId: interview.interviewId, roomName, url });
+  return NextResponse.json({
+    interviewId: interview.interviewId,
+    roomName,
+    url,
+    candidateName
+  });
 }

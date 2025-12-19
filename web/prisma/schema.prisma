@@ -23,6 +23,7 @@ model Interview {
   durationSec       Int
 
   candidateIdentity String
+  candidateName     String?
   agentName         String
 
   dispatchId        String?
