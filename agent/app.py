@@ -96,7 +96,7 @@ async def entrypoint(ctx: JobContext):
         tts=inference.TTS(
             model="elevenlabs/eleven_turbo_v2_5",
             # Set a default voice ID; change to your preferred voice
-            voice=os.getenv("ELEVENLABS_VOICE", "JBFqnCBsd6RMkjVDRZzb"),
+            voice=os.getenv("ELEVENLABS_VOICE", "XrExE9yKIg1WjnnlVkGX"),
             language="ja",
         ),
         # Optional: turn detection
