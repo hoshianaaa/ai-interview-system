@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { LiveKitRoom, VideoConference } from "@livekit/components-react";
 import "@livekit/components-styles";
 
@@ -19,6 +19,7 @@ export default function InterviewPage({
   const [ending, setEnding] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
+  const endingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,17 +51,47 @@ export default function InterviewPage({
   }, [secondsLeft]);
 
   async function endInterview() {
-    if (ending) return;
+    if (endingRef.current) return;
+    endingRef.current = true;
     setEnding(true);
 
     await fetch("/api/interview/end", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ interviewId })
+      body: JSON.stringify({ interviewId }),
+      keepalive: true
     }).catch(() => {});
 
     setJoin({ error: "Interview ended. You can close this tab." });
   }
+
+  useEffect(() => {
+    function sendEndBeacon() {
+      if (endingRef.current) return;
+      endingRef.current = true;
+
+      const payload = JSON.stringify({ interviewId });
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/interview/end", blob);
+        return;
+      }
+
+      void fetch("/api/interview/end", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: payload,
+        keepalive: true
+      });
+    }
+
+    window.addEventListener("pagehide", sendEndBeacon);
+    window.addEventListener("beforeunload", sendEndBeacon);
+    return () => {
+      window.removeEventListener("pagehide", sendEndBeacon);
+      window.removeEventListener("beforeunload", sendEndBeacon);
+    };
+  }, [interviewId]);
 
   const header = useMemo(() => {
     if (secondsLeft === null) return "Loading...";
