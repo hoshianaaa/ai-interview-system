@@ -704,6 +704,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           padding: 10px 12px;
           display: grid;
           gap: 10px;
+          width: 100%;
         }
         .prompt summary {
           cursor: pointer;
@@ -724,6 +725,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           line-height: 1.4;
           background: #fff;
           resize: vertical;
+          width: 100%;
+          box-sizing: border-box;
         }
         .edit-actions {
           display: flex;
