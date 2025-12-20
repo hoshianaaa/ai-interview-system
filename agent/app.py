@@ -28,27 +28,46 @@ load_dotenv(".env.local")
 AGENT_NAME = os.getenv("AGENT_NAME", "Sage-266e")
 
 
+DEFAULT_INTERVIEW_PROMPT = (
+    "あなたは日本語で話す面接官の人工知能です。"
+    "目的は候補者の経験と考え方を短時間で把握することです。"
+    "質問は大きく三つだけにします。"
+    "各質問では候補者の回答をよく聞き、重要度が高い点を1つ選び、2〜3回だけ深掘りします。"
+    "口調は丁寧で落ち着いていて、短く分かりやすく話します。"
+    "分からない点は推測せず確認してください。"
+    "最後に要点を短くまとめて終了してください。\n\n"
+    "本質問1: 最近の仕事やプロジェクトで、主担当として成果を出した取り組みを一つ教えてください。\n"
+    "本質問2: 難しい状況やトラブルに直面したとき、どうやって立て直しましたか。具体例で教えてください。\n"
+    "本質問3: 次の職場や役割で実現したいことは何ですか。"
+)
+
+
 class DefaultInterviewAgent(Agent):
     """
     Minimal interview agent instructions.
     Replace/extend this prompt freely.
     """
 
-    def __init__(self) -> None:
-        super().__init__(
-            instructions=(
-                "あなたは日本語で話す面接官の人工知能です。"
-                "目的は候補者の経験と考え方を短時間で把握することです。"
-                "質問は大きく三つだけにします。"
-                "各質問では候補者の回答をよく聞き、重要度が高い点を1つ選び、2〜3回だけ深掘りします。"
-                "口調は丁寧で落ち着いていて、短く分かりやすく話します。"
-                "分からない点は推測せず確認してください。"
-                "最後に要点を短くまとめて終了してください。\n\n"
-                "本質問1: 最近の仕事やプロジェクトで、主担当として成果を出した取り組みを一つ教えてください。\n"
-                "本質問2: 難しい状況やトラブルに直面したとき、どうやって立て直しましたか。具体例で教えてください。\n"
-                "本質問3: 次の職場や役割で実現したいことは何ですか。"
-            )
-        )
+    def __init__(self, prompt: str = DEFAULT_INTERVIEW_PROMPT) -> None:
+        super().__init__(instructions=prompt)
+
+
+def resolve_prompt(ctx: JobContext) -> str:
+    metadata = getattr(ctx.job, "metadata", "") or ""
+    if not isinstance(metadata, str):
+        metadata = str(metadata)
+    if metadata:
+        try:
+            parsed = json.loads(metadata)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            prompt = parsed.get("prompt")
+            if isinstance(prompt, str) and prompt.strip():
+                return prompt.strip()
+        if metadata.strip():
+            return metadata.strip()
+    return DEFAULT_INTERVIEW_PROMPT
 
 
 _http_port_raw = os.getenv("AGENT_HTTP_PORT", "").strip()
@@ -147,8 +166,9 @@ async def entrypoint(ctx: JobContext):
         except Exception as exc:
             logger.warning("Failed to register transcript handlers: %s", exc)
 
+    prompt = resolve_prompt(ctx)
     await session.start(
-        agent=DefaultInterviewAgent(),
+        agent=DefaultInterviewAgent(prompt=prompt),
         room=ctx.room,
     )
 

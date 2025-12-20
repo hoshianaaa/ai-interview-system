@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 
 type InterviewRow = {
   interviewId: string;
   url: string;
   status: string;
   candidateName: string | null;
+  prompt: string | null;
   notes: string | null;
   createdAt: string;
   hasRecording: boolean;
@@ -29,6 +31,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
   const [rows, setRows] = useState(interviews);
   const [durationSec, setDurationSec] = useState(600);
   const [candidateName, setCandidateName] = useState("");
+  const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [createResult, setCreateResult] = useState<CreateResponse | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
@@ -49,7 +52,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         durationSec,
-        candidateName: candidateName.trim() || undefined
+        candidateName: candidateName.trim() || undefined,
+        prompt
       })
     });
     const data = (await res.json()) as CreateResponse;
@@ -212,6 +216,14 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                 onChange={(e) => setDurationSec(Number(e.target.value))}
               />
             </div>
+            <div className="form-row">
+              <label>プロンプト</label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="面接AIの指示文を入力してください"
+              />
+            </div>
             <button className="primary" onClick={() => void createInterview()}>
               URLを発行
             </button>
@@ -357,6 +369,10 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                   placeholder="面接の気づきや評価メモを記録できます"
                 />
               </div>
+              <details className="prompt">
+                <summary>プロンプトを見る</summary>
+                <textarea value={selectedRow.prompt ?? ""} readOnly />
+              </details>
               {isDirty && (
                 <div className="edit-actions">
                   <button className="ghost" onClick={cancelEdit} disabled={saving}>
@@ -478,6 +494,16 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           border: 1px solid #c7d3e6;
           font-size: 14px;
           background: #f8fafc;
+        }
+        .form-row textarea {
+          min-height: 140px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid #c7d3e6;
+          font-size: 13px;
+          line-height: 1.4;
+          background: #f8fafc;
+          resize: vertical;
         }
         .primary {
           width: 100%;
@@ -669,6 +695,34 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           border: 1px solid #c7d3e6;
           font-size: 14px;
           background: #f8fafc;
+          resize: vertical;
+        }
+        .prompt {
+          border-radius: 12px;
+          border: 1px dashed #c7d3e6;
+          background: #f8fafc;
+          padding: 10px 12px;
+          display: grid;
+          gap: 10px;
+        }
+        .prompt summary {
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          color: #1f4fb2;
+          list-style: none;
+        }
+        .prompt summary::-webkit-details-marker {
+          display: none;
+        }
+        .prompt textarea {
+          min-height: 140px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid #c7d3e6;
+          font-size: 13px;
+          line-height: 1.4;
+          background: #fff;
           resize: vertical;
         }
         .edit-actions {

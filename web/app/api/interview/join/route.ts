@@ -8,6 +8,7 @@ import {
   defaultCompositeOpts
 } from "@/lib/livekit";
 import { makeR2ObjectKey } from "@/lib/recordings";
+import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 
 export const runtime = "nodejs";
 
@@ -56,8 +57,14 @@ export async function POST(req: Request) {
     await room.createRoom({ name: updated.roomName });
   } catch {}
 
+  const dispatchPrompt =
+    typeof updated.interviewPrompt === "string" && updated.interviewPrompt.trim()
+      ? updated.interviewPrompt
+      : DEFAULT_INTERVIEW_PROMPT;
   // Explicit dispatch: agent must be running and registered with matching agent_name
-  const dispatchInfo = await dispatch.createDispatch(updated.roomName, updated.agentName);
+  const dispatchInfo = await dispatch.createDispatch(updated.roomName, updated.agentName, {
+    metadata: JSON.stringify({ prompt: dispatchPrompt })
+  });
 
   await prisma.interview.update({
     where: { interviewId: updated.interviewId },

@@ -19,6 +19,7 @@ export default async function HomePage() {
     url: `${baseUrl}/interview/${row.publicToken ?? row.interviewId}`,
     status: row.status,
     candidateName: row.candidateName ?? null,
+    prompt: row.interviewPrompt ?? null,
     notes: row.interviewNotes ?? null,
     createdAt: row.createdAt.toISOString(),
     hasRecording: Boolean(row.r2ObjectKey)

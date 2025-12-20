@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { env, makeCandidateIdentity, makeRoomName } from "@/lib/livekit";
+import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,8 @@ export async function POST(req: Request) {
   const durationSec = Number(body.durationSec ?? 600);
   const candidateName =
     typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
+  const promptRaw = typeof body.prompt === "string" ? body.prompt : "";
+  const prompt = promptRaw.trim() ? promptRaw.trim() : DEFAULT_INTERVIEW_PROMPT;
 
   const interviewId = crypto.randomUUID();
   const publicToken = crypto.randomUUID();
@@ -29,6 +32,7 @@ export async function POST(req: Request) {
       durationSec,
       candidateIdentity: makeCandidateIdentity(interviewId),
       candidateName,
+      interviewPrompt: prompt,
       agentName: body.agentName ?? env.agentName,
       r2Bucket: env.r2Bucket
     }
