@@ -47,9 +47,12 @@ export default function AdminDashboard({
   const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [templates, setTemplates] = useState(promptTemplates);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [templateName, setTemplateName] = useState("");
-  const [templateError, setTemplateError] = useState<string | null>(null);
-  const [templateSaving, setTemplateSaving] = useState(false);
+  const [detailMode, setDetailMode] = useState<"interview" | "templates">("interview");
+  const [templateEditorId, setTemplateEditorId] = useState("");
+  const [templateEditName, setTemplateEditName] = useState("");
+  const [templateEditBody, setTemplateEditBody] = useState(DEFAULT_INTERVIEW_PROMPT);
+  const [templateEditError, setTemplateEditError] = useState<string | null>(null);
+  const [templateEditSaving, setTemplateEditSaving] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [createResult, setCreateResult] = useState<CreateResponse | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
@@ -81,53 +84,135 @@ export default function AdminDashboard({
 
   async function reloadTemplates() {
     setTemplateLoading(true);
-    setTemplateError(null);
+    setTemplateEditError(null);
     try {
       const res = await fetch("/api/admin/prompt-templates");
       const data = (await res.json()) as { templates?: PromptTemplate[]; error?: string };
       if (Array.isArray(data.templates)) {
         setTemplates(data.templates);
+        if (
+          templateEditorId &&
+          !data.templates.some((row) => row.templateId === templateEditorId)
+        ) {
+          setTemplateEditorId("");
+          setTemplateEditName("");
+          setTemplateEditBody(DEFAULT_INTERVIEW_PROMPT);
+        }
+        if (
+          selectedTemplateId &&
+          !data.templates.some((row) => row.templateId === selectedTemplateId)
+        ) {
+          setSelectedTemplateId("");
+          setPrompt(DEFAULT_INTERVIEW_PROMPT);
+        }
       } else if (data.error) {
-        setTemplateError("テンプレートの取得に失敗しました");
+        setTemplateEditError("テンプレートの取得に失敗しました");
       }
     } finally {
       setTemplateLoading(false);
     }
   }
 
-  async function addTemplate() {
-    const name = templateName.trim();
-    const body = prompt.trim();
+  async function saveTemplate() {
+    const name = templateEditName.trim();
+    const body = templateEditBody.trim();
     if (!name) {
-      setTemplateError("テンプレート名を入力してください");
+      setTemplateEditError("テンプレート名を入力してください");
       return;
     }
     if (!body) {
-      setTemplateError("プロンプトが空です");
+      setTemplateEditError("本文が空です");
       return;
     }
-    setTemplateSaving(true);
-    setTemplateError(null);
+    setTemplateEditSaving(true);
+    setTemplateEditError(null);
     try {
+      const isUpdate = Boolean(templateEditorId);
       const res = await fetch("/api/admin/prompt-templates", {
-        method: "POST",
+        method: isUpdate ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, body })
+        body: JSON.stringify({
+          templateId: templateEditorId || undefined,
+          name,
+          body
+        })
       });
       const data = (await res.json()) as { template?: PromptTemplate; error?: string };
       if (data.template) {
-        setTemplates((prev) => [data.template!, ...prev]);
-        setSelectedTemplateId(data.template.templateId);
-        setTemplateName("");
+        setTemplates((prev) => {
+          const filtered = prev.filter((row) => row.templateId !== data.template!.templateId);
+          return [data.template!, ...filtered];
+        });
+        setTemplateEditorId(data.template.templateId);
+        setTemplateEditName(data.template.name);
+        setTemplateEditBody(data.template.body);
         return;
       }
       if (res.status === 409) {
-        setTemplateError("同名のテンプレートが既にあります");
+        setTemplateEditError("同名のテンプレートが既にあります");
         return;
       }
-      setTemplateError("テンプレートの追加に失敗しました");
+      setTemplateEditError(isUpdate ? "保存に失敗しました" : "作成に失敗しました");
     } finally {
-      setTemplateSaving(false);
+      setTemplateEditSaving(false);
+    }
+  }
+
+  async function deleteTemplate() {
+    if (!templateEditorId) return;
+    const ok = window.confirm("このテンプレートを削除しますか？");
+    if (!ok) return;
+    setTemplateEditSaving(true);
+    setTemplateEditError(null);
+    try {
+      const res = await fetch("/api/admin/prompt-templates", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateId: templateEditorId })
+      });
+      if (res.ok) {
+        setTemplates((prev) => prev.filter((row) => row.templateId !== templateEditorId));
+        if (selectedTemplateId === templateEditorId) {
+          setSelectedTemplateId("");
+          setPrompt(DEFAULT_INTERVIEW_PROMPT);
+        }
+        setTemplateEditorId("");
+        setTemplateEditName("");
+        setTemplateEditBody(DEFAULT_INTERVIEW_PROMPT);
+        return;
+      }
+      setTemplateEditError("削除に失敗しました");
+    } finally {
+      setTemplateEditSaving(false);
+    }
+  }
+
+  function resetTemplateEditor() {
+    setTemplateEditError(null);
+    if (!templateEditorId) {
+      setTemplateEditName("");
+      setTemplateEditBody(DEFAULT_INTERVIEW_PROMPT);
+      return;
+    }
+    const template = templates.find((row) => row.templateId === templateEditorId);
+    if (template) {
+      setTemplateEditName(template.name);
+      setTemplateEditBody(template.body);
+    }
+  }
+
+  function selectTemplateForEdit(templateId: string) {
+    setTemplateEditorId(templateId);
+    setTemplateEditError(null);
+    if (!templateId) {
+      setTemplateEditName("");
+      setTemplateEditBody(DEFAULT_INTERVIEW_PROMPT);
+      return;
+    }
+    const template = templates.find((row) => row.templateId === templateId);
+    if (template) {
+      setTemplateEditName(template.name);
+      setTemplateEditBody(template.body);
     }
   }
 
@@ -138,13 +223,12 @@ export default function AdminDashboard({
       return;
     }
     const template = templates.find((row) => row.templateId === templateId);
-    if (template) {
-      setPrompt(template.body);
-    }
+    setPrompt(template ? template.body : DEFAULT_INTERVIEW_PROMPT);
   }
 
   async function loadVideo(row: InterviewRow) {
     const interviewId = row.interviewId;
+    setDetailMode("interview");
     setLoadingVideoId(interviewId);
     setSelectedId(interviewId);
     setSelectedVideoUrl(null);
@@ -248,10 +332,23 @@ export default function AdminDashboard({
     () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
     [sorted, selectedId]
   );
+  const selectedTemplate = useMemo(
+    () =>
+      templateEditorId
+        ? templates.find((row) => row.templateId === templateEditorId) ?? null
+        : null,
+    [templates, templateEditorId]
+  );
   const isDirty =
     Boolean(selectedRow) &&
     (editCandidateName !== (selectedRow?.candidateName ?? "") ||
       editNotes !== (selectedRow?.notes ?? ""));
+  const templateDirty = selectedTemplate
+    ? templateEditName !== selectedTemplate.name || templateEditBody !== selectedTemplate.body
+    : Boolean(templateEditName.trim() || templateEditBody.trim());
+  const canSaveTemplate =
+    Boolean(templateEditName.trim() && templateEditBody.trim()) &&
+    (selectedTemplate ? templateDirty : true);
 
   useEffect(() => {
     if (!selectedRow) {
@@ -332,25 +429,6 @@ export default function AdminDashboard({
                 placeholder="面接AIの指示文を入力してください"
               />
             </div>
-            <details className="template-create">
-              <summary>新規テンプレートを追加</summary>
-              <div className="template-fields">
-                <input
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  placeholder="テンプレート名"
-                />
-                <button
-                  className="ghost"
-                  onClick={() => void addTemplate()}
-                  type="button"
-                  disabled={templateSaving}
-                >
-                  {templateSaving ? "追加中..." : "現在のプロンプトで追加"}
-                </button>
-              </div>
-              {templateError && <p className="error">{templateError}</p>}
-            </details>
             <button className="primary" onClick={() => void createInterview()}>
               URLを発行
             </button>
@@ -371,6 +449,18 @@ export default function AdminDashboard({
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="card template-card">
+            <h2>プロンプトテンプレート</h2>
+            <p className="helper">面接で使うプロンプトのテンプレートを管理します。</p>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => setDetailMode("templates")}
+            >
+              プロンプトテンプレート編集
+            </button>
           </div>
 
           <div className="card list-card">
@@ -415,8 +505,77 @@ export default function AdminDashboard({
         </div>
 
         <div className="card detail-card">
-          <h2>面接詳細</h2>
-          {!selectedRow ? (
+          <div className="detail-title">
+            <h2>{detailMode === "templates" ? "プロンプトテンプレート編集" : "面接詳細"}</h2>
+          </div>
+          {detailMode === "templates" ? (
+            <div className="template-editor">
+              <div className="form-row">
+                <label>テンプレート一覧</label>
+                <div className="template-controls">
+                  <select
+                    value={templateEditorId}
+                    onChange={(e) => selectTemplateForEdit(e.target.value)}
+                  >
+                    <option value="">新規テンプレート</option>
+                    {templates.map((template) => (
+                      <option key={template.templateId} value={template.templateId}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="ghost"
+                    onClick={() => void reloadTemplates()}
+                    type="button"
+                    disabled={templateLoading}
+                  >
+                    {templateLoading ? "取得中..." : "再読み込み"}
+                  </button>
+                </div>
+                <p className="helper">テンプレートの作成・編集・削除ができます。</p>
+              </div>
+              <div className="form-row">
+                <label>テンプレート名</label>
+                <input
+                  value={templateEditName}
+                  onChange={(e) => setTemplateEditName(e.target.value)}
+                  placeholder="例）PM候補者向け"
+                />
+              </div>
+              <div className="form-row">
+                <label>本文</label>
+                <textarea
+                  value={templateEditBody}
+                  onChange={(e) => setTemplateEditBody(e.target.value)}
+                  placeholder="テンプレート本文を入力してください"
+                />
+              </div>
+              {templateEditError && <p className="error">{templateEditError}</p>}
+              <div className="edit-actions">
+                <button className="ghost" onClick={resetTemplateEditor} disabled={templateEditSaving}>
+                  リセット
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => void saveTemplate()}
+                  disabled={!canSaveTemplate || templateEditSaving}
+                >
+                  {templateEditSaving ? "保存中..." : "保存"}
+                </button>
+              </div>
+              {templateEditorId && (
+                <button
+                  className="danger"
+                  type="button"
+                  onClick={() => void deleteTemplate()}
+                  disabled={templateEditSaving}
+                >
+                  テンプレートを削除
+                </button>
+              )}
+            </div>
+          ) : !selectedRow ? (
             <div className="empty">左の一覧から面接を選択してください</div>
           ) : (
             <>
@@ -652,32 +811,40 @@ export default function AdminDashboard({
           font-size: 12px;
           color: #6b7a90;
         }
-        .template-create {
-          border-radius: 12px;
-          border: 1px dashed #c7d3e6;
-          background: #f8fafc;
-          padding: 10px 12px;
+        .detail-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
           margin-bottom: 12px;
+        }
+        .detail-title h2 {
+          margin: 0;
+        }
+        .template-card {
           display: grid;
           gap: 10px;
         }
-        .template-create summary {
-          cursor: pointer;
-          font-size: 12px;
+        .template-card .ghost {
+          width: 100%;
+        }
+        .template-editor {
+          display: grid;
+          gap: 14px;
+        }
+        .danger {
+          padding: 8px 12px;
+          border-radius: 10px;
+          border: 1px solid #f5b7b1;
+          background: #fff;
+          color: #b42318;
           font-weight: 600;
-          color: #1f4fb2;
-          list-style: none;
+          cursor: pointer;
         }
-        .template-create summary::-webkit-details-marker {
-          display: none;
-        }
-        .template-fields {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-        .template-fields input {
-          flex: 1;
+        .danger:disabled {
+          color: #8a97ab;
+          border-color: #f0d5d1;
+          cursor: default;
         }
         .primary {
           width: 100%;
