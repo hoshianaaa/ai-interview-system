@@ -41,7 +41,8 @@ export async function POST(req: Request) {
 
       const objectKey = makeR2ObjectKey({
         interviewId: interview.interviewId,
-        roomName: interview.roomName
+        roomName: interview.roomName,
+        orgId: interview.orgId
       });
 
       const info = await egress.startRoomCompositeEgress(

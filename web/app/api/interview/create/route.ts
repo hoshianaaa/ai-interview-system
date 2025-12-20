@@ -1,21 +1,30 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { env, makeCandidateIdentity, makeRoomName } from "@/lib/livekit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const { orgId } = await auth();
+  if (!orgId) {
+    return NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const durationSec = Number(body.durationSec ?? 600);
   const candidateName =
     typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
 
   const interviewId = crypto.randomUUID();
+  const publicToken = crypto.randomUUID();
   const roomName = makeRoomName(interviewId);
 
   const interview = await prisma.interview.create({
     data: {
       interviewId,
+      publicToken,
+      orgId,
       roomName,
       durationSec,
       candidateIdentity: makeCandidateIdentity(interviewId),
@@ -25,7 +34,7 @@ export async function POST(req: Request) {
     }
   });
 
-  const url = `${env.baseUrl}/interview/${interview.interviewId}`;
+  const url = `${env.baseUrl}/interview/${interview.publicToken ?? interview.interviewId}`;
   return NextResponse.json({
     interviewId: interview.interviewId,
     roomName,

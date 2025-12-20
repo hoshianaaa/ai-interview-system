@@ -9,7 +9,13 @@ export function utcTimestampCompact(d = new Date()) {
   return `${yyyy}${mm}${dd}T${hh}${mi}${ss}Z`;
 }
 
-export function makeR2ObjectKey(params: { interviewId: string; roomName: string; startedAt?: Date }) {
+export function makeR2ObjectKey(params: {
+  interviewId: string;
+  roomName: string;
+  startedAt?: Date;
+  orgId?: string | null;
+}) {
   const ts = utcTimestampCompact(params.startedAt ?? new Date());
-  return `recordings/${params.interviewId}/${ts}_${params.roomName}.mp4`;
+  const orgSegment = params.orgId ? params.orgId.replace(/[^a-zA-Z0-9_-]/g, "_") : "unassigned";
+  return `recordings/orgs/${orgSegment}/${params.interviewId}/${ts}_${params.roomName}.mp4`;
 }

@@ -27,9 +27,9 @@ const MAX_MESSAGES = 12;
 export default function InterviewPage({
   params
 }: {
-  params: Promise<{ interviewId: string }>;
+  params: Promise<{ publicToken: string }>;
 }) {
-  const { interviewId } = use(params);
+  const { publicToken } = use(params);
 
   const [join, setJoin] = useState<JoinResponse | null>(null);
   const [ending, setEnding] = useState(false);
@@ -43,7 +43,7 @@ export default function InterviewPage({
       const res = await fetch("/api/interview/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ interviewId })
+        body: JSON.stringify({ publicToken })
       });
 
       const data = (await res.json()) as JoinResponse;
@@ -54,7 +54,7 @@ export default function InterviewPage({
     return () => {
       cancelled = true;
     };
-  }, [interviewId]);
+  }, [publicToken]);
 
   useEffect(() => {
     if (secondsLeft === null) return;
@@ -74,7 +74,7 @@ export default function InterviewPage({
     await fetch("/api/interview/end", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ interviewId }),
+      body: JSON.stringify({ publicToken }),
       keepalive: true
     }).catch(() => {});
 
@@ -86,7 +86,7 @@ export default function InterviewPage({
       if (endingRef.current) return;
       endingRef.current = true;
 
-      const payload = JSON.stringify({ interviewId });
+      const payload = JSON.stringify({ publicToken });
       if (navigator.sendBeacon) {
         const blob = new Blob([payload], { type: "application/json" });
         navigator.sendBeacon("/api/interview/end", blob);
@@ -107,7 +107,7 @@ export default function InterviewPage({
       window.removeEventListener("pagehide", sendEndBeacon);
       window.removeEventListener("beforeunload", sendEndBeacon);
     };
-  }, [interviewId]);
+  }, [publicToken]);
 
   const header = useMemo(() => {
     if (secondsLeft === null) return "Loading...";

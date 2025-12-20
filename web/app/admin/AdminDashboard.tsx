@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { UserButton } from "@clerk/nextjs";
+import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 
 type InterviewRow = {
   interviewId: string;
@@ -72,6 +72,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           <p className="subtle">面接URLの発行、履歴確認、録画再生をまとめて管理します。</p>
         </div>
         <div className="user">
+          <OrganizationSwitcher />
           <UserButton />
         </div>
       </section>
@@ -184,6 +185,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         .user {
           display: flex;
           align-items: center;
+          gap: 12px;
         }
         h1 {
           margin: 4px 0 8px;

@@ -18,6 +18,8 @@ enum InterviewStatus {
 
 model Interview {
   interviewId       String          @id
+  publicToken       String?         @unique
+  orgId             String?
   roomName          String          @unique
   status            InterviewStatus @default(created)
   durationSec       Int
@@ -37,4 +39,6 @@ model Interview {
   candidateJoinedAt DateTime?
   endedAt           DateTime?
   error             String?
+
+  @@index([orgId])
 }

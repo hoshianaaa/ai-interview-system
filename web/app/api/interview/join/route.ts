@@ -12,17 +12,26 @@ import { makeR2ObjectKey } from "@/lib/recordings";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const { interviewId } = await req.json();
+  const body = await req.json().catch(() => ({}));
+  const publicToken = typeof body.publicToken === "string" ? body.publicToken.trim() : "";
+  const legacyInterviewId = typeof body.interviewId === "string" ? body.interviewId.trim() : "";
 
-  if (!interviewId) {
-    return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
+  if (!publicToken && !legacyInterviewId) {
+    return NextResponse.json({ error: "publicToken is required" }, { status: 400 });
   }
 
   const { dispatch, room, egress } = clients();
 
   const updated = await prisma
     .$transaction(async (tx) => {
-      const current = await tx.interview.findUnique({ where: { interviewId } });
+      let current = null;
+      if (publicToken) {
+        current = await tx.interview.findUnique({ where: { publicToken } });
+      }
+      const legacyLookupId = legacyInterviewId || publicToken;
+      if (!current && legacyLookupId) {
+        current = await tx.interview.findUnique({ where: { interviewId: legacyLookupId } });
+      }
       if (!current) return null;
 
       if (current.status !== "created") {
@@ -30,7 +39,7 @@ export async function POST(req: Request) {
       }
 
       return tx.interview.update({
-        where: { interviewId },
+        where: { interviewId: current.interviewId },
         data: { status: "used", usedAt: new Date() }
       });
     })
@@ -51,13 +60,14 @@ export async function POST(req: Request) {
   const dispatchInfo = await dispatch.createDispatch(updated.roomName, updated.agentName);
 
   await prisma.interview.update({
-    where: { interviewId },
+    where: { interviewId: updated.interviewId },
     data: { dispatchId: dispatchInfo.id }
   });
 
   const objectKey = makeR2ObjectKey({
     interviewId: updated.interviewId,
-    roomName: updated.roomName
+    roomName: updated.roomName,
+    orgId: updated.orgId
   });
 
   let egressInfo: { egressId: string };
