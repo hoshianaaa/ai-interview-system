@@ -267,21 +267,21 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
               <span>判定フィルター</span>
               <button
                 type="button"
-                className={`filter-chip ${showPass ? "active" : ""}`}
+                className={`filter-chip pass ${showPass ? "active" : ""}`}
                 onClick={() => setShowPass((v) => !v)}
               >
                 合格
               </button>
               <button
                 type="button"
-                className={`filter-chip ${showFail ? "active" : ""}`}
+                className={`filter-chip fail ${showFail ? "active" : ""}`}
                 onClick={() => setShowFail((v) => !v)}
               >
                 不合格
               </button>
               <button
                 type="button"
-                className={`filter-chip ${showHold ? "active" : ""}`}
+                className={`filter-chip hold ${showHold ? "active" : ""}`}
                 onClick={() => setShowHold((v) => !v)}
               >
                 保留
@@ -308,8 +308,13 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                     }}
                   >
                     <div>
-                      <div className="title">
-                        {row.candidateName ? row.candidateName : "候補者名なし"}
+                      <div className="title-row">
+                        <div className="title">
+                          {row.candidateName ? row.candidateName : "候補者名なし"}
+                        </div>
+                        <span className={`outcome-tag ${row.outcome}`}>
+                          {outcomeLabel(row.outcome)}
+                        </span>
                       </div>
                       <div className="meta">
                         <a href={row.url} target="_blank" rel="noreferrer">
@@ -344,19 +349,19 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                       placeholder="候補者名を入力"
                     />
                   </div>
-                  <div className="detail-row">
-                    <label>判定</label>
-                    <div className="segmented">
-                      {(["hold", "pass", "fail"] as const).map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          className={`segment ${editOutcome === value ? "active" : ""}`}
-                          onClick={() => setEditOutcome(value)}
-                          disabled={saving}
-                        >
-                          {outcomeLabel(value)}
-                        </button>
+                      <div className="detail-row">
+                        <label>判定</label>
+                        <div className="segmented">
+                          {(["hold", "pass", "fail"] as const).map((value) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className={`segment ${value} ${editOutcome === value ? "active" : ""}`}
+                              onClick={() => setEditOutcome(value)}
+                              disabled={saving}
+                            >
+                              {outcomeLabel(value)}
+                            </button>
                       ))}
                     </div>
                   </div>
@@ -508,10 +513,22 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           cursor: pointer;
         }
         .filter-chip.active {
-          background: #e8f0ff;
-          border-color: #1f4fb2;
-          color: #1f4fb2;
           font-weight: 600;
+        }
+        .filter-chip.pass.active {
+          background: #dcfce7;
+          border-color: #22c55e;
+          color: #166534;
+        }
+        .filter-chip.fail.active {
+          background: #ffe4e6;
+          border-color: #f43f5e;
+          color: #9f1239;
+        }
+        .filter-chip.hold.active {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
         }
         .detail-card {
           min-height: 420px;
@@ -556,10 +573,22 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           color: #41526b;
         }
         .segment.active {
-          background: #1f4fb2;
-          border-color: #1f4fb2;
-          color: #fff;
           font-weight: 600;
+        }
+        .segment.pass.active {
+          background: #22c55e;
+          border-color: #22c55e;
+          color: #fff;
+        }
+        .segment.fail.active {
+          background: #f43f5e;
+          border-color: #f43f5e;
+          color: #fff;
+        }
+        .segment.hold.active {
+          background: #94a3b8;
+          border-color: #94a3b8;
+          color: #0f172a;
         }
         .segment:disabled {
           opacity: 0.6;
@@ -662,6 +691,34 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         .title {
           font-weight: 600;
           margin-bottom: 4px;
+        }
+        .title-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+        }
+        .outcome-tag {
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          border: 1px solid transparent;
+        }
+        .outcome-tag.pass {
+          background: #dcfce7;
+          border-color: #22c55e;
+          color: #166534;
+        }
+        .outcome-tag.fail {
+          background: #ffe4e6;
+          border-color: #f43f5e;
+          color: #9f1239;
+        }
+        .outcome-tag.hold {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
         }
         .meta {
           font-size: 12px;
