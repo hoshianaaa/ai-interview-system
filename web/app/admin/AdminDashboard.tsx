@@ -576,19 +576,19 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           font-weight: 600;
         }
         .segment.pass.active {
-          background: #22c55e;
+          background: #dcfce7;
           border-color: #22c55e;
-          color: #fff;
+          color: #166534;
         }
         .segment.fail.active {
-          background: #f43f5e;
+          background: #ffe4e6;
           border-color: #f43f5e;
-          color: #fff;
+          color: #9f1239;
         }
         .segment.hold.active {
-          background: #94a3b8;
+          background: #e2e8f0;
           border-color: #94a3b8;
-          color: #0f172a;
+          color: #334155;
         }
         .segment:disabled {
           opacity: 0.6;
