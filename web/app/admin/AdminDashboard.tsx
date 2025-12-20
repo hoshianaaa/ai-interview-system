@@ -244,6 +244,15 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                   <div
                     key={row.interviewId}
                     className={`row ${selectedId === row.interviewId ? "selected" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => void loadVideo(row)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        void loadVideo(row);
+                      }
+                    }}
                   >
                     <div>
                       <div className="title">
@@ -258,15 +267,6 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                         ステータス: {row.status} / 作成:{" "}
                         {new Date(row.createdAt).toLocaleString("ja-JP")}
                       </div>
-                    </div>
-                    <div className="actions">
-                      <button
-                        className="ghost"
-                        onClick={() => void loadVideo(row)}
-                        disabled={loadingVideoId === row.interviewId}
-                      >
-                        {loadingVideoId === row.interviewId ? "読み込み中..." : "詳細を表示"}
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -527,11 +527,20 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           border: 1px solid #d8e1f0;
           display: grid;
           gap: 10px;
+          cursor: pointer;
         }
         .row.selected {
           border-color: #1f4fb2;
           background: #eef3ff;
           box-shadow: 0 10px 20px rgba(31, 79, 178, 0.12);
+        }
+        .row:hover {
+          border-color: #9fb2d5;
+          box-shadow: 0 8px 18px rgba(35, 63, 110, 0.12);
+        }
+        .row:focus-visible {
+          outline: 2px solid #1f4fb2;
+          outline-offset: 2px;
         }
         .title {
           font-weight: 600;
@@ -541,10 +550,6 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           font-size: 12px;
           color: #4b5c72;
           word-break: break-all;
-        }
-        .actions {
-          display: flex;
-          justify-content: flex-end;
         }
         .ghost {
           padding: 8px 12px;
