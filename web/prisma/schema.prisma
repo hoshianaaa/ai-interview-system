@@ -39,6 +39,7 @@ model Interview {
   r2Bucket          String
   r2ObjectKey       String?
   recordingStartedAt DateTime?
+  interviewNotes    String?         @db.Text
 
   createdAt         DateTime        @default(now())
   usedAt            DateTime?

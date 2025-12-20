@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 
 type InterviewRow = {
@@ -8,6 +8,7 @@ type InterviewRow = {
   url: string;
   status: string;
   candidateName: string | null;
+  notes: string | null;
   createdAt: string;
   hasRecording: boolean;
 };
@@ -25,6 +26,7 @@ type CreateResponse =
   | { error: string };
 
 export default function AdminDashboard({ interviews }: { interviews: InterviewRow[] }) {
+  const [rows, setRows] = useState(interviews);
   const [durationSec, setDurationSec] = useState(600);
   const [candidateName, setCandidateName] = useState("");
   const [createResult, setCreateResult] = useState<CreateResponse | null>(null);
@@ -34,6 +36,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [editCandidateName, setEditCandidateName] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const hasResult = createResult && "url" in createResult;
 
@@ -103,17 +108,73 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     videoRef.current.currentTime = offsetMs / 1000;
   };
 
+  async function saveDetails() {
+    if (!selectedRow) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/interview/update", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          interviewId: selectedRow.interviewId,
+          candidateName: editCandidateName.trim(),
+          notes: editNotes
+        })
+      });
+      const data = (await res.json()) as {
+        interviewId?: string;
+        candidateName?: string | null;
+        notes?: string | null;
+      };
+      if (data.interviewId) {
+        setRows((prev) =>
+          prev.map((row) =>
+            row.interviewId === data.interviewId
+              ? {
+                  ...row,
+                  candidateName: data.candidateName ?? null,
+                  notes: data.notes ?? null
+                }
+              : row
+          )
+        );
+        setEditCandidateName(data.candidateName ?? "");
+        setEditNotes(data.notes ?? "");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancelEdit() {
+    if (!selectedRow) return;
+    setEditCandidateName(selectedRow.candidateName ?? "");
+    setEditNotes(selectedRow.notes ?? "");
+  }
+
   const sorted = useMemo(
     () =>
-      [...interviews].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ),
-    [interviews]
+      [...rows].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [rows]
   );
   const selectedRow = useMemo(
     () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
     [sorted, selectedId]
   );
+  const isDirty =
+    Boolean(selectedRow) &&
+    (editCandidateName !== (selectedRow?.candidateName ?? "") ||
+      editNotes !== (selectedRow?.notes ?? ""));
+
+  useEffect(() => {
+    if (!selectedRow) {
+      setEditCandidateName("");
+      setEditNotes("");
+      return;
+    }
+    setEditCandidateName(selectedRow.candidateName ?? "");
+    setEditNotes(selectedRow.notes ?? "");
+  }, [selectedRow?.interviewId]);
 
   return (
     <main className="page">
@@ -222,8 +283,13 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
             <>
               <div className="detail-header">
                 <div>
-                  <div className="title">
-                    {selectedRow.candidateName ? selectedRow.candidateName : "候補者名なし"}
+                  <div className="detail-row">
+                    <label>候補者名</label>
+                    <input
+                      value={editCandidateName}
+                      onChange={(e) => setEditCandidateName(e.target.value)}
+                      placeholder="候補者名を入力"
+                    />
                   </div>
                   <div className="meta">
                     <a href={selectedRow.url} target="_blank" rel="noreferrer">
@@ -283,6 +349,24 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                   </div>
                 </div>
               </div>
+              <div className="notes">
+                <label>メモ</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="面接の気づきや評価メモを記録できます"
+                />
+              </div>
+              {isDirty && (
+                <div className="edit-actions">
+                  <button className="ghost" onClick={cancelEdit} disabled={saving}>
+                    キャンセル
+                  </button>
+                  <button className="primary" onClick={() => void saveDetails()} disabled={saving}>
+                    {saving ? "保存中..." : "変更を保存"}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -347,6 +431,22 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           justify-content: space-between;
           align-items: flex-start;
           gap: 16px;
+        }
+        .detail-row {
+          display: grid;
+          gap: 6px;
+        }
+        .detail-row label {
+          font-size: 12px;
+          color: #4b5c72;
+        }
+        .detail-row input {
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid #c7d3e6;
+          font-size: 14px;
+          background: #f8fafc;
+          width: min(320px, 100%);
         }
         .badge {
           padding: 6px 10px;
@@ -548,6 +648,32 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         .text {
           font-size: 13px;
           color: #1c2a3a;
+        }
+        .notes {
+          display: grid;
+          gap: 6px;
+        }
+        .notes label {
+          font-size: 12px;
+          color: #4b5c72;
+        }
+        .notes textarea {
+          min-height: 110px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          border: 1px solid #c7d3e6;
+          font-size: 14px;
+          background: #f8fafc;
+          resize: vertical;
+        }
+        .edit-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+        .edit-actions .primary,
+        .edit-actions .ghost {
+          width: auto;
         }
         .empty {
           color: #6b7a90;
