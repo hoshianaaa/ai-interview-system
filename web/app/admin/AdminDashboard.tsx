@@ -51,24 +51,29 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     setCreateResult(data);
   }
 
-  async function loadVideo(interviewId: string) {
+  async function loadVideo(row: InterviewRow) {
+    const interviewId = row.interviewId;
     setLoadingVideoId(interviewId);
     setSelectedId(interviewId);
     setSelectedVideoUrl(null);
     setSelectedChat([]);
     setCurrentTimeSec(0);
     try {
-      const [videoRes, chatRes] = await Promise.all([
-        fetch(`/api/admin/interview/video?interviewId=${interviewId}`),
-        fetch(`/api/admin/interview/chat?interviewId=${interviewId}`)
-      ]);
+      const chatPromise = fetch(`/api/admin/interview/chat?interviewId=${interviewId}`);
+      const videoPromise = row.hasRecording
+        ? fetch(`/api/admin/interview/video?interviewId=${interviewId}`)
+        : Promise.resolve(null);
 
-      const videoData = (await videoRes.json()) as { url?: string; error?: string };
-      if (videoData.url) setSelectedVideoUrl(videoData.url);
+      const [chatRes, videoRes] = await Promise.all([chatPromise, videoPromise]);
 
       const chatData = (await chatRes.json()) as { messages?: ChatItem[] };
       if (Array.isArray(chatData.messages)) {
         setSelectedChat(chatData.messages);
+      }
+
+      if (videoRes) {
+        const videoData = (await videoRes.json()) as { url?: string; error?: string };
+        if (videoData.url) setSelectedVideoUrl(videoData.url);
       }
     } finally {
       setLoadingVideoId(null);
@@ -105,6 +110,10 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
       ),
     [interviews]
   );
+  const selectedRow = useMemo(
+    () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
+    [sorted, selectedId]
+  );
 
   return (
     <main className="page">
@@ -121,121 +130,160 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
       </section>
 
       <section className="grid">
-        <div className="card">
-          <h2>新規面接URLの発行</h2>
-          <div className="form-row">
-            <label>候補者名（任意）</label>
-            <input
-              value={candidateName}
-              onChange={(e) => setCandidateName(e.target.value)}
-              placeholder="例）山田 太郎"
-            />
-          </div>
-          <div className="form-row">
-            <label>面接時間（秒）</label>
-            <input
-              type="number"
-              min={60}
-              step={30}
-              value={durationSec}
-              onChange={(e) => setDurationSec(Number(e.target.value))}
-            />
-          </div>
-          <button className="primary" onClick={() => void createInterview()}>
-            URLを発行
-          </button>
-          {createResult && "error" in createResult && (
-            <p className="error">作成に失敗しました: {createResult.error}</p>
-          )}
-          {hasResult && (
-            <div className="result">
-              <div className="result-row">
-                <span>面接URL</span>
-                <a href={createResult.url} target="_blank" rel="noreferrer">
-                  {createResult.url}
-                </a>
-              </div>
-              <div className="result-row">
-                <span>候補者名</span>
-                <strong>{createResult.candidateName ?? "未設定"}</strong>
-              </div>
+        <div className="stack">
+          <div className="card">
+            <h2>新規面接URLの発行</h2>
+            <div className="form-row">
+              <label>候補者名（任意）</label>
+              <input
+                value={candidateName}
+                onChange={(e) => setCandidateName(e.target.value)}
+                placeholder="例）山田 太郎"
+              />
             </div>
-          )}
+            <div className="form-row">
+              <label>面接時間（秒）</label>
+              <input
+                type="number"
+                min={60}
+                step={30}
+                value={durationSec}
+                onChange={(e) => setDurationSec(Number(e.target.value))}
+              />
+            </div>
+            <button className="primary" onClick={() => void createInterview()}>
+              URLを発行
+            </button>
+            {createResult && "error" in createResult && (
+              <p className="error">作成に失敗しました: {createResult.error}</p>
+            )}
+            {hasResult && (
+              <div className="result">
+                <div className="result-row">
+                  <span>面接URL</span>
+                  <a href={createResult.url} target="_blank" rel="noreferrer">
+                    {createResult.url}
+                  </a>
+                </div>
+                <div className="result-row">
+                  <span>候補者名</span>
+                  <strong>{createResult.candidateName ?? "未設定"}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="card list-card">
+            <h2>面接一覧</h2>
+            {sorted.length === 0 ? (
+              <div className="empty">面接データがありません</div>
+            ) : (
+              <div className="list">
+                {sorted.map((row) => (
+                  <div
+                    key={row.interviewId}
+                    className={`row ${selectedId === row.interviewId ? "selected" : ""}`}
+                  >
+                    <div>
+                      <div className="title">
+                        {row.candidateName ? row.candidateName : "候補者名なし"}
+                      </div>
+                      <div className="meta">
+                        <a href={row.url} target="_blank" rel="noreferrer">
+                          {row.url}
+                        </a>
+                      </div>
+                      <div className="meta">
+                        ステータス: {row.status} / 作成:{" "}
+                        {new Date(row.createdAt).toLocaleString("ja-JP")}
+                      </div>
+                    </div>
+                    <div className="actions">
+                      <button
+                        className="ghost"
+                        onClick={() => void loadVideo(row)}
+                        disabled={loadingVideoId === row.interviewId}
+                      >
+                        {loadingVideoId === row.interviewId ? "読み込み中..." : "詳細を表示"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="card wide">
-          <h2>面接一覧</h2>
-          {sorted.length === 0 ? (
-            <div className="empty">面接データがありません</div>
+        <div className="card detail-card">
+          <h2>面接詳細</h2>
+          {!selectedRow ? (
+            <div className="empty">左の一覧から面接を選択してください</div>
           ) : (
-            <div className="list">
-              {sorted.map((row) => (
-                <div key={row.interviewId} className="row">
-                  <div>
-                    <div className="title">
-                      {row.candidateName ? row.candidateName : "候補者名なし"}
-                    </div>
-                    <div className="meta">
-                      <a href={row.url} target="_blank" rel="noreferrer">
-                        {row.url}
-                      </a>
-                    </div>
-                    <div className="meta">
-                      ステータス: {row.status} / 作成:{" "}
-                      {new Date(row.createdAt).toLocaleString("ja-JP")}
-                    </div>
+            <>
+              <div className="detail-header">
+                <div>
+                  <div className="title">
+                    {selectedRow.candidateName ? selectedRow.candidateName : "候補者名なし"}
                   </div>
-                  <div className="actions">
-                    <button
-                      className="ghost"
-                      onClick={() => void loadVideo(row.interviewId)}
-                      disabled={!row.hasRecording || loadingVideoId === row.interviewId}
-                    >
-                      {loadingVideoId === row.interviewId
-                        ? "読み込み中..."
-                        : row.hasRecording
-                          ? "動画を再生"
-                          : "録画なし"}
-                    </button>
+                  <div className="meta">
+                    <a href={selectedRow.url} target="_blank" rel="noreferrer">
+                      {selectedRow.url}
+                    </a>
                   </div>
-                  {selectedId === row.interviewId && selectedVideoUrl && (
-                    <div className="media">
-                      <div className="video">
-                        <video
-                          ref={videoRef}
-                          controls
-                          src={selectedVideoUrl}
-                          onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
-                        />
-                      </div>
-                      <div className="chat-panel">
-                        <div className="chat-title">Chat Timeline</div>
-                        <div className="chat-list">
-                          {selectedChat.length === 0 ? (
-                            <div className="chat-empty">チャットはまだありません</div>
-                          ) : (
-                            selectedChat.map((msg) => (
-                              <button
-                                key={msg.messageId}
-                                className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
-                                onClick={() => seekTo(msg.offsetMs)}
-                                type="button"
-                              >
-                                <span className="time">{formatTime(msg.offsetMs)}</span>
-                                <span className="speaker">
-                                  {msg.role === "interviewer" ? "面接官" : "候補者"}
-                                </span>
-                                <span className="text">{msg.text}</span>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </div>
+                  <div className="meta">
+                    ステータス: {selectedRow.status} / 作成:{" "}
+                    {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
+                  </div>
+                </div>
+                <div className="badge">
+                  {selectedRow.hasRecording ? "録画あり" : "録画なし"}
+                </div>
+              </div>
+
+              <div className="media">
+                <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
+                  {selectedVideoUrl ? (
+                    <video
+                      ref={videoRef}
+                      controls
+                      src={selectedVideoUrl}
+                      onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
+                    />
+                  ) : (
+                    <div className="video-empty">
+                      {loadingVideoId === selectedRow.interviewId
+                        ? "動画を読み込み中..."
+                        : selectedRow.hasRecording
+                          ? "動画の取得に失敗しました"
+                          : "録画がありません"}
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+                <div className="chat-panel">
+                  <div className="chat-title">Chat Timeline</div>
+                  <div className="chat-list">
+                    {selectedChat.length === 0 ? (
+                      <div className="chat-empty">チャットはまだありません</div>
+                    ) : (
+                      selectedChat.map((msg) => (
+                        <button
+                          key={msg.messageId}
+                          className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
+                          onClick={() => seekTo(msg.offsetMs)}
+                          type="button"
+                        >
+                          <span className="time">{formatTime(msg.offsetMs)}</span>
+                          <span className="speaker">
+                            {msg.role === "interviewer" ? "面接官" : "候補者"}
+                          </span>
+                          <span className="text">{msg.text}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </section>
@@ -277,9 +325,13 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         }
         .grid {
           display: grid;
-          grid-template-columns: minmax(280px, 360px) 1fr;
+          grid-template-columns: minmax(280px, 360px) minmax(520px, 1fr);
           gap: 20px;
           align-items: start;
+        }
+        .stack {
+          display: grid;
+          gap: 20px;
         }
         .card {
           background: #fff;
@@ -288,8 +340,30 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           box-shadow: 0 16px 40px rgba(19, 41, 72, 0.12);
           border: 1px solid rgba(28, 48, 74, 0.08);
         }
-        .card.wide {
+        .list-card {
           min-height: 420px;
+        }
+        .detail-card {
+          min-height: 420px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .detail-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 16px;
+        }
+        .badge {
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 600;
+          background: #eff3fb;
+          color: #1f4fb2;
+          border: 1px solid #d3dcf0;
+          white-space: nowrap;
         }
         h2 {
           margin: 0 0 16px;
@@ -361,6 +435,11 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           display: grid;
           gap: 10px;
         }
+        .row.selected {
+          border-color: #1f4fb2;
+          background: #eef3ff;
+          box-shadow: 0 10px 20px rgba(31, 79, 178, 0.12);
+        }
         .title {
           font-weight: 600;
           margin-bottom: 4px;
@@ -393,6 +472,20 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           border-radius: 12px;
           border: 1px solid #c9d3e3;
           background: #0b1220;
+        }
+        .video.empty {
+          border-radius: 12px;
+          border: 1px dashed #c2cde1;
+          background: #f7f9fc;
+          min-height: 240px;
+          display: grid;
+          place-items: center;
+          color: #6b7a90;
+          font-size: 14px;
+        }
+        .video-empty {
+          padding: 24px;
+          text-align: center;
         }
         .media {
           display: grid;
@@ -472,6 +565,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         @media (max-width: 980px) {
           .grid {
             grid-template-columns: 1fr;
+          }
+          .detail-header {
+            flex-direction: column;
           }
           .media {
             grid-template-columns: 1fr;
