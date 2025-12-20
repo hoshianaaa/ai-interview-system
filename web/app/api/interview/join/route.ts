@@ -87,7 +87,12 @@ export async function POST(req: Request) {
 
   await prisma.interview.update({
     where: { interviewId: updated.interviewId },
-    data: { status: "recording", egressId: egressInfo.egressId, r2ObjectKey: objectKey }
+    data: {
+      status: "recording",
+      egressId: egressInfo.egressId,
+      r2ObjectKey: objectKey,
+      recordingStartedAt: new Date()
+    }
   });
 
   const token = await makeCandidateToken({

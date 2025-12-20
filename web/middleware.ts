@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/interview(.*)",
   "/api/interview/join",
   "/api/interview/end",
+  "/api/interview/chat",
   "/api/interview/webhook",
   "/api/livekit/webhook"
 ]);

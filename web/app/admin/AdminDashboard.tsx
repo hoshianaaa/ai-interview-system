@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 
 type InterviewRow = {
@@ -10,6 +10,14 @@ type InterviewRow = {
   candidateName: string | null;
   createdAt: string;
   hasRecording: boolean;
+};
+
+type ChatItem = {
+  messageId: string;
+  role: "interviewer" | "candidate";
+  text: string;
+  offsetMs: number;
+  createdAt: string;
 };
 
 type CreateResponse =
@@ -23,6 +31,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
+  const [currentTimeSec, setCurrentTimeSec] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const hasResult = createResult && "url" in createResult;
 
@@ -44,16 +55,48 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     setLoadingVideoId(interviewId);
     setSelectedId(interviewId);
     setSelectedVideoUrl(null);
+    setSelectedChat([]);
+    setCurrentTimeSec(0);
     try {
-      const res = await fetch(`/api/admin/interview/video?interviewId=${interviewId}`);
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (data.url) {
-        setSelectedVideoUrl(data.url);
+      const [videoRes, chatRes] = await Promise.all([
+        fetch(`/api/admin/interview/video?interviewId=${interviewId}`),
+        fetch(`/api/admin/interview/chat?interviewId=${interviewId}`)
+      ]);
+
+      const videoData = (await videoRes.json()) as { url?: string; error?: string };
+      if (videoData.url) setSelectedVideoUrl(videoData.url);
+
+      const chatData = (await chatRes.json()) as { messages?: ChatItem[] };
+      if (Array.isArray(chatData.messages)) {
+        setSelectedChat(chatData.messages);
       }
     } finally {
       setLoadingVideoId(null);
     }
   }
+
+  const activeMessageId = useMemo(() => {
+    if (!selectedChat.length) return null;
+    const currentMs = currentTimeSec * 1000;
+    let active: string | null = null;
+    for (const msg of selectedChat) {
+      if (msg.offsetMs <= currentMs) active = msg.messageId;
+      else break;
+    }
+    return active;
+  }, [selectedChat, currentTimeSec]);
+
+  const formatTime = (ms: number) => {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const mm = Math.floor(total / 60);
+    const ss = total % 60;
+    return `${mm}:${String(ss).padStart(2, "0")}`;
+  };
+
+  const seekTo = (offsetMs: number) => {
+    if (!videoRef.current) return;
+    videoRef.current.currentTime = offsetMs / 1000;
+  };
 
   const sorted = useMemo(
     () =>
@@ -156,8 +199,38 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                     </button>
                   </div>
                   {selectedId === row.interviewId && selectedVideoUrl && (
-                    <div className="video">
-                      <video controls src={selectedVideoUrl} />
+                    <div className="media">
+                      <div className="video">
+                        <video
+                          ref={videoRef}
+                          controls
+                          src={selectedVideoUrl}
+                          onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
+                        />
+                      </div>
+                      <div className="chat-panel">
+                        <div className="chat-title">Chat Timeline</div>
+                        <div className="chat-list">
+                          {selectedChat.length === 0 ? (
+                            <div className="chat-empty">チャットはまだありません</div>
+                          ) : (
+                            selectedChat.map((msg) => (
+                              <button
+                                key={msg.messageId}
+                                className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
+                                onClick={() => seekTo(msg.offsetMs)}
+                                type="button"
+                              >
+                                <span className="time">{formatTime(msg.offsetMs)}</span>
+                                <span className="speaker">
+                                  {msg.role === "interviewer" ? "面接官" : "候補者"}
+                                </span>
+                                <span className="text">{msg.text}</span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -321,6 +394,75 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           border: 1px solid #c9d3e3;
           background: #0b1220;
         }
+        .media {
+          display: grid;
+          grid-template-columns: minmax(320px, 1fr) minmax(220px, 320px);
+          gap: 14px;
+        }
+        .chat-panel {
+          border-radius: 12px;
+          border: 1px solid #d8e1f0;
+          background: #f5f8ff;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-height: 360px;
+          overflow: hidden;
+        }
+        .chat-title {
+          font-size: 12px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #3a5a86;
+        }
+        .chat-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          overflow: auto;
+          padding-right: 4px;
+        }
+        .chat-empty {
+          font-size: 13px;
+          color: #6b7a90;
+        }
+        .chat-item {
+          border: 1px solid #d7e0f0;
+          background: #fff;
+          border-radius: 10px;
+          padding: 8px 10px;
+          display: grid;
+          gap: 4px;
+          text-align: left;
+          cursor: pointer;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .chat-item:hover {
+          border-color: #9fb2d5;
+          box-shadow: 0 6px 14px rgba(35, 63, 110, 0.12);
+        }
+        .chat-item.active {
+          border-color: #1f4fb2;
+          box-shadow: 0 8px 18px rgba(31, 79, 178, 0.18);
+          background: #eef3ff;
+        }
+        .chat-item.candidate {
+          background: #f3f8ff;
+        }
+        .time {
+          font-size: 11px;
+          color: #3a4a63;
+        }
+        .speaker {
+          font-size: 12px;
+          font-weight: 600;
+          color: #1f4fb2;
+        }
+        .text {
+          font-size: 13px;
+          color: #1c2a3a;
+        }
         .empty {
           color: #6b7a90;
           font-size: 14px;
@@ -329,6 +471,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         }
         @media (max-width: 980px) {
           .grid {
+            grid-template-columns: 1fr;
+          }
+          .media {
             grid-template-columns: 1fr;
           }
         }

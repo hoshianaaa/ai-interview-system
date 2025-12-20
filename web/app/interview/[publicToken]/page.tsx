@@ -171,7 +171,7 @@ export default function InterviewPage({
             </button>
           </div>
 
-          <InterviewCanvas />
+          <InterviewCanvas publicToken={publicToken} />
         </div>
         <RoomAudioRenderer />
       </LiveKitRoom>
@@ -297,7 +297,7 @@ export default function InterviewPage({
   );
 }
 
-function InterviewCanvas() {
+function InterviewCanvas({ publicToken }: { publicToken: string }) {
   const room = useRoomContext();
   const tracks = useTracks([Track.Source.Camera], { onlySubscribed: false });
   const localTrack =
@@ -328,13 +328,21 @@ function InterviewCanvas() {
         ts: Date.now()
       };
       setMessages((prev) => [...prev, msg].slice(-MAX_MESSAGES));
+      void fetch("/api/interview/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          publicToken,
+          message: { messageId: msg.id, role: msg.role, text: msg.text }
+        })
+      }).catch(() => {});
     };
 
     room.on(RoomEvent.DataReceived, onData);
     return () => {
       room.off(RoomEvent.DataReceived, onData);
     };
-  }, [room]);
+  }, [room, publicToken]);
 
   useEffect(() => {
     if (!chatListRef.current) return;

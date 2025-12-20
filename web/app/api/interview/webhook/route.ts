@@ -56,7 +56,8 @@ export async function POST(req: Request) {
         data: {
           status: "recording",
           egressId: info.egressId,
-          r2ObjectKey: objectKey
+          r2ObjectKey: objectKey,
+          recordingStartedAt: new Date()
         }
       });
     }

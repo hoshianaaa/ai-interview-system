@@ -16,6 +16,11 @@ enum InterviewStatus {
   failed
 }
 
+enum ChatRole {
+  interviewer
+  candidate
+}
+
 model Interview {
   interviewId       String          @id
   publicToken       String?         @unique
@@ -33,6 +38,7 @@ model Interview {
 
   r2Bucket          String
   r2ObjectKey       String?
+  recordingStartedAt DateTime?
 
   createdAt         DateTime        @default(now())
   usedAt            DateTime?
@@ -40,5 +46,23 @@ model Interview {
   endedAt           DateTime?
   error             String?
 
+  messages          InterviewMessage[]
+
   @@index([orgId])
+}
+
+model InterviewMessage {
+  messageId   String    @id
+  interviewId String
+  orgId       String?
+  role        ChatRole
+  text        String
+  offsetMs    Int
+  createdAt   DateTime  @default(now())
+
+  interview   Interview @relation(fields: [interviewId], references: [interviewId], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@index([orgId])
+  @@index([interviewId, offsetMs])
 }
