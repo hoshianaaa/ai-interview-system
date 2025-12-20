@@ -15,6 +15,7 @@ export async function PATCH(req: Request) {
   const candidateNameRaw =
     typeof body.candidateName === "string" ? body.candidateName.trim() : "";
   const notesRaw = typeof body.notes === "string" ? body.notes.trim() : "";
+  const outcomeRaw = typeof body.outcome === "string" ? body.outcome.trim() : "";
 
   if (!interviewId) {
     return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
@@ -25,17 +26,23 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
+  if (outcomeRaw && outcomeRaw !== "pass" && outcomeRaw !== "fail" && outcomeRaw !== "hold") {
+    return NextResponse.json({ error: "invalid outcome" }, { status: 400 });
+  }
+
   const updated = await prisma.interview.update({
     where: { interviewId },
     data: {
       candidateName: candidateNameRaw ? candidateNameRaw : null,
-      interviewNotes: notesRaw ? notesRaw : null
+      interviewNotes: notesRaw ? notesRaw : null,
+      outcome: (outcomeRaw as "pass" | "fail" | "hold") || interview.outcome
     }
   });
 
   return NextResponse.json({
     interviewId: updated.interviewId,
     candidateName: updated.candidateName ?? null,
-    notes: updated.interviewNotes ?? null
+    notes: updated.interviewNotes ?? null,
+    outcome: updated.outcome
   });
 }

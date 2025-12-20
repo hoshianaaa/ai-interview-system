@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 
+type Outcome = "pass" | "fail" | "hold";
+
 type InterviewRow = {
   interviewId: string;
   url: string;
   status: string;
+  outcome: Outcome;
   candidateName: string | null;
   notes: string | null;
   createdAt: string;
@@ -38,7 +41,11 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [editCandidateName, setEditCandidateName] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editOutcome, setEditOutcome] = useState<Outcome>("hold");
   const [saving, setSaving] = useState(false);
+  const [showPass, setShowPass] = useState(true);
+  const [showFail, setShowFail] = useState(true);
+  const [showHold, setShowHold] = useState(true);
 
   const hasResult = createResult && "url" in createResult;
 
@@ -108,6 +115,12 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     videoRef.current.currentTime = offsetMs / 1000;
   };
 
+  const outcomeLabel = (value: Outcome) => {
+    if (value === "pass") return "合格";
+    if (value === "fail") return "不合格";
+    return "保留";
+  };
+
   async function saveDetails() {
     if (!selectedRow) return;
     setSaving(true);
@@ -118,13 +131,15 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         body: JSON.stringify({
           interviewId: selectedRow.interviewId,
           candidateName: editCandidateName.trim(),
-          notes: editNotes
+          notes: editNotes,
+          outcome: editOutcome
         })
       });
       const data = (await res.json()) as {
         interviewId?: string;
         candidateName?: string | null;
         notes?: string | null;
+        outcome?: Outcome;
       };
       if (data.interviewId) {
         setRows((prev) =>
@@ -133,13 +148,15 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
               ? {
                   ...row,
                   candidateName: data.candidateName ?? null,
-                  notes: data.notes ?? null
+                  notes: data.notes ?? null,
+                  outcome: data.outcome ?? row.outcome
                 }
               : row
           )
         );
         setEditCandidateName(data.candidateName ?? "");
         setEditNotes(data.notes ?? "");
+        setEditOutcome(data.outcome ?? editOutcome);
       }
     } finally {
       setSaving(false);
@@ -150,6 +167,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     if (!selectedRow) return;
     setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
+    setEditOutcome(selectedRow.outcome);
   }
 
   const sorted = useMemo(
@@ -157,6 +175,13 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
       [...rows].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [rows]
   );
+  const filtered = useMemo(() => {
+    return sorted.filter((row) => {
+      if (row.outcome === "pass") return showPass;
+      if (row.outcome === "fail") return showFail;
+      return showHold;
+    });
+  }, [sorted, showPass, showFail, showHold]);
   const selectedRow = useMemo(
     () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
     [sorted, selectedId]
@@ -164,7 +189,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
   const isDirty =
     Boolean(selectedRow) &&
     (editCandidateName !== (selectedRow?.candidateName ?? "") ||
-      editNotes !== (selectedRow?.notes ?? ""));
+      editNotes !== (selectedRow?.notes ?? "") ||
+      editOutcome !== (selectedRow?.outcome ?? "hold"));
 
   useEffect(() => {
     if (!selectedRow) {
@@ -174,6 +200,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     }
     setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
+    setEditOutcome(selectedRow.outcome ?? "hold");
   }, [selectedRow?.interviewId]);
 
   return (
@@ -236,11 +263,37 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
 
           <div className="card list-card">
             <h2>面接一覧</h2>
-            {sorted.length === 0 ? (
-              <div className="empty">面接データがありません</div>
+            <div className="filters">
+              <span>判定フィルター</span>
+              <button
+                type="button"
+                className={`filter-chip ${showPass ? "active" : ""}`}
+                onClick={() => setShowPass((v) => !v)}
+              >
+                合格
+              </button>
+              <button
+                type="button"
+                className={`filter-chip ${showFail ? "active" : ""}`}
+                onClick={() => setShowFail((v) => !v)}
+              >
+                不合格
+              </button>
+              <button
+                type="button"
+                className={`filter-chip ${showHold ? "active" : ""}`}
+                onClick={() => setShowHold((v) => !v)}
+              >
+                保留
+              </button>
+            </div>
+            {filtered.length === 0 ? (
+              <div className="empty">
+                {rows.length === 0 ? "面接データがありません" : "条件に一致する面接がありません"}
+              </div>
             ) : (
               <div className="list">
-                {sorted.map((row) => (
+                {filtered.map((row) => (
                   <div
                     key={row.interviewId}
                     className={`row ${selectedId === row.interviewId ? "selected" : ""}`}
@@ -264,7 +317,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                         </a>
                       </div>
                       <div className="meta">
-                        ステータス: {row.status} / 作成:{" "}
+                        判定: {outcomeLabel(row.outcome)} / ステータス: {row.status} / 作成:{" "}
                         {new Date(row.createdAt).toLocaleString("ja-JP")}
                       </div>
                     </div>
@@ -290,6 +343,22 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                       onChange={(e) => setEditCandidateName(e.target.value)}
                       placeholder="候補者名を入力"
                     />
+                  </div>
+                  <div className="detail-row">
+                    <label>判定</label>
+                    <div className="segmented">
+                      {(["hold", "pass", "fail"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`segment ${editOutcome === value ? "active" : ""}`}
+                          onClick={() => setEditOutcome(value)}
+                          disabled={saving}
+                        >
+                          {outcomeLabel(value)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="meta">
                     <a href={selectedRow.url} target="_blank" rel="noreferrer">
@@ -420,6 +489,30 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         .list-card {
           min-height: 420px;
         }
+        .filters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+          font-size: 12px;
+          color: #4b5c72;
+          margin: -4px 0 12px;
+        }
+        .filter-chip {
+          border: 1px solid #c9d3e3;
+          border-radius: 999px;
+          padding: 6px 12px;
+          font-size: 12px;
+          background: #f8fafc;
+          color: #41526b;
+          cursor: pointer;
+        }
+        .filter-chip.active {
+          background: #e8f0ff;
+          border-color: #1f4fb2;
+          color: #1f4fb2;
+          font-weight: 600;
+        }
         .detail-card {
           min-height: 420px;
           display: flex;
@@ -447,6 +540,30 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           font-size: 14px;
           background: #f8fafc;
           width: min(320px, 100%);
+        }
+        .segmented {
+          display: inline-flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .segment {
+          padding: 8px 14px;
+          border-radius: 999px;
+          border: 1px solid #c9d3e3;
+          background: #f8fafc;
+          font-size: 13px;
+          cursor: pointer;
+          color: #41526b;
+        }
+        .segment.active {
+          background: #1f4fb2;
+          border-color: #1f4fb2;
+          color: #fff;
+          font-weight: 600;
+        }
+        .segment:disabled {
+          opacity: 0.6;
+          cursor: default;
         }
         .badge {
           padding: 6px 10px;
