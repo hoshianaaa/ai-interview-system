@@ -16,6 +16,8 @@ export async function PATCH(req: Request) {
     typeof body.candidateName === "string" ? body.candidateName.trim() : "";
   const notesRaw = typeof body.notes === "string" ? body.notes.trim() : "";
   const outcomeRaw = typeof body.outcome === "string" ? body.outcome.trim() : "";
+  const notificationRaw =
+    typeof body.notificationStatus === "string" ? body.notificationStatus.trim() : "";
 
   if (!interviewId) {
     return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
@@ -29,13 +31,25 @@ export async function PATCH(req: Request) {
   if (outcomeRaw && outcomeRaw !== "pass" && outcomeRaw !== "fail" && outcomeRaw !== "hold") {
     return NextResponse.json({ error: "invalid outcome" }, { status: 400 });
   }
+  if (notificationRaw && notificationRaw !== "not_sent" && notificationRaw !== "sent") {
+    return NextResponse.json({ error: "invalid notification status" }, { status: 400 });
+  }
+
+  const notificationStatus =
+    (notificationRaw as "not_sent" | "sent") || interview.notificationStatus;
+  const notifiedAt =
+    notificationStatus === "sent"
+      ? interview.notifiedAt ?? new Date()
+      : null;
 
   const updated = await prisma.interview.update({
     where: { interviewId },
     data: {
       candidateName: candidateNameRaw ? candidateNameRaw : null,
       interviewNotes: notesRaw ? notesRaw : null,
-      outcome: (outcomeRaw as "pass" | "fail" | "hold") || interview.outcome
+      outcome: (outcomeRaw as "pass" | "fail" | "hold") || interview.outcome,
+      notificationStatus,
+      notifiedAt
     }
   });
 
@@ -43,6 +57,8 @@ export async function PATCH(req: Request) {
     interviewId: updated.interviewId,
     candidateName: updated.candidateName ?? null,
     notes: updated.interviewNotes ?? null,
-    outcome: updated.outcome
+    outcome: updated.outcome,
+    notificationStatus: updated.notificationStatus,
+    notifiedAt: updated.notifiedAt ? updated.notifiedAt.toISOString() : null
   });
 }

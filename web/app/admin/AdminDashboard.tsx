@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 
 type Outcome = "pass" | "fail" | "hold";
+type NotificationStatus = "not_sent" | "sent";
 
 type InterviewRow = {
   interviewId: string;
   url: string;
   status: string;
   outcome: Outcome;
+  notificationStatus: NotificationStatus;
   candidateName: string | null;
   notes: string | null;
   createdAt: string;
@@ -42,10 +44,14 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
   const [editCandidateName, setEditCandidateName] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editOutcome, setEditOutcome] = useState<Outcome>("hold");
+  const [editNotificationStatus, setEditNotificationStatus] =
+    useState<NotificationStatus>("not_sent");
   const [saving, setSaving] = useState(false);
   const [showPass, setShowPass] = useState(true);
   const [showFail, setShowFail] = useState(true);
   const [showHold, setShowHold] = useState(true);
+  const [showNotSent, setShowNotSent] = useState(true);
+  const [showSent, setShowSent] = useState(true);
 
   const hasResult = createResult && "url" in createResult;
 
@@ -120,6 +126,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     if (value === "fail") return "不合格";
     return "保留";
   };
+  const notificationLabel = (value: NotificationStatus) =>
+    value === "sent" ? "通知済" : "未通知";
 
   async function saveDetails() {
     if (!selectedRow) return;
@@ -132,7 +140,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           interviewId: selectedRow.interviewId,
           candidateName: editCandidateName.trim(),
           notes: editNotes,
-          outcome: editOutcome
+          outcome: editOutcome,
+          notificationStatus: editNotificationStatus
         })
       });
       const data = (await res.json()) as {
@@ -140,6 +149,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         candidateName?: string | null;
         notes?: string | null;
         outcome?: Outcome;
+        notificationStatus?: NotificationStatus;
       };
       if (data.interviewId) {
         setRows((prev) =>
@@ -149,7 +159,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                   ...row,
                   candidateName: data.candidateName ?? null,
                   notes: data.notes ?? null,
-                  outcome: data.outcome ?? row.outcome
+                  outcome: data.outcome ?? row.outcome,
+                  notificationStatus: data.notificationStatus ?? row.notificationStatus
                 }
               : row
           )
@@ -157,6 +168,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         setEditCandidateName(data.candidateName ?? "");
         setEditNotes(data.notes ?? "");
         setEditOutcome(data.outcome ?? editOutcome);
+        setEditNotificationStatus(
+          data.notificationStatus ?? editNotificationStatus
+        );
       }
     } finally {
       setSaving(false);
@@ -168,6 +182,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
     setEditOutcome(selectedRow.outcome);
+    setEditNotificationStatus(selectedRow.notificationStatus);
   }
 
   const sorted = useMemo(
@@ -182,6 +197,12 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
       return showHold;
     });
   }, [sorted, showPass, showFail, showHold]);
+  const filteredByNotification = useMemo(() => {
+    return filtered.filter((row) => {
+      if (row.notificationStatus === "sent") return showSent;
+      return showNotSent;
+    });
+  }, [filtered, showSent, showNotSent]);
   const selectedRow = useMemo(
     () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
     [sorted, selectedId]
@@ -190,7 +211,8 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     Boolean(selectedRow) &&
     (editCandidateName !== (selectedRow?.candidateName ?? "") ||
       editNotes !== (selectedRow?.notes ?? "") ||
-      editOutcome !== (selectedRow?.outcome ?? "hold"));
+      editOutcome !== (selectedRow?.outcome ?? "hold") ||
+      editNotificationStatus !== (selectedRow?.notificationStatus ?? "not_sent"));
 
   useEffect(() => {
     if (!selectedRow) {
@@ -201,6 +223,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
     setEditOutcome(selectedRow.outcome ?? "hold");
+    setEditNotificationStatus(selectedRow.notificationStatus ?? "not_sent");
   }, [selectedRow?.interviewId]);
 
   return (
@@ -264,7 +287,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           <div className="card list-card">
             <h2>面接一覧</h2>
             <div className="filters">
-              <span>判定フィルター</span>
+              <span className="filter-label">判定</span>
               <button
                 type="button"
                 className={`filter-chip pass ${showPass ? "active" : ""}`}
@@ -286,14 +309,30 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
               >
                 保留
               </button>
+              <span className="divider" />
+              <span className="filter-label">通知</span>
+              <button
+                type="button"
+                className={`filter-chip not-sent ${showNotSent ? "active" : ""}`}
+                onClick={() => setShowNotSent((v) => !v)}
+              >
+                未通知
+              </button>
+              <button
+                type="button"
+                className={`filter-chip sent ${showSent ? "active" : ""}`}
+                onClick={() => setShowSent((v) => !v)}
+              >
+                通知済
+              </button>
             </div>
-            {filtered.length === 0 ? (
+            {filteredByNotification.length === 0 ? (
               <div className="empty">
                 {rows.length === 0 ? "面接データがありません" : "条件に一致する面接がありません"}
               </div>
             ) : (
               <div className="list">
-                {filtered.map((row) => (
+                {filteredByNotification.map((row) => (
                   <div
                     key={row.interviewId}
                     className={`row ${selectedId === row.interviewId ? "selected" : ""}`}
@@ -315,6 +354,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                         <span className={`outcome-tag ${row.outcome}`}>
                           {outcomeLabel(row.outcome)}
                         </span>
+                        <span className={`notification-tag ${row.notificationStatus}`}>
+                          {notificationLabel(row.notificationStatus)}
+                        </span>
                       </div>
                       <div className="meta">
                         <a href={row.url} target="_blank" rel="noreferrer">
@@ -322,7 +364,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                         </a>
                       </div>
                       <div className="meta">
-                        判定: {outcomeLabel(row.outcome)} / ステータス: {row.status} / 作成:{" "}
+                        ステータス: {row.status} / 作成:{" "}
                         {new Date(row.createdAt).toLocaleString("ja-JP")}
                       </div>
                     </div>
@@ -349,19 +391,35 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                       placeholder="候補者名を入力"
                     />
                   </div>
-                      <div className="detail-row">
-                        <label>判定</label>
-                        <div className="segmented">
-                          {(["hold", "pass", "fail"] as const).map((value) => (
-                            <button
-                              key={value}
-                              type="button"
-                              className={`segment ${value} ${editOutcome === value ? "active" : ""}`}
-                              onClick={() => setEditOutcome(value)}
-                              disabled={saving}
-                            >
-                              {outcomeLabel(value)}
-                            </button>
+                  <div className="detail-row">
+                    <label>判定</label>
+                    <div className="segmented">
+                      {(["hold", "pass", "fail"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`segment ${value} ${editOutcome === value ? "active" : ""}`}
+                          onClick={() => setEditOutcome(value)}
+                          disabled={saving}
+                        >
+                          {outcomeLabel(value)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="detail-row">
+                    <label>通知</label>
+                    <div className="segmented">
+                      {(["not_sent", "sent"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`segment notify ${value} ${editNotificationStatus === value ? "active" : ""}`}
+                          onClick={() => setEditNotificationStatus(value)}
+                          disabled={saving}
+                        >
+                          {notificationLabel(value)}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -503,6 +561,15 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           color: #4b5c72;
           margin: -4px 0 12px;
         }
+        .filter-label {
+          font-weight: 600;
+        }
+        .divider {
+          width: 1px;
+          height: 18px;
+          background: #d2dbe9;
+          margin: 0 2px;
+        }
         .filter-chip {
           border: 1px solid #c9d3e3;
           border-radius: 999px;
@@ -529,6 +596,16 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           background: #e2e8f0;
           border-color: #94a3b8;
           color: #334155;
+        }
+        .filter-chip.not-sent.active {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
+        }
+        .filter-chip.sent.active {
+          background: #dbeafe;
+          border-color: #3b82f6;
+          color: #1d4ed8;
         }
         .detail-card {
           min-height: 420px;
@@ -589,6 +666,16 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           background: #e2e8f0;
           border-color: #94a3b8;
           color: #334155;
+        }
+        .segment.notify.not_sent.active {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
+        }
+        .segment.notify.sent.active {
+          background: #dbeafe;
+          border-color: #3b82f6;
+          color: #1d4ed8;
         }
         .segment:disabled {
           opacity: 0.6;
@@ -719,6 +806,23 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           background: #e2e8f0;
           border-color: #94a3b8;
           color: #334155;
+        }
+        .notification-tag {
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          border: 1px solid transparent;
+        }
+        .notification-tag.not_sent {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
+        }
+        .notification-tag.sent {
+          background: #dbeafe;
+          border-color: #3b82f6;
+          color: #1d4ed8;
         }
         .meta {
           font-size: 12px;

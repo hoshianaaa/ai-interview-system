@@ -22,6 +22,11 @@ enum InterviewOutcome {
   hold
 }
 
+enum NotificationStatus {
+  not_sent
+  sent
+}
+
 enum ChatRole {
   interviewer
   candidate
@@ -34,6 +39,8 @@ model Interview {
   roomName          String          @unique
   status            InterviewStatus @default(created)
   outcome           InterviewOutcome @default(hold)
+  notificationStatus NotificationStatus @default(not_sent)
+  notifiedAt        DateTime?
   durationSec       Int
 
   candidateIdentity String
