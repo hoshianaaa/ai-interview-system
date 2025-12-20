@@ -14,6 +14,10 @@ export default async function HomePage() {
     where: { orgId },
     orderBy: { createdAt: "desc" }
   });
+  const templates = await prisma.promptTemplate.findMany({
+    where: { orgId },
+    orderBy: { createdAt: "desc" }
+  });
   const data = interviews.map((row) => ({
     interviewId: row.interviewId,
     url: `${baseUrl}/interview/${row.publicToken ?? row.interviewId}`,
@@ -24,6 +28,12 @@ export default async function HomePage() {
     createdAt: row.createdAt.toISOString(),
     hasRecording: Boolean(row.r2ObjectKey)
   }));
+  const templateData = templates.map((row) => ({
+    templateId: row.templateId,
+    name: row.name,
+    body: row.body,
+    createdAt: row.createdAt.toISOString()
+  }));
 
-  return <AdminDashboard interviews={data} />;
+  return <AdminDashboard interviews={data} promptTemplates={templateData} />;
 }

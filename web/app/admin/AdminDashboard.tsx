@@ -23,15 +23,34 @@ type ChatItem = {
   createdAt: string;
 };
 
+type PromptTemplate = {
+  templateId: string;
+  name: string;
+  body: string;
+  createdAt: string;
+};
+
 type CreateResponse =
   | { interviewId: string; roomName: string; url: string; candidateName: string | null }
   | { error: string };
 
-export default function AdminDashboard({ interviews }: { interviews: InterviewRow[] }) {
+export default function AdminDashboard({
+  interviews,
+  promptTemplates
+}: {
+  interviews: InterviewRow[];
+  promptTemplates: PromptTemplate[];
+}) {
   const [rows, setRows] = useState(interviews);
   const [durationSec, setDurationSec] = useState(600);
   const [candidateName, setCandidateName] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
+  const [templates, setTemplates] = useState(promptTemplates);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
   const [createResult, setCreateResult] = useState<CreateResponse | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
@@ -58,6 +77,70 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     });
     const data = (await res.json()) as CreateResponse;
     setCreateResult(data);
+  }
+
+  async function reloadTemplates() {
+    setTemplateLoading(true);
+    setTemplateError(null);
+    try {
+      const res = await fetch("/api/admin/prompt-templates");
+      const data = (await res.json()) as { templates?: PromptTemplate[]; error?: string };
+      if (Array.isArray(data.templates)) {
+        setTemplates(data.templates);
+      } else if (data.error) {
+        setTemplateError("テンプレートの取得に失敗しました");
+      }
+    } finally {
+      setTemplateLoading(false);
+    }
+  }
+
+  async function addTemplate() {
+    const name = templateName.trim();
+    const body = prompt.trim();
+    if (!name) {
+      setTemplateError("テンプレート名を入力してください");
+      return;
+    }
+    if (!body) {
+      setTemplateError("プロンプトが空です");
+      return;
+    }
+    setTemplateSaving(true);
+    setTemplateError(null);
+    try {
+      const res = await fetch("/api/admin/prompt-templates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, body })
+      });
+      const data = (await res.json()) as { template?: PromptTemplate; error?: string };
+      if (data.template) {
+        setTemplates((prev) => [data.template!, ...prev]);
+        setSelectedTemplateId(data.template.templateId);
+        setTemplateName("");
+        return;
+      }
+      if (res.status === 409) {
+        setTemplateError("同名のテンプレートが既にあります");
+        return;
+      }
+      setTemplateError("テンプレートの追加に失敗しました");
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  function applyTemplate(templateId: string) {
+    setSelectedTemplateId(templateId);
+    if (!templateId) {
+      setPrompt(DEFAULT_INTERVIEW_PROMPT);
+      return;
+    }
+    const template = templates.find((row) => row.templateId === templateId);
+    if (template) {
+      setPrompt(template.body);
+    }
   }
 
   async function loadVideo(row: InterviewRow) {
@@ -217,6 +300,31 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
               />
             </div>
             <div className="form-row">
+              <label>テンプレート</label>
+              <div className="template-controls">
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => applyTemplate(e.target.value)}
+                >
+                  <option value="">デフォルト（標準プロンプト）</option>
+                  {templates.map((template) => (
+                    <option key={template.templateId} value={template.templateId}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="ghost"
+                  onClick={() => void reloadTemplates()}
+                  type="button"
+                  disabled={templateLoading}
+                >
+                  {templateLoading ? "取得中..." : "再読み込み"}
+                </button>
+              </div>
+              <p className="helper">選択するとプロンプトに反映されます。</p>
+            </div>
+            <div className="form-row">
               <label>プロンプト</label>
               <textarea
                 value={prompt}
@@ -224,6 +332,25 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
                 placeholder="面接AIの指示文を入力してください"
               />
             </div>
+            <details className="template-create">
+              <summary>新規テンプレートを追加</summary>
+              <div className="template-fields">
+                <input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="テンプレート名"
+                />
+                <button
+                  className="ghost"
+                  onClick={() => void addTemplate()}
+                  type="button"
+                  disabled={templateSaving}
+                >
+                  {templateSaving ? "追加中..." : "現在のプロンプトで追加"}
+                </button>
+              </div>
+              {templateError && <p className="error">{templateError}</p>}
+            </details>
             <button className="primary" onClick={() => void createInterview()}>
               URLを発行
             </button>
@@ -495,6 +622,13 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           font-size: 14px;
           background: #f8fafc;
         }
+        select {
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid #c7d3e6;
+          font-size: 14px;
+          background: #f8fafc;
+        }
         .form-row textarea {
           min-height: 140px;
           padding: 10px 12px;
@@ -504,6 +638,46 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           line-height: 1.4;
           background: #f8fafc;
           resize: vertical;
+        }
+        .template-controls {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .template-controls select {
+          flex: 1;
+        }
+        .helper {
+          margin: 6px 0 0;
+          font-size: 12px;
+          color: #6b7a90;
+        }
+        .template-create {
+          border-radius: 12px;
+          border: 1px dashed #c7d3e6;
+          background: #f8fafc;
+          padding: 10px 12px;
+          margin-bottom: 12px;
+          display: grid;
+          gap: 10px;
+        }
+        .template-create summary {
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          color: #1f4fb2;
+          list-style: none;
+        }
+        .template-create summary::-webkit-details-marker {
+          display: none;
+        }
+        .template-fields {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .template-fields input {
+          flex: 1;
         }
         .primary {
           width: 100%;

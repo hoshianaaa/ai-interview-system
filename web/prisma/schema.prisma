@@ -68,3 +68,15 @@ model InterviewMessage {
   @@index([orgId])
   @@index([interviewId, offsetMs])
 }
+
+model PromptTemplate {
+  templateId String   @id
+  orgId      String
+  name       String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([orgId])
+  @@unique([orgId, name])
+}
