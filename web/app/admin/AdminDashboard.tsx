@@ -119,9 +119,9 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
     <main className="page">
       <section className="header">
         <div>
-          <p className="eyebrow">AI Interview Admin</p>
-          <h1>面接管理ダッシュボード</h1>
-          <p className="subtle">面接URLの発行、履歴確認、録画再生をまとめて管理します。</p>
+          <h1 className="brand">
+            PM1 <span>AI Interview</span>
+          </h1>
         </div>
         <div className="user">
           <OrganizationSwitcher />
@@ -298,7 +298,7 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
         }
         .header {
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           justify-content: space-between;
           gap: 24px;
           margin-bottom: 24px;
@@ -309,19 +309,12 @@ export default function AdminDashboard({ interviews }: { interviews: InterviewRo
           gap: 12px;
         }
         h1 {
-          margin: 4px 0 8px;
-          font-size: 28px;
-        }
-        .eyebrow {
-          font-size: 12px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: #3a5a86;
           margin: 0;
+          font-size: 22px;
+          line-height: 1.2;
         }
-        .subtle {
-          color: #546178;
-          margin: 0;
+        .brand span {
+          color: #1f4fb2;
         }
         .grid {
           display: grid;
