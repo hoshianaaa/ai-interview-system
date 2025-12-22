@@ -238,6 +238,7 @@ export default function AdminDashboard({
       });
       upsertApplication(application);
       insertInterview(buildInterviewFromResponse(data, application));
+      selectApplication(data.applicationId);
     }
   }
 
