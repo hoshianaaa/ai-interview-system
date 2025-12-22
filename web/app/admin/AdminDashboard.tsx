@@ -119,6 +119,7 @@ export default function AdminDashboard({
     String(settings.defaultExpiresHours)
   );
   const [newCandidateName, setNewCandidateName] = useState("");
+  const [newCandidateEmail, setNewCandidateEmail] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [templates, setTemplates] = useState(
     promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
@@ -140,6 +141,7 @@ export default function AdminDashboard({
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
+  const [editApplicationEmail, setEditApplicationEmail] = useState("");
   const [editApplicationNotes, setEditApplicationNotes] = useState("");
   const [editDecision, setEditDecision] = useState<Decision>("undecided");
   const [savingInterview, setSavingInterview] = useState(false);
@@ -800,6 +802,7 @@ export default function AdminDashboard({
   function cancelApplicationEdit() {
     if (!selectedApplication) return;
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
+    setEditApplicationEmail("");
     setEditApplicationNotes(selectedApplication.notes ?? "");
   }
 
@@ -994,11 +997,13 @@ export default function AdminDashboard({
   useEffect(() => {
     if (!selectedApplication) {
       setEditApplicationCandidateName("");
+      setEditApplicationEmail("");
       setEditApplicationNotes("");
       setApplicationInterviewResult(null);
       return;
     }
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
+    setEditApplicationEmail("");
     setEditApplicationNotes(selectedApplication.notes ?? "");
     setApplicationInterviewResult(null);
   }, [selectedApplication?.applicationId]);
@@ -1367,12 +1372,19 @@ export default function AdminDashboard({
             <section className="panel">
               <div className="card">
                 <h2>新規応募の追加</h2>
-                <div className="form-row">
-                  <label>候補者名（任意）</label>
+                <div className="form-row form-row-inline">
+                  <label className="inline-label">候補者名：</label>
                   <input
                     value={newCandidateName}
                     onChange={(e) => setNewCandidateName(e.target.value)}
                     placeholder="例）山田 太郎"
+                  />
+                  <label className="inline-label">メールアドレス：</label>
+                  <input
+                    type="email"
+                    value={newCandidateEmail}
+                    onChange={(e) => setNewCandidateEmail(e.target.value)}
+                    placeholder="example@example.com"
                   />
                 </div>
                 <div className="form-row">
@@ -1518,13 +1530,20 @@ export default function AdminDashboard({
                   <div className="empty">左の一覧から応募を選択してください</div>
                 ) : (
                   <div className="application-detail">
-                    <div className="detail-row">
-                      <label>候補者名</label>
+                    <div className="detail-row detail-row-inline">
+                      <label>候補者名：</label>
                       <input
                         value={editApplicationCandidateName}
                         onChange={(e) => setEditApplicationCandidateName(e.target.value)}
                         placeholder="候補者名を入力"
                         disabled={savingApplication}
+                      />
+                      <label>メールアドレス：</label>
+                      <input
+                        type="email"
+                        value={editApplicationEmail}
+                        onChange={(e) => setEditApplicationEmail(e.target.value)}
+                        placeholder="example@example.com"
                       />
                     </div>
                     {applicationInterviewResult && "error" in applicationInterviewResult && (
@@ -2019,7 +2038,7 @@ export default function AdminDashboard({
         }
         .content {
           flex: 1;
-          padding: 32px 32px 60px;
+          padding: 24px 32px 60px;
           display: flex;
           flex-direction: column;
           gap: 20px;
@@ -2372,6 +2391,20 @@ export default function AdminDashboard({
           display: grid;
           gap: 6px;
         }
+        .detail-row-inline {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+          align-items: center;
+          gap: 8px;
+        }
+        .detail-row-inline label {
+          margin: 0;
+          white-space: nowrap;
+        }
+        .detail-row-inline input {
+          width: 100%;
+          min-width: 0;
+        }
         .detail-row label {
           font-size: 12px;
           color: #4b5c72;
@@ -2403,6 +2436,21 @@ export default function AdminDashboard({
           flex-direction: column;
           gap: 6px;
           margin-bottom: 12px;
+        }
+        .form-row-inline {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+          align-items: center;
+          gap: 8px;
+        }
+        .form-row-inline .inline-label {
+          font-size: 12px;
+          color: #4b5c72;
+          white-space: nowrap;
+        }
+        .form-row-inline input {
+          width: 100%;
+          min-width: 0;
         }
         label {
           font-size: 12px;
