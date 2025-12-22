@@ -1944,7 +1944,7 @@ export default function AdminDashboard({
           opacity: 0;
           transform: translateY(-4px);
           overflow: hidden;
-          transition: max-height 0.45s ease, opacity 0.45s ease, transform 0.45s ease;
+          transition: max-height 0.65s ease, opacity 0.65s ease, transform 0.65s ease;
           padding-right: 2px;
         }
         .nav-panel.open {
