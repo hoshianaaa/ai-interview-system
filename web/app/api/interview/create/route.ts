@@ -13,7 +13,9 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const durationSec = Number(body.durationSec ?? 600);
+  const durationRaw = Number(body.durationSec ?? 600);
+  const normalizedDuration = Number.isFinite(durationRaw) ? Math.round(durationRaw) : 600;
+  const durationSec = Math.min(1800, Math.max(60, normalizedDuration));
   const candidateName =
     typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
   const promptRaw = typeof body.prompt === "string" ? body.prompt : "";
