@@ -1587,110 +1587,105 @@ export default function AdminDashboard({
                             <div className="empty">面接がありません</div>
                           )}
                         </div>
-                        <div className="section-title-row">
-                          <div className="section-title">面接詳細</div>
-                          <div className="section-title-actions">
-                            {canCreateAdditionalInterview && (
-                              <button
-                                className="ghost"
-                                type="button"
-                                onClick={() => void createNextInterview()}
-                              >
-                                {createInterviewLabel}
-                              </button>
-                            )}
-                            {selectedApplication.interviews.length > 0 && (
-                              <select
-                                value={selectedRow?.interviewId ?? ""}
-                                onChange={(e) => {
-                                  const interviewId = e.target.value;
-                                  const next = selectedApplication.interviews.find(
-                                    (row) => row.interviewId === interviewId
-                                  );
-                                  if (next) void loadVideo(next);
-                                }}
-                                disabled={selectedApplication.interviews.length <= 1}
-                              >
-                                <option value="" disabled>
-                                  面接を選択してください
-                                </option>
-                                {selectedApplication.interviews
-                                  .slice()
-                                  .sort((a, b) => {
-                                    if (a.round !== b.round) return b.round - a.round;
-                                    return (
-                                      new Date(b.createdAt).getTime() -
-                                      new Date(a.createdAt).getTime()
-                                    );
-                                  })
-                                  .map((row) => (
-                                    <option key={row.interviewId} value={row.interviewId}>
-                                      第{row.round}次（{decisionLabel(row.decision)}）{" "}
-                                      {new Date(row.createdAt).toLocaleString("ja-JP")}
-                                    </option>
-                                  ))}
-                              </select>
-                            )}
-                            {selectedRow && (
-                              <button
-                                className="danger"
-                                type="button"
-                                onClick={() => void deleteInterview()}
-                                disabled={deletingInterview}
-                              >
-                                {deletingInterview ? "削除中..." : "面接を削除"}
-                              </button>
-                            )}
+                        {canCreateAdditionalInterview && (
+                          <div className="section-title-row">
+                            <button
+                              className="ghost"
+                              type="button"
+                              onClick={() => void createNextInterview()}
+                            >
+                              {createInterviewLabel}
+                            </button>
                           </div>
-                        </div>
+                        )}
                         {selectedRow ? (
                           <div className="interview-detail">
-                            <div className="interview-top-row">
-                              {isDecisionLocked && (
-                                <div className="interview-url">
-                                  面接URL:{" "}
-                                  <a href={selectedRow.url} target="_blank" rel="noreferrer">
-                                    {selectedRow.url}
-                                  </a>
-                                  {selectedRow.expiresAt && (
-                                    <span>
-                                      {" "}
-                                      （有効期限:{" "}
-                                      {new Date(selectedRow.expiresAt).toLocaleString("ja-JP")})
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {!isDecisionLocked && (
-                                <div className="decision-select">
-                                  <fieldset
-                                    className="decision-options"
-                                    disabled={savingInterview}
-                                    aria-label="判定"
+                            <div className="interview-header">
+                              <div className="interview-title">面接詳細</div>
+                              <div className="interview-actions">
+                                <div className="interview-switcher">
+                                  <select
+                                    value={selectedRow.interviewId}
+                                    onChange={(e) => {
+                                      const interviewId = e.target.value;
+                                      const next = selectedApplication.interviews.find(
+                                        (row) => row.interviewId === interviewId
+                                      );
+                                      if (next) void loadVideo(next);
+                                    }}
+                                    disabled={selectedApplication.interviews.length <= 1}
                                   >
-                                    {(["undecided", "pass", "fail", "hold"] as const).map(
-                                      (value) => (
-                                        <label
-                                          key={value}
-                                          className={`decision-option ${value} ${
-                                            editDecision === value ? "selected" : ""
-                                          }`}
-                                        >
-                                          <input
-                                            type="radio"
-                                            name={`decision-${selectedRow.interviewId}`}
-                                            value={value}
-                                            checked={editDecision === value}
-                                            onChange={() => handleDecisionChange(value)}
-                                          />
-                                          <span>{decisionLabel(value)}</span>
-                                        </label>
-                                      )
-                                    )}
-                                  </fieldset>
+                                    {selectedApplication.interviews
+                                      .slice()
+                                      .sort((a, b) => {
+                                        if (a.round !== b.round) return b.round - a.round;
+                                        return (
+                                          new Date(b.createdAt).getTime() -
+                                          new Date(a.createdAt).getTime()
+                                        );
+                                      })
+                                      .map((row) => (
+                                        <option key={row.interviewId} value={row.interviewId}>
+                                          第{row.round}次（{decisionLabel(row.decision)}）{" "}
+                                          {new Date(row.createdAt).toLocaleString("ja-JP")}
+                                        </option>
+                                      ))}
+                                  </select>
                                 </div>
-                              )}
+                                {!isDecisionLocked && (
+                                  <div className="decision-select">
+                                    <fieldset
+                                      className="decision-options"
+                                      disabled={savingInterview}
+                                      aria-label="判定"
+                                    >
+                                      {(["undecided", "pass", "fail", "hold"] as const).map(
+                                        (value) => (
+                                          <label
+                                            key={value}
+                                            className={`decision-option ${value} ${
+                                              editDecision === value ? "selected" : ""
+                                            }`}
+                                          >
+                                            <input
+                                              type="radio"
+                                              name={`decision-${selectedRow.interviewId}`}
+                                              value={value}
+                                              checked={editDecision === value}
+                                              onChange={() => handleDecisionChange(value)}
+                                            />
+                                            <span>{decisionLabel(value)}</span>
+                                          </label>
+                                        )
+                                      )}
+                                    </fieldset>
+                                  </div>
+                                )}
+                                <button
+                                  className="danger"
+                                  type="button"
+                                  onClick={() => void deleteInterview()}
+                                  disabled={deletingInterview}
+                                >
+                                  {deletingInterview ? "削除中..." : "面接を削除"}
+                                </button>
+                              </div>
                             </div>
+                            {isDecisionLocked && (
+                              <div className="interview-url">
+                                面接URL:{" "}
+                                <a href={selectedRow.url} target="_blank" rel="noreferrer">
+                                  {selectedRow.url}
+                                </a>
+                                {selectedRow.expiresAt && (
+                                  <span>
+                                    {" "}
+                                    （有効期限:{" "}
+                                    {new Date(selectedRow.expiresAt).toLocaleString("ja-JP")})
+                                  </span>
+                                )}
+                              </div>
+                            )}
                             {canReissueInterview && (
                               <div className="detail-actions">
                                 <button
@@ -2351,11 +2346,35 @@ export default function AdminDashboard({
           padding: 16px;
           min-width: 0;
         }
-        .interview-top-row {
+        .interview-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1f2f44;
+          min-height: 28px;
           display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
+          align-items: center;
+        }
+        .interview-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .interview-actions {
+          margin-left: auto;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          flex: 1 1 auto;
+        }
+        .interview-switcher {
+          flex: 0 1 220px;
+          min-width: 160px;
+        }
+        .interview-switcher select {
+          width: 100%;
         }
         .interview-url {
           flex: 1;
@@ -2368,7 +2387,8 @@ export default function AdminDashboard({
           flex-direction: column;
           gap: 6px;
           min-width: 140px;
-          margin-left: auto;
+          flex: 0 1 auto;
+          margin-left: 0;
         }
         .decision-options {
           border: 0;
@@ -2751,7 +2771,7 @@ export default function AdminDashboard({
         .section-title-row {
           display: flex;
           align-items: center;
-          justify-content: space-between;
+          justify-content: flex-start;
           gap: 12px;
         }
         .section-title-actions {
@@ -2766,9 +2786,11 @@ export default function AdminDashboard({
         }
         .video video {
           width: 100%;
+          height: 100%;
           border-radius: 12px;
           border: 1px solid #c9d3e3;
           background: #0b1220;
+          object-fit: contain;
         }
         .video.empty {
           border-radius: 12px;
@@ -2784,12 +2806,22 @@ export default function AdminDashboard({
           padding: 24px;
           text-align: center;
         }
+        .video {
+          display: flex;
+          align-items: stretch;
+          min-height: 240px;
+        }
         .media {
           display: grid;
           grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
           gap: 14px;
           align-items: stretch;
           margin-bottom: 16px;
+        }
+        .media > .video,
+        .media > .chat-panel {
+          height: 100%;
+          align-self: stretch;
         }
         .media > * {
           min-width: 0;
@@ -2805,7 +2837,9 @@ export default function AdminDashboard({
           min-width: 0;
           overflow: hidden;
           height: 100%;
-          min-height: 240px;
+          min-height: 0;
+          max-height: 100%;
+          transform: translateY(2px);
         }
         .chat-title {
           font-size: 12px;
@@ -2819,6 +2853,8 @@ export default function AdminDashboard({
           gap: 8px;
           overflow: auto;
           padding-right: 4px;
+          flex: 1;
+          min-height: 0;
         }
         .chat-empty {
           font-size: 13px;
@@ -2883,6 +2919,9 @@ export default function AdminDashboard({
         .notes-panel label {
           font-size: 12px;
           color: #4b5c72;
+          min-height: 28px;
+          display: flex;
+          align-items: center;
         }
         .notes-panel textarea {
           min-height: 360px;
