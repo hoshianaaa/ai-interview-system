@@ -573,6 +573,12 @@ export default function AdminDashboard({
     setSelectedApplicationId(applicationId);
   }
 
+  function selectApplicationFromList(applicationId: string) {
+    setSelectedApplicationId(applicationId);
+    setApplicationsOpen(true);
+    setActivePanel("applications");
+  }
+
   async function loadVideo(row: InterviewRow) {
     const interviewId = row.interviewId;
     setLoadingVideoId(interviewId);
@@ -1360,11 +1366,11 @@ export default function AdminDashboard({
                                   className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
                                   role="button"
                                   tabIndex={0}
-                                  onClick={() => selectApplication(app.applicationId)}
+                                  onClick={() => selectApplicationFromList(app.applicationId)}
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter" || e.key === " ") {
                                       e.preventDefault();
-                                      selectApplication(app.applicationId);
+                                      selectApplicationFromList(app.applicationId);
                                     }
                                   }}
                                 >
