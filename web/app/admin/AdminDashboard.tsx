@@ -1360,30 +1360,6 @@ export default function AdminDashboard({
                     )}
                     <div className="application-split">
                       <div className="application-left">
-                        {hasApplicationInterviewResult && (
-                          <div className="result">
-                            <div className="result-row">
-                              <span>面接URL</span>
-                              <a
-                                href={applicationInterviewResult.url}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {applicationInterviewResult.url}
-                              </a>
-                            </div>
-                            {applicationInterviewResult.expiresAt && (
-                              <div className="result-row">
-                                <span>有効期限</span>
-                                <strong>
-                                  {new Date(
-                                    applicationInterviewResult.expiresAt
-                                  ).toLocaleString("ja-JP")}
-                                </strong>
-                              </div>
-                            )}
-                          </div>
-                        )}
                         <div className="application-interviews">
                           {selectedApplication.interviews.length === 0 && (
                             <div className="empty">面接がありません</div>
@@ -1454,6 +1430,13 @@ export default function AdminDashboard({
                                   <a href={selectedRow.url} target="_blank" rel="noreferrer">
                                     {selectedRow.url}
                                   </a>
+                                  {selectedRow.expiresAt && (
+                                    <span>
+                                      {" "}
+                                      （有効期限:{" "}
+                                      {new Date(selectedRow.expiresAt).toLocaleString("ja-JP")})
+                                    </span>
+                                  )}
                                 </div>
                               )}
                               {!isDecisionLocked && (
