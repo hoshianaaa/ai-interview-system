@@ -32,6 +32,7 @@ export default async function HomePage() {
     templateId: row.templateId,
     name: row.name,
     body: row.body,
+    isDefault: row.isDefault,
     createdAt: row.createdAt.toISOString()
   }));
 

@@ -20,6 +20,7 @@ export async function GET() {
       templateId: row.templateId,
       name: row.name,
       body: row.body,
+      isDefault: row.isDefault,
       createdAt: row.createdAt.toISOString()
     }))
   });
@@ -34,6 +35,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const promptBody = typeof body.body === "string" ? body.body.trim() : "";
+  const isDefault = typeof body.isDefault === "boolean" ? body.isDefault : false;
 
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -47,13 +49,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "NAME_ALREADY_EXISTS" }, { status: 409 });
   }
 
-  const created = await prisma.promptTemplate.create({
-    data: {
-      templateId: crypto.randomUUID(),
-      orgId,
-      name,
-      body: promptBody
+  const created = await prisma.$transaction(async (tx) => {
+    if (isDefault) {
+      await tx.promptTemplate.updateMany({
+        where: { orgId },
+        data: { isDefault: false }
+      });
     }
+    return tx.promptTemplate.create({
+      data: {
+        templateId: crypto.randomUUID(),
+        orgId,
+        name,
+        body: promptBody,
+        isDefault
+      }
+    });
   });
 
   return NextResponse.json({
@@ -61,6 +72,7 @@ export async function POST(req: Request) {
       templateId: created.templateId,
       name: created.name,
       body: created.body,
+      isDefault: created.isDefault,
       createdAt: created.createdAt.toISOString()
     }
   });
@@ -76,6 +88,7 @@ export async function PATCH(req: Request) {
   const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const promptBody = typeof body.body === "string" ? body.body.trim() : "";
+  const isDefault = typeof body.isDefault === "boolean" ? body.isDefault : null;
 
   if (!templateId) {
     return NextResponse.json({ error: "templateId is required" }, { status: 400 });
@@ -97,9 +110,27 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "NAME_ALREADY_EXISTS" }, { status: 409 });
   }
 
-  const updated = await prisma.promptTemplate.update({
-    where: { templateId },
-    data: { name, body: promptBody }
+  const updated = await prisma.$transaction(async (tx) => {
+    if (isDefault === true) {
+      await tx.promptTemplate.updateMany({
+        where: { orgId },
+        data: { isDefault: false }
+      });
+      return tx.promptTemplate.update({
+        where: { templateId },
+        data: { name, body: promptBody, isDefault: true }
+      });
+    }
+    if (isDefault === false) {
+      return tx.promptTemplate.update({
+        where: { templateId },
+        data: { name, body: promptBody, isDefault: false }
+      });
+    }
+    return tx.promptTemplate.update({
+      where: { templateId },
+      data: { name, body: promptBody }
+    });
   });
 
   return NextResponse.json({
@@ -107,6 +138,7 @@ export async function PATCH(req: Request) {
       templateId: updated.templateId,
       name: updated.name,
       body: updated.body,
+      isDefault: updated.isDefault,
       createdAt: updated.createdAt.toISOString()
     }
   });
