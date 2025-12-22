@@ -2064,6 +2064,7 @@ export default function AdminDashboard({
           border: 1px solid #111;
           border-radius: 12px;
           padding: 16px;
+          min-width: 0;
         }
         .interview-top-row {
           display: flex;
@@ -2467,8 +2468,11 @@ export default function AdminDashboard({
         }
         .media {
           display: grid;
-          grid-template-columns: minmax(320px, 1fr) minmax(220px, 320px);
+          grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
           gap: 14px;
+        }
+        .media > * {
+          min-width: 0;
         }
         .chat-panel {
           border-radius: 12px;
@@ -2478,7 +2482,8 @@ export default function AdminDashboard({
           display: flex;
           flex-direction: column;
           gap: 10px;
-          max-height: 360px;
+          max-height: 280px;
+          min-width: 0;
           overflow: hidden;
         }
         .chat-title {
@@ -2536,18 +2541,22 @@ export default function AdminDashboard({
         }
         .application-split {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+          grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
           gap: 16px;
           align-items: stretch;
         }
         .application-left {
           display: grid;
           gap: 12px;
+          min-width: 0;
         }
         .notes-panel {
           display: grid;
           gap: 6px;
           grid-template-rows: auto 1fr;
+          min-width: 0;
+          width: 100%;
+          align-self: stretch;
         }
         .notes-panel label {
           font-size: 12px;
@@ -2564,13 +2573,18 @@ export default function AdminDashboard({
           resize: vertical;
         }
         .prompt {
+          display: block;
           border-radius: 12px;
           border: 1px dashed #c7d3e6;
           background: #f8fafc;
           padding: 10px 12px;
+          box-sizing: border-box;
+          min-width: 0;
           display: grid;
           gap: 10px;
           width: 100%;
+          max-width: 100%;
+          overflow: hidden;
         }
         .prompt summary {
           cursor: pointer;
@@ -2583,6 +2597,10 @@ export default function AdminDashboard({
           display: none;
         }
         .prompt textarea {
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          overflow-wrap: anywhere;
           min-height: 140px;
           padding: 10px 12px;
           border-radius: 10px;
