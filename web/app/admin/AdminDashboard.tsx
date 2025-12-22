@@ -977,50 +977,51 @@ export default function AdminDashboard({
     <main className="page">
       <div className={`layout ${menuCollapsed ? "collapsed" : ""}`}>
         <aside className={`sidebar ${menuCollapsed ? "collapsed" : ""}`}>
-          <button
-            type="button"
-            className="brand-button"
-            onClick={() => window.location.reload()}
-            aria-label="AI Interview"
-          >
-            <img src="/logo.png" alt="" className="brand-logo" />
-            {!menuCollapsed && <span className="brand-text">AI Interview</span>}
-          </button>
-          <button
-            className="collapse-button"
-            type="button"
-            onClick={() => setMenuCollapsed((prev) => !prev)}
-            aria-label={menuCollapsed ? "メニューを開く" : "メニューを閉じる"}
-          >
-            {menuCollapsed ? (
-              <svg
-                className="nav-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 5l6 7-6 7" />
-              </svg>
-            ) : (
-              <svg
-                className="nav-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M15 19l-6-7 6-7" />
-              </svg>
-            )}
-            {!menuCollapsed && <span>閉じる</span>}
-          </button>
+          <div className="sidebar-header">
+            <button
+              type="button"
+              className="brand-button"
+              onClick={() => window.location.reload()}
+              aria-label="AI Interview"
+            >
+              <img src="/logo.png" alt="" className="brand-logo" />
+              {!menuCollapsed && <span className="brand-text">AI Interview</span>}
+            </button>
+            <button
+              className="collapse-button"
+              type="button"
+              onClick={() => setMenuCollapsed((prev) => !prev)}
+              aria-label={menuCollapsed ? "メニューを開く" : "メニューを閉じる"}
+            >
+              {menuCollapsed ? (
+                <svg
+                  className="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 5l6 7-6 7" />
+                </svg>
+              ) : (
+                <svg
+                  className="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M15 19l-6-7 6-7" />
+                </svg>
+              )}
+            </button>
+          </div>
           <nav className="nav">
             <button
               className={`nav-item ${activePanel === "create" ? "active" : ""}`}
@@ -1793,6 +1794,7 @@ export default function AdminDashboard({
           background: linear-gradient(160deg, #f4f7fb 0%, #e6edf6 45%, #dde6f2 100%);
           color: #0d1b2a;
           font-family: "IBM Plex Sans", "Noto Sans JP", "Hiragino Sans", sans-serif;
+          --header-row-height: 44px;
         }
         .layout {
           display: flex;
@@ -1806,6 +1808,7 @@ export default function AdminDashboard({
           display: flex;
           flex-direction: column;
           gap: 16px;
+          overflow: visible;
         }
         .sidebar.collapsed {
           width: 56px;
@@ -1821,11 +1824,23 @@ export default function AdminDashboard({
         .topbar {
           display: flex;
           justify-content: flex-end;
+          align-items: center;
+          height: var(--header-row-height);
         }
         .user {
           display: flex;
           align-items: center;
           gap: 12px;
+        }
+        .sidebar-header {
+          position: relative;
+          display: flex;
+          align-items: center;
+          height: var(--header-row-height);
+          padding-right: calc(var(--header-row-height) - 8px);
+        }
+        .sidebar.collapsed .sidebar-header {
+          padding-right: 8px;
         }
         .brand-button {
           border: none;
@@ -1892,23 +1907,31 @@ export default function AdminDashboard({
           height: 20px;
           flex-shrink: 0;
         }
-        .sidebar.collapsed .nav-item,
-        .sidebar.collapsed .collapse-button {
+        .sidebar.collapsed .nav-item {
           justify-content: center;
           padding: 10px;
+        }
+        .sidebar.collapsed .collapse-button {
+          justify-content: center;
+          right: -36px;
         }
         .collapse-button {
           display: flex;
           align-items: center;
-          gap: 10px;
+          justify-content: center;
+          position: absolute;
+          top: 0;
+          right: -24px;
+          height: var(--header-row-height);
+          width: var(--header-row-height);
           border-radius: 12px;
           border: 1px solid #d3dbe8;
           background: #fff;
-          padding: 10px 12px;
+          padding: 0;
           font-size: 13px;
           color: #4b5c72;
           cursor: pointer;
-          align-self: flex-end;
+          z-index: 2;
         }
         .panel {
           display: block;
@@ -2512,9 +2535,11 @@ export default function AdminDashboard({
             align-items: center;
             padding: 12px 16px;
           }
+          .sidebar-header {
+            padding-right: 0;
+          }
           .collapse-button {
-            align-self: center;
-            order: 3;
+            position: static;
           }
           .nav {
             flex-direction: row;
