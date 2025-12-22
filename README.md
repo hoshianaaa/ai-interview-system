@@ -1,3 +1,41 @@
+# 3. 概念モデル（最小エンティティ）
+
+## Candidate（応募者）
+
+- id
+- 氏名（name）
+- メール（email）※重複チェック
+- メモ（memo 任意）
+- 作成日時（createdAt）
+
+## Job（求人）
+
+- id
+- 求人名（title）
+- 有効/無効（isActive）
+
+## Application（応募）※主役
+- id
+- candidateId
+- jobId
+- currentStage：1st / 2nd（将来拡張可）
+- overallDecision：Undecided / Pass / Fail / Hold
+//今は不要 - 担当者（assignee 任意：userId）
+- updatedAt
+
+## InterviewSession（面接1回）
+
+- id
+- applicationId
+- stage：1st / 2nd
+- progressStatus：Scheduled / Completed / NoShow / Failed
+- decision：Undecided / Pass / Fail / Hold
+//今は不要 - score：number（0–100想定、null可）
+- recordingUrl（任意）
+- transcriptUrl or transcriptText（任意）
+- startedAt / endedAt（任意）
+- inviteUrl（面接用URL）
+
 # 4. ステータス定義
 
 ## progressStatus（面接の進行）
