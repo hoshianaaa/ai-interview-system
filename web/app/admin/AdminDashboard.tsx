@@ -1192,6 +1192,16 @@ export default function AdminDashboard({
             <h2>
               {detailMode === "settings" ? "設定" : "応募詳細"}
             </h2>
+            {detailMode !== "settings" && selectedApplication && (
+              <button
+                className="danger"
+                type="button"
+                onClick={() => void deleteApplication()}
+                disabled={deletingApplication}
+              >
+                {deletingApplication ? "削除中..." : "応募を削除"}
+              </button>
+            )}
           </div>
           {detailMode === "settings" ? (
             <div className="settings">
@@ -1444,16 +1454,6 @@ export default function AdminDashboard({
                   )}
                 </div>
               )}
-              <div className="detail-actions">
-                <button
-                  className="danger"
-                  type="button"
-                  onClick={() => void deleteApplication()}
-                  disabled={deletingApplication}
-                >
-                  {deletingApplication ? "削除中..." : "応募を削除"}
-                </button>
-              </div>
               <div className="application-interviews">
                 <div className="section-title">面接一覧</div>
                 {selectedApplication.interviews.length === 0 ? (
@@ -1491,7 +1491,19 @@ export default function AdminDashboard({
                   </div>
                 )}
               </div>
-              <div className="section-title">面接詳細</div>
+              <div className="section-title-row">
+                <div className="section-title">面接詳細</div>
+                {selectedRow && (
+                  <button
+                    className="danger"
+                    type="button"
+                    onClick={() => void deleteInterview()}
+                    disabled={deletingInterview}
+                  >
+                    {deletingInterview ? "削除中..." : "面接を削除"}
+                  </button>
+                )}
+              </div>
               {selectedRow ? (
                 <div className="interview-detail">
                   <div className="detail-header">
@@ -1631,17 +1643,6 @@ export default function AdminDashboard({
                       )}
                     </div>
                   )}
-                  <div className="detail-actions">
-                    <button
-                      className="danger"
-                      type="button"
-                      onClick={() => void deleteInterview()}
-                      disabled={deletingInterview}
-                    >
-                      {deletingInterview ? "削除中..." : "面接を削除"}
-                    </button>
-                  </div>
-
                   <div className="media">
                     <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
                       {selectedVideoUrl ? (
@@ -2070,6 +2071,9 @@ export default function AdminDashboard({
           flex-wrap: wrap;
           gap: 8px;
         }
+        .detail-actions.align-right {
+          justify-content: flex-end;
+        }
         .application-interviews {
           margin-top: 12px;
           display: grid;
@@ -2088,6 +2092,12 @@ export default function AdminDashboard({
           font-size: 13px;
           font-weight: 600;
           color: #1f2f44;
+        }
+        .section-title-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
         }
         .ghost:disabled {
           color: #8a97ab;
