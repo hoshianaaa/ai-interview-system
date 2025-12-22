@@ -13,7 +13,8 @@ export default async function HomePage() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "";
   const interviews = await prisma.interview.findMany({
     where: { orgId },
-    orderBy: { createdAt: "desc" }
+    orderBy: { createdAt: "desc" },
+    include: { application: { select: { candidateName: true } } }
   });
   const templates = await prisma.promptTemplate.findMany({
     where: { orgId },
@@ -22,13 +23,15 @@ export default async function HomePage() {
   const now = new Date();
   const data = interviews.map((row) => ({
     interviewId: row.interviewId,
+    applicationId: row.applicationId,
     url: `${baseUrl}/interview/${row.publicToken ?? row.interviewId}`,
     status: getProgressStatusLabel(
       { status: row.status, expiresAt: row.expiresAt, usedAt: row.usedAt },
       now
     ),
     decision: row.decision,
-    candidateName: row.candidateName ?? null,
+    round: row.round,
+    candidateName: row.application?.candidateName ?? null,
     prompt: row.interviewPrompt ?? null,
     notes: row.interviewNotes ?? null,
     createdAt: row.createdAt.toISOString(),

@@ -30,11 +30,13 @@ export async function POST(req: Request) {
   const durationRaw = Number(body.durationSec ?? 600);
   const normalizedDuration = Number.isFinite(durationRaw) ? Math.round(durationRaw) : 600;
   const durationSec = Math.min(1800, Math.max(60, normalizedDuration));
+  const applicationIdRaw =
+    typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   const candidateName =
     typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
   const promptRaw = typeof body.prompt === "string" ? body.prompt : "";
   const promptTrimmed = promptRaw.trim();
-  if (candidateName && candidateName.length > MAX_CANDIDATE_NAME) {
+  if (!applicationIdRaw && candidateName && candidateName.length > MAX_CANDIDATE_NAME) {
     return NextResponse.json({ error: "CANDIDATE_NAME_TOO_LONG" }, { status: 400 });
   }
   if (promptTrimmed.length > MAX_PROMPT_CHARS) {
@@ -56,15 +58,44 @@ export async function POST(req: Request) {
   const publicToken = crypto.randomUUID();
   const roomName = makeRoomName(interviewId);
 
+  let applicationId = applicationIdRaw;
+  let applicationCandidateName = candidateName;
+  let round = 1;
+
+  if (applicationId) {
+    const application = await prisma.application.findFirst({
+      where: { applicationId, orgId }
+    });
+    if (!application) {
+      return NextResponse.json({ error: "APPLICATION_NOT_FOUND" }, { status: 404 });
+    }
+    applicationCandidateName = application.candidateName ?? null;
+    const maxRound = await prisma.interview.aggregate({
+      where: { applicationId },
+      _max: { round: true }
+    });
+    round = (maxRound._max.round ?? 0) + 1;
+  } else {
+    applicationId = crypto.randomUUID();
+    await prisma.application.create({
+      data: {
+        applicationId,
+        orgId,
+        candidateName: applicationCandidateName
+      }
+    });
+  }
+
   const interview = await prisma.interview.create({
     data: {
       interviewId,
       publicToken,
       orgId,
+      applicationId,
       roomName,
       durationSec,
+      round,
       candidateIdentity: makeCandidateIdentity(interviewId),
-      candidateName,
       interviewPrompt: prompt,
       agentName: body.agentName ?? env.agentName,
       r2Bucket: env.r2Bucket,
@@ -75,9 +106,11 @@ export async function POST(req: Request) {
   const url = `${env.baseUrl}/interview/${interview.publicToken ?? interview.interviewId}`;
   return NextResponse.json({
     interviewId: interview.interviewId,
+    applicationId,
+    round: interview.round,
     roomName,
     url,
-    candidateName,
+    candidateName: applicationCandidateName ?? null,
     expiresAt: interview.expiresAt?.toISOString() ?? null
   });
 }

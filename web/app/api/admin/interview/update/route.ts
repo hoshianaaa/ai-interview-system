@@ -24,7 +24,10 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
   }
 
-  const interview = await prisma.interview.findFirst({ where: { interviewId, orgId } });
+  const interview = await prisma.interview.findFirst({
+    where: { interviewId, orgId },
+    include: { application: true }
+  });
   if (!interview) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
@@ -46,19 +49,26 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "INVALID_DECISION" }, { status: 400 });
   }
 
-  const updated = await prisma.interview.update({
-    where: { interviewId },
-    data: {
-      candidateName: candidateNameRaw ? candidateNameRaw : null,
-      interviewNotes: notesRaw ? notesRaw : null,
-      ...(decision ? { decision } : {})
-    }
+  const candidateName = candidateNameRaw ? candidateNameRaw : null;
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedInterview = await tx.interview.update({
+      where: { interviewId },
+      data: {
+        interviewNotes: notesRaw ? notesRaw : null,
+        ...(decision ? { decision } : {})
+      }
+    });
+    const updatedApplication = await tx.application.update({
+      where: { applicationId: interview.applicationId },
+      data: { candidateName }
+    });
+    return { updatedInterview, updatedApplication };
   });
 
   return NextResponse.json({
-    interviewId: updated.interviewId,
-    candidateName: updated.candidateName ?? null,
-    notes: updated.interviewNotes ?? null,
-    decision: updated.decision
+    interviewId: updated.updatedInterview.interviewId,
+    candidateName: updated.updatedApplication.candidateName ?? null,
+    notes: updated.updatedInterview.interviewNotes ?? null,
+    decision: updated.updatedInterview.decision
   });
 }

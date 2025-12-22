@@ -28,17 +28,30 @@ enum ChatRole {
   candidate
 }
 
+model Application {
+  applicationId String   @id
+  orgId         String?
+  candidateName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  interviews    Interview[]
+
+  @@index([orgId])
+}
+
 model Interview {
   interviewId       String          @id
   publicToken       String?         @unique
   orgId             String?
+  applicationId     String
   roomName          String          @unique
   status            InterviewStatus @default(created)
   decision          InterviewDecision @default(undecided)
+  round             Int             @default(1)
   durationSec       Int
 
   candidateIdentity String
-  candidateName     String?
   agentName         String
 
   dispatchId        String?
@@ -58,8 +71,10 @@ model Interview {
   error             String?
 
   messages          InterviewMessage[]
+  application       Application @relation(fields: [applicationId], references: [applicationId], onDelete: Cascade)
 
   @@index([orgId])
+  @@index([applicationId])
 }
 
 model InterviewMessage {

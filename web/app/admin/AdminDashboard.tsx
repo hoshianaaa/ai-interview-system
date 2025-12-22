@@ -8,9 +8,11 @@ type Decision = "undecided" | "pass" | "fail" | "hold";
 
 type InterviewRow = {
   interviewId: string;
+  applicationId: string;
   url: string;
   status: string;
   decision: Decision;
+  round: number;
   candidateName: string | null;
   prompt: string | null;
   notes: string | null;
@@ -37,6 +39,8 @@ type PromptTemplate = {
 type CreateResponse =
   | {
       interviewId: string;
+      applicationId: string;
+      round: number;
       roomName: string;
       url: string;
       candidateName: string | null;
@@ -84,27 +88,38 @@ export default function AdminDashboard({
 
   const hasResult = createResult && "url" in createResult;
 
-  async function createInterview() {
+  async function createInterview(applicationId?: string) {
     setCreateResult(null);
     const parsedMin = Number(durationMinInput);
     const fallbackMin = 10;
     const normalizedMin = Number.isFinite(parsedMin) ? parsedMin : fallbackMin;
     const clampedMin = Math.min(30, Math.max(1, normalizedMin));
     const durationSec = Math.round(clampedMin * 60);
+    const payload: Record<string, unknown> = {
+      durationSec,
+      prompt,
+      expiresInWeeks: Number(expiresWeeks),
+      expiresInDays: Number(expiresDays),
+      expiresInHours: Number(expiresHours)
+    };
+    if (applicationId) {
+      payload.applicationId = applicationId;
+    } else {
+      const trimmedName = candidateName.trim();
+      if (trimmedName) payload.candidateName = trimmedName;
+    }
     const res = await fetch("/api/interview/create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        durationSec,
-        candidateName: candidateName.trim() || undefined,
-        prompt,
-        expiresInWeeks: Number(expiresWeeks),
-        expiresInDays: Number(expiresDays),
-        expiresInHours: Number(expiresHours)
-      })
+      body: JSON.stringify(payload)
     });
     const data = (await res.json()) as CreateResponse;
     setCreateResult(data);
+  }
+
+  async function createNextInterview() {
+    if (!selectedRow) return;
+    await createInterview(selectedRow.applicationId);
   }
 
   async function reloadTemplates() {
@@ -343,13 +358,15 @@ export default function AdminDashboard({
       if (data.interviewId) {
         setRows((prev) =>
           prev.map((row) =>
-            row.interviewId === data.interviewId
-              ? {
-                  ...row,
-                  candidateName: data.candidateName ?? null,
-                  notes: data.notes ?? null,
-                  decision: data.decision ?? row.decision
-                }
+            row.applicationId === selectedRow.applicationId
+              ? row.interviewId === data.interviewId
+                ? {
+                    ...row,
+                    candidateName: data.candidateName ?? null,
+                    notes: data.notes ?? null,
+                    decision: data.decision ?? row.decision
+                  }
+                : { ...row, candidateName: data.candidateName ?? null }
               : row
           )
         );
@@ -560,6 +577,14 @@ export default function AdminDashboard({
                   <span>候補者名</span>
                   <strong>{createResult.candidateName ?? "未設定"}</strong>
                 </div>
+                <div className="result-row">
+                  <span>応募ID</span>
+                  <strong>{createResult.applicationId}</strong>
+                </div>
+                <div className="result-row">
+                  <span>面接ラウンド</span>
+                  <strong>第{createResult.round}次</strong>
+                </div>
                 {createResult.expiresAt && (
                   <div className="result-row">
                     <span>有効期限</span>
@@ -607,6 +632,7 @@ export default function AdminDashboard({
                         <div className="title">
                           {row.candidateName ? row.candidateName : "候補者名なし"}
                         </div>
+                        <span className="round-tag">第{row.round}次</span>
                         <span className={`decision-tag ${row.decision}`}>
                           {decisionLabel(row.decision)}
                         </span>
@@ -750,6 +776,17 @@ export default function AdminDashboard({
                   <div className="meta">
                     ステータス: {selectedRow.status} / 作成:{" "}
                     {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
+                  </div>
+                  <div className="meta">応募ID: {selectedRow.applicationId}</div>
+                  <div className="meta">面接ラウンド: 第{selectedRow.round}次</div>
+                  <div className="detail-actions">
+                    <button
+                      className="ghost"
+                      type="button"
+                      onClick={() => void createNextInterview()}
+                    >
+                      次の面接URLを発行
+                    </button>
                   </div>
                 </div>
                 <div className="badge">
@@ -1088,6 +1125,15 @@ export default function AdminDashboard({
           align-items: center;
           gap: 8px;
         }
+        .round-tag {
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          background: #e0f2fe;
+          border: 1px solid #38bdf8;
+          color: #0c4a6e;
+        }
         .decision-tag {
           padding: 4px 10px;
           border-radius: 999px;
@@ -1128,6 +1174,12 @@ export default function AdminDashboard({
           color: #1f4fb2;
           font-weight: 600;
           cursor: pointer;
+        }
+        .detail-actions {
+          margin-top: 10px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
         .ghost:disabled {
           color: #8a97ab;
