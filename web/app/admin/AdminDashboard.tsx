@@ -2651,6 +2651,7 @@ export default function AdminDashboard({
         .detail-title-fields {
           display: flex;
           align-items: center;
+          justify-content: flex-end;
           gap: 12px;
           flex: 1 1 520px;
           min-width: 240px;
@@ -2658,6 +2659,7 @@ export default function AdminDashboard({
         .detail-title-fields .inline-pair {
           flex: 1 1 260px;
           max-width: 360px;
+          justify-content: flex-end;
         }
         .detail-title-fields .candidate-name-input {
           width: 50%;
