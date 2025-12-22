@@ -1506,18 +1506,27 @@ export default function AdminDashboard({
                     )}
                     {!isDecisionLocked && (
                       <div className="decision-select">
-                        <label>判定</label>
-                        <select
-                          value={editDecision}
-                          onChange={(e) => handleDecisionChange(e.target.value as Decision)}
+                        <fieldset
+                          className="decision-options"
                           disabled={savingInterview}
+                          aria-label="判定"
                         >
                           {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
-                            <option key={value} value={value}>
-                              {decisionLabel(value)}
-                            </option>
+                            <label
+                              key={value}
+                              className={`decision-option ${value} ${editDecision === value ? "selected" : ""}`}
+                            >
+                              <input
+                                type="radio"
+                                name={`decision-${selectedRow.interviewId}`}
+                                value={value}
+                                checked={editDecision === value}
+                                onChange={() => handleDecisionChange(value)}
+                              />
+                              <span>{decisionLabel(value)}</span>
+                            </label>
                           ))}
-                        </select>
+                        </fieldset>
                       </div>
                     )}
                   </div>
@@ -1776,9 +1785,51 @@ export default function AdminDashboard({
           min-width: 140px;
           margin-left: auto;
         }
-        .decision-select label {
+        .decision-options {
+          border: 0;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .decision-option {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 999px;
+          border: 1px solid #c7d3e6;
+          background: #fff;
           font-size: 12px;
-          color: #4b5c72;
+          color: #1c2a3a;
+          cursor: pointer;
+        }
+        .decision-option input {
+          margin: 0;
+        }
+        .decision-option.selected {
+          box-shadow: 0 0 0 2px rgba(31, 79, 178, 0.2);
+        }
+        .decision-option.undecided {
+          background: #fef3c7;
+          border-color: #f59e0b;
+          color: #92400e;
+        }
+        .decision-option.pass {
+          background: #dcfce7;
+          border-color: #22c55e;
+          color: #166534;
+        }
+        .decision-option.fail {
+          background: #ffe4e6;
+          border-color: #f43f5e;
+          color: #9f1239;
+        }
+        .decision-option.hold {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
         }
         .detail-row {
           display: grid;
