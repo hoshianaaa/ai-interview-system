@@ -27,6 +27,7 @@ export default async function HomePage() {
       { status: row.status, expiresAt: row.expiresAt, usedAt: row.usedAt },
       now
     ),
+    decision: row.decision,
     candidateName: row.candidateName ?? null,
     prompt: row.interviewPrompt ?? null,
     notes: row.interviewNotes ?? null,

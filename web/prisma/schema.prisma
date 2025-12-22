@@ -16,6 +16,13 @@ enum InterviewStatus {
   failed
 }
 
+enum InterviewDecision {
+  undecided
+  pass
+  fail
+  hold
+}
+
 enum ChatRole {
   interviewer
   candidate
@@ -27,6 +34,7 @@ model Interview {
   orgId             String?
   roomName          String          @unique
   status            InterviewStatus @default(created)
+  decision          InterviewDecision @default(undecided)
   durationSec       Int
 
   candidateIdentity String

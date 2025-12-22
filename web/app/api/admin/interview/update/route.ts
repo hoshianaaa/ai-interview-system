@@ -18,6 +18,7 @@ export async function PATCH(req: Request) {
   const candidateNameRaw =
     typeof body.candidateName === "string" ? body.candidateName.trim() : "";
   const notesRaw = typeof body.notes === "string" ? body.notes.trim() : "";
+  const decisionRaw = typeof body.decision === "string" ? body.decision.trim() : "";
 
   if (!interviewId) {
     return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
@@ -34,17 +35,30 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "NOTES_TOO_LONG" }, { status: 400 });
   }
 
+  const decision =
+    decisionRaw === "undecided" ||
+    decisionRaw === "pass" ||
+    decisionRaw === "fail" ||
+    decisionRaw === "hold"
+      ? decisionRaw
+      : null;
+  if (decisionRaw && !decision) {
+    return NextResponse.json({ error: "INVALID_DECISION" }, { status: 400 });
+  }
+
   const updated = await prisma.interview.update({
     where: { interviewId },
     data: {
       candidateName: candidateNameRaw ? candidateNameRaw : null,
-      interviewNotes: notesRaw ? notesRaw : null
+      interviewNotes: notesRaw ? notesRaw : null,
+      ...(decision ? { decision } : {})
     }
   });
 
   return NextResponse.json({
     interviewId: updated.interviewId,
     candidateName: updated.candidateName ?? null,
-    notes: updated.interviewNotes ?? null
+    notes: updated.interviewNotes ?? null,
+    decision: updated.decision
   });
 }

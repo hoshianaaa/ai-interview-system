@@ -4,10 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 
+type Decision = "undecided" | "pass" | "fail" | "hold";
+
 type InterviewRow = {
   interviewId: string;
   url: string;
   status: string;
+  decision: Decision;
   candidateName: string | null;
   prompt: string | null;
   notes: string | null;
@@ -76,6 +79,7 @@ export default function AdminDashboard({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [editCandidateName, setEditCandidateName] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editDecision, setEditDecision] = useState<Decision>("undecided");
   const [saving, setSaving] = useState(false);
 
   const hasResult = createResult && "url" in createResult;
@@ -304,6 +308,13 @@ export default function AdminDashboard({
     return `${mm}:${String(ss).padStart(2, "0")}`;
   };
 
+  const decisionLabel = (value: Decision) => {
+    if (value === "pass") return "通過";
+    if (value === "fail") return "不合格";
+    if (value === "hold") return "保留";
+    return "未判定";
+  };
+
   const seekTo = (offsetMs: number) => {
     if (!videoRef.current) return;
     videoRef.current.currentTime = offsetMs / 1000;
@@ -319,13 +330,15 @@ export default function AdminDashboard({
         body: JSON.stringify({
           interviewId: selectedRow.interviewId,
           candidateName: editCandidateName.trim(),
-          notes: editNotes
+          notes: editNotes,
+          decision: editDecision
         })
       });
       const data = (await res.json()) as {
         interviewId?: string;
         candidateName?: string | null;
         notes?: string | null;
+        decision?: Decision;
       };
       if (data.interviewId) {
         setRows((prev) =>
@@ -334,13 +347,15 @@ export default function AdminDashboard({
               ? {
                   ...row,
                   candidateName: data.candidateName ?? null,
-                  notes: data.notes ?? null
+                  notes: data.notes ?? null,
+                  decision: data.decision ?? row.decision
                 }
               : row
           )
         );
         setEditCandidateName(data.candidateName ?? "");
         setEditNotes(data.notes ?? "");
+        setEditDecision(data.decision ?? editDecision);
       }
     } finally {
       setSaving(false);
@@ -351,6 +366,7 @@ export default function AdminDashboard({
     if (!selectedRow) return;
     setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
+    setEditDecision(selectedRow.decision);
   }
 
   const sorted = useMemo(
@@ -376,7 +392,8 @@ export default function AdminDashboard({
   const isDirty =
     Boolean(selectedRow) &&
     (editCandidateName !== (selectedRow?.candidateName ?? "") ||
-      editNotes !== (selectedRow?.notes ?? ""));
+      editNotes !== (selectedRow?.notes ?? "") ||
+      editDecision !== (selectedRow?.decision ?? "undecided"));
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
@@ -392,10 +409,12 @@ export default function AdminDashboard({
     if (!selectedRow) {
       setEditCandidateName("");
       setEditNotes("");
+      setEditDecision("undecided");
       return;
     }
     setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
+    setEditDecision(selectedRow.decision ?? "undecided");
   }, [selectedRow?.interviewId]);
 
   useEffect(() => {
@@ -584,8 +603,13 @@ export default function AdminDashboard({
                     }}
                   >
                     <div>
-                      <div className="title">
-                        {row.candidateName ? row.candidateName : "候補者名なし"}
+                      <div className="title-row">
+                        <div className="title">
+                          {row.candidateName ? row.candidateName : "候補者名なし"}
+                        </div>
+                        <span className={`decision-tag ${row.decision}`}>
+                          {decisionLabel(row.decision)}
+                        </span>
                       </div>
                       <div className="meta">
                         <a href={row.url} target="_blank" rel="noreferrer">
@@ -703,6 +727,20 @@ export default function AdminDashboard({
                       onChange={(e) => setEditCandidateName(e.target.value)}
                       placeholder="候補者名を入力"
                     />
+                  </div>
+                  <div className="detail-row">
+                    <label>判定</label>
+                    <select
+                      value={editDecision}
+                      onChange={(e) => setEditDecision(e.target.value as Decision)}
+                      disabled={saving}
+                    >
+                      {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
+                        <option key={value} value={value}>
+                          {decisionLabel(value)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="meta">
                     <a href={selectedRow.url} target="_blank" rel="noreferrer">
@@ -1043,6 +1081,39 @@ export default function AdminDashboard({
         .title {
           font-weight: 600;
           margin-bottom: 4px;
+        }
+        .title-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+        }
+        .decision-tag {
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          border: 1px solid transparent;
+        }
+        .decision-tag.undecided {
+          background: #fef3c7;
+          border-color: #f59e0b;
+          color: #92400e;
+        }
+        .decision-tag.pass {
+          background: #dcfce7;
+          border-color: #22c55e;
+          color: #166534;
+        }
+        .decision-tag.fail {
+          background: #ffe4e6;
+          border-color: #f43f5e;
+          color: #9f1239;
+        }
+        .decision-tag.hold {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
         }
         .meta {
           font-size: 12px;
