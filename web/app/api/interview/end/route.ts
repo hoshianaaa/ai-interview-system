@@ -4,6 +4,8 @@ import { clients } from "@/lib/livekit";
 
 export const runtime = "nodejs";
 
+const MAX_TOKEN_LENGTH = 128;
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const publicToken = typeof body.publicToken === "string" ? body.publicToken.trim() : "";
@@ -11,6 +13,9 @@ export async function POST(req: Request) {
 
   if (!publicToken && !legacyInterviewId) {
     return NextResponse.json({ error: "publicToken is required" }, { status: 400 });
+  }
+  if (publicToken.length > MAX_TOKEN_LENGTH || legacyInterviewId.length > MAX_TOKEN_LENGTH) {
+    return NextResponse.json({ error: "token is too long" }, { status: 400 });
   }
 
   const { egress, room } = clients();

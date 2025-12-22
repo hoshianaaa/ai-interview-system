@@ -3,11 +3,16 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+const MAX_TOKEN_LENGTH = 128;
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const publicToken = (searchParams.get("publicToken") ?? "").trim();
   if (!publicToken) {
     return NextResponse.json({ error: "publicToken is required" }, { status: 400 });
+  }
+  if (publicToken.length > MAX_TOKEN_LENGTH) {
+    return NextResponse.json({ error: "token is too long" }, { status: 400 });
   }
 
   const interview =

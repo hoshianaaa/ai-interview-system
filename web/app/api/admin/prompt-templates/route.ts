@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+const MAX_TEMPLATE_NAME = 80;
+const MAX_TEMPLATE_BODY = 4000;
+
 export async function GET() {
   const { orgId } = await auth();
   if (!orgId) {
@@ -40,8 +43,14 @@ export async function POST(req: Request) {
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
+  if (name.length > MAX_TEMPLATE_NAME) {
+    return NextResponse.json({ error: "NAME_TOO_LONG" }, { status: 400 });
+  }
   if (!promptBody) {
     return NextResponse.json({ error: "body is required" }, { status: 400 });
+  }
+  if (promptBody.length > MAX_TEMPLATE_BODY) {
+    return NextResponse.json({ error: "BODY_TOO_LONG" }, { status: 400 });
   }
 
   const exists = await prisma.promptTemplate.findFirst({ where: { orgId, name } });
@@ -96,8 +105,14 @@ export async function PATCH(req: Request) {
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
+  if (name.length > MAX_TEMPLATE_NAME) {
+    return NextResponse.json({ error: "NAME_TOO_LONG" }, { status: 400 });
+  }
   if (!promptBody) {
     return NextResponse.json({ error: "body is required" }, { status: 400 });
+  }
+  if (promptBody.length > MAX_TEMPLATE_BODY) {
+    return NextResponse.json({ error: "BODY_TOO_LONG" }, { status: 400 });
   }
 
   const existing = await prisma.promptTemplate.findFirst({ where: { templateId, orgId } });

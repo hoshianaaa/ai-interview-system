@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 const MAX_TEXT_LENGTH = 2000;
+const MAX_TOKEN_LENGTH = 128;
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
@@ -14,6 +15,9 @@ export async function POST(req: Request) {
   const text = typeof msg.text === "string" ? msg.text.trim() : "";
   if (!publicToken && !legacyInterviewId) {
     return NextResponse.json({ error: "publicToken is required" }, { status: 400 });
+  }
+  if (publicToken.length > MAX_TOKEN_LENGTH || legacyInterviewId.length > MAX_TOKEN_LENGTH) {
+    return NextResponse.json({ error: "token is too long" }, { status: 400 });
   }
   if (!text) {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
