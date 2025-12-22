@@ -1905,7 +1905,6 @@ export default function AdminDashboard({
                         )}
                       </div>
                       <div className="notes-panel">
-                        <label>メモ</label>
                         <textarea
                           value={editApplicationNotes}
                           onChange={(e) => setEditApplicationNotes(e.target.value)}
@@ -2999,20 +2998,12 @@ export default function AdminDashboard({
         }
         .notes-panel {
           display: grid;
-          gap: 6px;
-          grid-template-rows: auto 1fr;
+          gap: 0;
+          grid-template-rows: 1fr;
           min-width: 0;
           width: 100%;
           align-self: stretch;
           padding-bottom: 20px;
-        }
-        .notes-panel label {
-          font-size: 12px;
-          color: #4b5c72;
-          min-height: 28px;
-          display: flex;
-          align-items: center;
-          margin-top: 18px;
         }
         .notes-panel textarea {
           min-height: 360px;
