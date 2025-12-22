@@ -35,6 +35,8 @@ export default function InterviewPage({
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
   const [endedMessage, setEndedMessage] = useState<string | null>(null);
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
   const endingRef = useRef(false);
@@ -49,11 +51,39 @@ export default function InterviewPage({
         ? "接続に失敗しました。もう一度お試しください。"
         : null;
 
+  useEffect(() => {
+    let cancelled = false;
+    setStatusLoading(true);
+    setBlockedMessage(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/interview/status?publicToken=${encodeURIComponent(publicToken)}`);
+        if (cancelled) return;
+        if (!res.ok) {
+          setBlockedMessage("この面接URLは無効です。");
+          return;
+        }
+        const data = (await res.json()) as { status?: string };
+        if (data.status && data.status !== "created") {
+          setBlockedMessage("この面接URLはすでに使用されています。");
+        }
+      } finally {
+        if (!cancelled) setStatusLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [publicToken]);
+
   async function startInterview() {
     if (starting) return;
     if (hasActiveJoin) return;
+    if (statusLoading || blockedMessage) return;
     setStarting(true);
     setJoin(null);
+    setBlockedMessage(null);
     try {
       const res = await fetch("/api/interview/join", {
         method: "POST",
@@ -62,6 +92,16 @@ export default function InterviewPage({
       });
 
       const data = (await res.json()) as JoinResponse;
+      if ("error" in data) {
+        if (data.error === "INTERVIEW_ALREADY_USED") {
+          setBlockedMessage("この面接URLはすでに使用されています。");
+          return;
+        }
+        if (data.error === "not found") {
+          setBlockedMessage("この面接URLは無効です。");
+          return;
+        }
+      }
       setJoin(data);
       if ("durationSec" in data) setSecondsLeft(data.durationSec);
     } finally {
@@ -193,6 +233,124 @@ export default function InterviewPage({
             color: #fff;
             font-weight: 700;
             cursor: pointer;
+          }
+        `}</style>
+      </main>
+    );
+  }
+
+  if (blockedMessage) {
+    return (
+      <main className="intro">
+        <div className="intro-card">
+          <div className="eyebrow">AI Interview</div>
+          <h1>このURLは使用できません</h1>
+          <p className="lead">{blockedMessage}</p>
+          <div className="actions">
+            <button className="start" type="button" onClick={() => window.close()}>
+              閉じる
+            </button>
+          </div>
+        </div>
+
+        <style jsx>{`
+          :global(body) {
+            margin: 0;
+            background: linear-gradient(160deg, #f4f7fb 0%, #e6edf6 45%, #dde6f2 100%);
+          }
+          .intro {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            font-family: "IBM Plex Sans", "Noto Sans JP", "Hiragino Sans", "Meiryo", sans-serif;
+            color: #0d1b2a;
+          }
+          .intro-card {
+            width: min(680px, 92vw);
+            background: #fff;
+            border: 1px solid rgba(28, 48, 74, 0.12);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 22px 60px rgba(19, 41, 72, 0.18);
+          }
+          .eyebrow {
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: #5a6a82;
+          }
+          h1 {
+            margin: 12px 0 8px;
+            font-size: 26px;
+          }
+          .lead {
+            margin: 0 0 20px;
+            color: #4b5c72;
+            line-height: 1.6;
+          }
+          .actions {
+            display: flex;
+            justify-content: flex-end;
+          }
+          .start {
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(31, 79, 178, 0.35);
+            background: #1f4fb2;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+          }
+        `}</style>
+      </main>
+    );
+  }
+
+  if (statusLoading) {
+    return (
+      <main className="intro">
+        <div className="intro-card">
+          <div className="eyebrow">AI Interview</div>
+          <h1>確認中...</h1>
+          <p className="lead">面接URLの状態を確認しています。</p>
+        </div>
+
+        <style jsx>{`
+          :global(body) {
+            margin: 0;
+            background: linear-gradient(160deg, #f4f7fb 0%, #e6edf6 45%, #dde6f2 100%);
+          }
+          .intro {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            font-family: "IBM Plex Sans", "Noto Sans JP", "Hiragino Sans", "Meiryo", sans-serif;
+            color: #0d1b2a;
+          }
+          .intro-card {
+            width: min(680px, 92vw);
+            background: #fff;
+            border: 1px solid rgba(28, 48, 74, 0.12);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 22px 60px rgba(19, 41, 72, 0.18);
+          }
+          .eyebrow {
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: #5a6a82;
+          }
+          h1 {
+            margin: 12px 0 8px;
+            font-size: 26px;
+          }
+          .lead {
+            margin: 0;
+            color: #4b5c72;
+            line-height: 1.6;
           }
         `}</style>
       </main>
