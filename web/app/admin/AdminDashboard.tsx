@@ -874,7 +874,13 @@ export default function AdminDashboard({
       <section className="header">
         <div>
           <h1 className="brand">
-            PM1 <span>AI Interview</span>
+            <button
+              type="button"
+              className="brand-button"
+              onClick={() => window.location.reload()}
+            >
+              PM1 <span>AI Interview</span>
+            </button>
           </h1>
         </div>
         <div className="user">
@@ -1534,6 +1540,19 @@ export default function AdminDashboard({
         }
         .brand span {
           color: #1f4fb2;
+        }
+        .brand-button {
+          border: none;
+          background: transparent;
+          padding: 0;
+          font: inherit;
+          color: inherit;
+          cursor: pointer;
+        }
+        .brand-button:focus-visible {
+          outline: 2px solid #1f4fb2;
+          outline-offset: 4px;
+          border-radius: 6px;
         }
         .grid {
           display: grid;
