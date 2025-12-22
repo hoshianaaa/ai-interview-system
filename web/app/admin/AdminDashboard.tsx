@@ -80,10 +80,7 @@ export default function AdminDashboard({
     promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [detailMode, setDetailMode] = useState<"interview" | "templates" | "application">(
-    "application"
-  );
-  const [listMode, setListMode] = useState<"applications" | "interviews">("applications");
+  const [detailMode, setDetailMode] = useState<"templates" | "application">("application");
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
   const [templateEditBody, setTemplateEditBody] = useState(DEFAULT_INTERVIEW_PROMPT);
@@ -300,7 +297,7 @@ export default function AdminDashboard({
 
   async function loadVideo(row: InterviewRow) {
     const interviewId = row.interviewId;
-    setDetailMode("interview");
+    setDetailMode("application");
     setLoadingVideoId(interviewId);
     setSelectedId(interviewId);
     setSelectedApplicationId(row.applicationId);
@@ -456,10 +453,6 @@ export default function AdminDashboard({
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [rows]);
-  const selectedRow = useMemo(
-    () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
-    [sorted, selectedId]
-  );
   const selectedApplication = useMemo(
     () =>
       selectedApplicationId
@@ -467,6 +460,15 @@ export default function AdminDashboard({
         : null,
     [applicationRows, selectedApplicationId]
   );
+  const selectedRow = useMemo(() => {
+    if (selectedApplication) {
+      if (!selectedId) return null;
+      return (
+        selectedApplication.interviews.find((row) => row.interviewId === selectedId) ?? null
+      );
+    }
+    return selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null;
+  }, [selectedApplication, selectedId, sorted]);
   const selectedTemplate = useMemo(
     () =>
       templateEditorId
@@ -507,15 +509,26 @@ export default function AdminDashboard({
   }, [selectedRow?.interviewId]);
 
   useEffect(() => {
-    if (detailMode === "templates") return;
-    if (listMode === "applications") {
+    if (!selectedApplication) {
       setSelectedId(null);
-      setDetailMode("application");
       return;
     }
-    setSelectedApplicationId(null);
-    setDetailMode("interview");
-  }, [listMode, detailMode]);
+    if (!selectedApplication.interviews.length) {
+      setSelectedId(null);
+      return;
+    }
+    const exists =
+      selectedId &&
+      selectedApplication.interviews.some((row) => row.interviewId === selectedId);
+    if (exists) return;
+    const next = [...selectedApplication.interviews].sort((a, b) => {
+      if (a.round !== b.round) return b.round - a.round;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })[0];
+    if (next) {
+      void loadVideo(next);
+    }
+  }, [selectedApplication, selectedId]);
 
   useEffect(() => {
     if (selectedTemplateId || prompt.trim() !== DEFAULT_INTERVIEW_PROMPT.trim()) return;
@@ -692,99 +705,40 @@ export default function AdminDashboard({
 
           <div className="card list-card">
             <div className="list-header">
-              <h2>{listMode === "applications" ? "応募一覧" : "面接一覧"}</h2>
-              <div className="list-tabs">
-                <button
-                  className={`tab ${listMode === "applications" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setListMode("applications")}
-                >
-                  応募
-                </button>
-                <button
-                  className={`tab ${listMode === "interviews" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => setListMode("interviews")}
-                >
-                  面接
-                </button>
-              </div>
+              <h2>応募一覧</h2>
             </div>
-            {listMode === "applications" ? (
-              applicationRows.length === 0 ? (
-                <div className="empty">応募データがありません</div>
-              ) : (
-                <div className="list">
-                  {applicationRows.map((app) => (
-                    <div
-                      key={app.applicationId}
-                      className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => selectApplication(app.applicationId)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          selectApplication(app.applicationId);
-                        }
-                      }}
-                    >
-                      <div>
-                        <div className="title-row">
-                          <div className="title">
-                            {app.candidateName ? app.candidateName : "候補者名なし"}
-                          </div>
-                          <span className="round-tag">面接{app.interviewCount}件</span>
-                          <span className={`decision-tag ${app.latestDecision}`}>
-                            {decisionLabel(app.latestDecision)}
-                          </span>
-                        </div>
-                        <div className="meta">応募ID: {app.applicationId}</div>
-                        <div className="meta">
-                          最新面接: 第{app.latestRound}次 / 作成:{" "}
-                          {new Date(app.latestCreatedAt).toLocaleString("ja-JP")}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : sorted.length === 0 ? (
-              <div className="empty">面接データがありません</div>
+            {applicationRows.length === 0 ? (
+              <div className="empty">応募データがありません</div>
             ) : (
               <div className="list">
-                {sorted.map((row) => (
+                {applicationRows.map((app) => (
                   <div
-                    key={row.interviewId}
-                    className={`row ${selectedId === row.interviewId ? "selected" : ""}`}
+                    key={app.applicationId}
+                    className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
                     role="button"
                     tabIndex={0}
-                    onClick={() => void loadVideo(row)}
+                    onClick={() => selectApplication(app.applicationId)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        void loadVideo(row);
+                        selectApplication(app.applicationId);
                       }
                     }}
                   >
                     <div>
                       <div className="title-row">
                         <div className="title">
-                          {row.candidateName ? row.candidateName : "候補者名なし"}
+                          {app.candidateName ? app.candidateName : "候補者名なし"}
                         </div>
-                        <span className="round-tag">第{row.round}次</span>
-                        <span className={`decision-tag ${row.decision}`}>
-                          {decisionLabel(row.decision)}
+                        <span className="round-tag">面接{app.interviewCount}件</span>
+                        <span className={`decision-tag ${app.latestDecision}`}>
+                          {decisionLabel(app.latestDecision)}
                         </span>
                       </div>
+                      <div className="meta">応募ID: {app.applicationId}</div>
                       <div className="meta">
-                        <a href={row.url} target="_blank" rel="noreferrer">
-                          {row.url}
-                        </a>
-                      </div>
-                      <div className="meta">
-                        ステータス: {row.status} / 作成:{" "}
-                        {new Date(row.createdAt).toLocaleString("ja-JP")}
+                        最新面接: 第{app.latestRound}次 / 作成:{" "}
+                        {new Date(app.latestCreatedAt).toLocaleString("ja-JP")}
                       </div>
                     </div>
                   </div>
@@ -799,9 +753,7 @@ export default function AdminDashboard({
             <h2>
               {detailMode === "templates"
                 ? "プロンプトテンプレート編集"
-                : detailMode === "application"
-                  ? "応募詳細"
-                  : "面接詳細"}
+                : "応募詳細"}
             </h2>
           </div>
           {detailMode === "templates" ? (
@@ -886,197 +838,197 @@ export default function AdminDashboard({
                 </button>
               )}
             </div>
-          ) : detailMode === "application" ? (
-            !selectedApplication ? (
-              <div className="empty">左の一覧から応募を選択してください</div>
-            ) : (
-              <div className="application-detail">
-                <div className="detail-row">
-                  <label>候補者名</label>
-                  <div className="detail-value">
-                    {selectedApplication.candidateName ?? "未設定"}
-                  </div>
+          ) : !selectedApplication ? (
+            <div className="empty">左の一覧から応募を選択してください</div>
+          ) : (
+            <div className="application-detail">
+              <div className="detail-row">
+                <label>候補者名</label>
+                <div className="detail-value">
+                  {selectedApplication.candidateName ?? "未設定"}
                 </div>
-                <div className="detail-row">
-                  <label>応募ID</label>
-                  <div className="detail-value mono">{selectedApplication.applicationId}</div>
+              </div>
+              <div className="detail-row">
+                <label>応募ID</label>
+                <div className="detail-value mono">{selectedApplication.applicationId}</div>
+              </div>
+              <div className="detail-row">
+                <label>応募作成</label>
+                <div className="detail-value">
+                  {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
                 </div>
-                <div className="detail-row">
-                  <label>応募作成</label>
-                  <div className="detail-value">
-                    {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
-                  </div>
-                </div>
-                <div className="detail-actions">
-                  <button
-                    className="ghost"
-                    type="button"
-                    onClick={() => void createInterview(selectedApplication.applicationId)}
-                  >
-                    次の面接URLを発行
-                  </button>
-                </div>
-                <div className="application-interviews">
-                  <div className="section-title">面接一覧</div>
-                  {selectedApplication.interviews
-                    .slice()
-                    .sort((a, b) => a.round - b.round)
-                    .map((row) => (
-                      <div
-                        key={row.interviewId}
-                        className={`row application-row ${selectedId === row.interviewId ? "selected" : ""}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => void loadVideo(row)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            void loadVideo(row);
-                          }
-                        }}
-                      >
-                        <div>
-                          <div className="title-row">
-                            <div className="title">第{row.round}次</div>
-                            <span className={`decision-tag ${row.decision}`}>
-                              {decisionLabel(row.decision)}
-                            </span>
-                          </div>
-                          <div className="meta">
-                            ステータス: {row.status} / 作成:{" "}
-                            {new Date(row.createdAt).toLocaleString("ja-JP")}
-                          </div>
-                          <div className="meta">
-                            <a href={row.url} target="_blank" rel="noreferrer">
-                              {row.url}
-                            </a>
-                          </div>
+              </div>
+              <div className="detail-actions">
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => void createInterview(selectedApplication.applicationId)}
+                >
+                  次の面接URLを発行
+                </button>
+              </div>
+              <div className="application-interviews">
+                <div className="section-title">面接一覧</div>
+                {selectedApplication.interviews
+                  .slice()
+                  .sort((a, b) => a.round - b.round)
+                  .map((row) => (
+                    <div
+                      key={row.interviewId}
+                      className={`row application-row ${selectedId === row.interviewId ? "selected" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => void loadVideo(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          void loadVideo(row);
+                        }
+                      }}
+                    >
+                      <div>
+                        <div className="title-row">
+                          <div className="title">第{row.round}次</div>
+                          <span className={`decision-tag ${row.decision}`}>
+                            {decisionLabel(row.decision)}
+                          </span>
+                        </div>
+                        <div className="meta">
+                          ステータス: {row.status} / 作成:{" "}
+                          {new Date(row.createdAt).toLocaleString("ja-JP")}
+                        </div>
+                        <div className="meta">
+                          <a href={row.url} target="_blank" rel="noreferrer">
+                            {row.url}
+                          </a>
                         </div>
                       </div>
-                    ))}
-                </div>
+                    </div>
+                  ))}
               </div>
-            )
-          ) : !selectedRow ? (
-            <div className="empty">左の一覧から面接を選択してください</div>
-          ) : (
-            <>
-              <div className="detail-header">
-                <div>
-                  <div className="detail-row">
-                    <label>候補者名</label>
-                    <input
-                      value={editCandidateName}
-                      onChange={(e) => setEditCandidateName(e.target.value)}
-                      placeholder="候補者名を入力"
-                    />
+              <div className="section-title">面接詳細</div>
+              {selectedRow ? (
+                <div className="interview-detail">
+                  <div className="detail-header">
+                    <div>
+                      <div className="detail-row">
+                        <label>候補者名</label>
+                        <input
+                          value={editCandidateName}
+                          onChange={(e) => setEditCandidateName(e.target.value)}
+                          placeholder="候補者名を入力"
+                        />
+                      </div>
+                      <div className="detail-row">
+                        <label>判定</label>
+                        <select
+                          value={editDecision}
+                          onChange={(e) => setEditDecision(e.target.value as Decision)}
+                          disabled={saving}
+                        >
+                          {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
+                            <option key={value} value={value}>
+                              {decisionLabel(value)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="meta">
+                        <a href={selectedRow.url} target="_blank" rel="noreferrer">
+                          {selectedRow.url}
+                        </a>
+                      </div>
+                      <div className="meta">
+                        ステータス: {selectedRow.status} / 作成:{" "}
+                        {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
+                      </div>
+                      <div className="meta">応募ID: {selectedRow.applicationId}</div>
+                      <div className="meta">面接ラウンド: 第{selectedRow.round}次</div>
+                      <div className="detail-actions">
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() => void createNextInterview()}
+                        >
+                          次の面接URLを発行
+                        </button>
+                      </div>
+                    </div>
+                    <div className="badge">
+                      {selectedRow.hasRecording ? "録画あり" : "録画なし"}
+                    </div>
                   </div>
-                  <div className="detail-row">
-                    <label>判定</label>
-                    <select
-                      value={editDecision}
-                      onChange={(e) => setEditDecision(e.target.value as Decision)}
-                      disabled={saving}
-                    >
-                      {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
-                        <option key={value} value={value}>
-                          {decisionLabel(value)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="meta">
-                    <a href={selectedRow.url} target="_blank" rel="noreferrer">
-                      {selectedRow.url}
-                    </a>
-                  </div>
-                  <div className="meta">
-                    ステータス: {selectedRow.status} / 作成:{" "}
-                    {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
-                  </div>
-                  <div className="meta">応募ID: {selectedRow.applicationId}</div>
-                  <div className="meta">面接ラウンド: 第{selectedRow.round}次</div>
-                  <div className="detail-actions">
-                    <button
-                      className="ghost"
-                      type="button"
-                      onClick={() => void createNextInterview()}
-                    >
-                      次の面接URLを発行
-                    </button>
-                  </div>
-                </div>
-                <div className="badge">
-                  {selectedRow.hasRecording ? "録画あり" : "録画なし"}
-                </div>
-              </div>
 
-              <div className="media">
-                <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
-                  {selectedVideoUrl ? (
-                    <video
-                      ref={videoRef}
-                      controls
-                      src={selectedVideoUrl}
-                      onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
+                  <div className="media">
+                    <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
+                      {selectedVideoUrl ? (
+                        <video
+                          ref={videoRef}
+                          controls
+                          src={selectedVideoUrl}
+                          onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
+                        />
+                      ) : (
+                        <div className="video-empty">
+                          {loadingVideoId === selectedRow.interviewId
+                            ? "動画を読み込み中..."
+                            : selectedRow.hasRecording
+                              ? "動画の取得に失敗しました"
+                              : "録画がありません"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="chat-panel">
+                      <div className="chat-title">Chat Timeline</div>
+                      <div className="chat-list">
+                        {selectedChat.length === 0 ? (
+                          <div className="chat-empty">チャットはまだありません</div>
+                        ) : (
+                          selectedChat.map((msg) => (
+                            <button
+                              key={msg.messageId}
+                              className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
+                              onClick={() => seekTo(msg.offsetMs)}
+                              type="button"
+                            >
+                              <span className="time">{formatTime(msg.offsetMs)}</span>
+                              <span className="speaker">
+                                {msg.role === "interviewer" ? "面接官" : "候補者"}
+                              </span>
+                              <span className="text">{msg.text}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="notes">
+                    <label>メモ</label>
+                    <textarea
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      placeholder="面接の気づきや評価メモを記録できます"
                     />
-                  ) : (
-                    <div className="video-empty">
-                      {loadingVideoId === selectedRow.interviewId
-                        ? "動画を読み込み中..."
-                        : selectedRow.hasRecording
-                          ? "動画の取得に失敗しました"
-                          : "録画がありません"}
+                  </div>
+                  <details className="prompt">
+                    <summary>プロンプトを見る</summary>
+                    <textarea value={selectedRow.prompt ?? ""} readOnly />
+                  </details>
+                  {isDirty && (
+                    <div className="edit-actions">
+                      <button className="ghost" onClick={cancelEdit} disabled={saving}>
+                        キャンセル
+                      </button>
+                      <button className="primary" onClick={() => void saveDetails()} disabled={saving}>
+                        {saving ? "保存中..." : "変更を保存"}
+                      </button>
                     </div>
                   )}
                 </div>
-                <div className="chat-panel">
-                  <div className="chat-title">Chat Timeline</div>
-                  <div className="chat-list">
-                    {selectedChat.length === 0 ? (
-                      <div className="chat-empty">チャットはまだありません</div>
-                    ) : (
-                      selectedChat.map((msg) => (
-                        <button
-                          key={msg.messageId}
-                          className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
-                          onClick={() => seekTo(msg.offsetMs)}
-                          type="button"
-                        >
-                          <span className="time">{formatTime(msg.offsetMs)}</span>
-                          <span className="speaker">
-                            {msg.role === "interviewer" ? "面接官" : "候補者"}
-                          </span>
-                          <span className="text">{msg.text}</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="notes">
-                <label>メモ</label>
-                <textarea
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
-                  placeholder="面接の気づきや評価メモを記録できます"
-                />
-              </div>
-              <details className="prompt">
-                <summary>プロンプトを見る</summary>
-                <textarea value={selectedRow.prompt ?? ""} readOnly />
-              </details>
-              {isDirty && (
-                <div className="edit-actions">
-                  <button className="ghost" onClick={cancelEdit} disabled={saving}>
-                    キャンセル
-                  </button>
-                  <button className="primary" onClick={() => void saveDetails()} disabled={saving}>
-                    {saving ? "保存中..." : "変更を保存"}
-                  </button>
-                </div>
+              ) : (
+                <div className="empty">面接を選択してください</div>
               )}
-            </>
+            </div>
           )}
         </div>
       </section>
@@ -1136,28 +1088,18 @@ export default function AdminDashboard({
           gap: 12px;
           margin-bottom: 8px;
         }
-        .list-tabs {
-          display: flex;
-          gap: 6px;
-        }
-        .tab {
-          padding: 6px 12px;
-          border-radius: 999px;
-          border: 1px solid #c9d3e3;
-          background: #f8fafc;
-          color: #52627a;
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .tab.active {
-          background: #1f4fb2;
-          color: #fff;
-          border-color: #1f4fb2;
-        }
         .detail-card {
           min-height: 420px;
           display: flex;
           flex-direction: column;
+          gap: 16px;
+        }
+        .application-detail {
+          display: grid;
+          gap: 16px;
+        }
+        .interview-detail {
+          display: grid;
           gap: 16px;
         }
         .detail-header {
