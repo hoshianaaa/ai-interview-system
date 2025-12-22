@@ -912,7 +912,10 @@ export default function AdminDashboard({
       if (query) {
         const name = (row.candidateName ?? "").toLowerCase();
         const notes = (row.notes ?? "").toLowerCase();
-        if (!name.includes(query) && !notes.includes(query)) return false;
+        const email = (row.candidateEmail ?? "").toLowerCase();
+        if (!name.includes(query) && !notes.includes(query) && !email.includes(query)) {
+          return false;
+        }
       }
       if (applicationDecision !== "all" && row.latestDecision !== applicationDecision) {
         return false;
@@ -2897,19 +2900,20 @@ export default function AdminDashboard({
           min-height: 240px;
         }
         .media {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+          display: flex;
           gap: 14px;
           align-items: stretch;
           margin-bottom: 16px;
         }
-        .media > .video,
-        .media > .chat-panel {
-          height: 100%;
-          align-self: stretch;
-        }
-        .media > * {
+        .media > .video {
+          flex: 1 1 auto;
           min-width: 0;
+        }
+        .media > .chat-panel {
+          flex: 0 1 160px;
+          min-width: 110px;
+          max-width: 160px;
+          height: 100%;
         }
         .chat-panel {
           border-radius: 12px;
@@ -2925,6 +2929,7 @@ export default function AdminDashboard({
           min-height: 0;
           max-height: 100%;
           transform: translateY(2px);
+          width: 100%;
         }
         .chat-title {
           font-size: 12px;
@@ -2983,7 +2988,7 @@ export default function AdminDashboard({
         }
         .application-split {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+          grid-template-columns: minmax(0, 3.2fr) minmax(160px, 0.8fr);
           gap: 16px;
           align-items: stretch;
         }
