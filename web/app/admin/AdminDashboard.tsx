@@ -1795,6 +1795,7 @@ export default function AdminDashboard({
           color: #0d1b2a;
           font-family: "IBM Plex Sans", "Noto Sans JP", "Hiragino Sans", sans-serif;
           --header-row-height: 44px;
+          --collapse-button-size: 38px;
         }
         .layout {
           display: flex;
@@ -1912,18 +1913,15 @@ export default function AdminDashboard({
           justify-content: center;
           padding: 10px;
         }
-        .sidebar.collapsed .collapse-button {
-          right: -24px;
-        }
         .collapse-button {
           display: flex;
           align-items: center;
           justify-content: center;
           position: absolute;
-          top: 0;
-          right: -24px;
-          height: var(--header-row-height);
-          width: var(--header-row-height);
+          top: calc((var(--header-row-height) - var(--collapse-button-size)) * 0.5);
+          right: -32px;
+          height: var(--collapse-button-size);
+          width: var(--collapse-button-size);
           border-radius: 12px;
           border: 1px solid #d3dbe8;
           background: #fff;
