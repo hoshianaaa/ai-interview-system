@@ -2923,7 +2923,7 @@ export default function AdminDashboard({
           display: flex;
           gap: 14px;
           align-items: stretch;
-          margin-bottom: 16px;
+          margin-bottom: 0;
         }
         .media > .video {
           flex: 1 1 auto;
@@ -3050,7 +3050,7 @@ export default function AdminDashboard({
           width: 100%;
           max-width: 100%;
           overflow: hidden;
-          margin-top: 16px;
+          margin-top: 0;
         }
         .prompt summary {
           cursor: pointer;
