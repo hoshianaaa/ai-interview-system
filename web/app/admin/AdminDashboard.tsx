@@ -2914,7 +2914,7 @@ export default function AdminDashboard({
           min-width: 0;
           width: 100%;
           align-self: stretch;
-          padding-bottom: 12px;
+          padding-bottom: 20px;
         }
         .notes-panel label {
           font-size: 12px;
@@ -2922,6 +2922,7 @@ export default function AdminDashboard({
           min-height: 28px;
           display: flex;
           align-items: center;
+          margin-top: 18px;
         }
         .notes-panel textarea {
           min-height: 360px;
