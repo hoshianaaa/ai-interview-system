@@ -4,7 +4,10 @@ import { ClerkProvider } from "@clerk/nextjs";
 
 export const metadata: Metadata = {
   title: "AI Interview",
-  description: "LiveKit + Agents minimal app"
+  description: "LiveKit + Agents minimal app",
+  icons: {
+    icon: "/logo.png"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

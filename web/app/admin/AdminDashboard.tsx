@@ -720,10 +720,6 @@ export default function AdminDashboard({
                   <strong>{createResult.candidateName ?? "未設定"}</strong>
                 </div>
                 <div className="result-row">
-                  <span>応募ID</span>
-                  <strong>{createResult.applicationId}</strong>
-                </div>
-                <div className="result-row">
                   <span>面接ラウンド</span>
                   <strong>第{createResult.round}次</strong>
                 </div>
@@ -781,7 +777,6 @@ export default function AdminDashboard({
                           {decisionLabel(app.latestDecision)}
                         </span>
                       </div>
-                      <div className="meta">応募ID: {app.applicationId}</div>
                       <div className="meta">
                         最新面接: 第{app.latestRound}次 / 作成:{" "}
                         {new Date(app.latestCreatedAt).toLocaleString("ja-JP")}
@@ -918,10 +913,6 @@ export default function AdminDashboard({
                 </div>
               )}
               <div className="detail-row">
-                <label>応募ID</label>
-                <div className="detail-value mono">{selectedApplication.applicationId}</div>
-              </div>
-              <div className="detail-row">
                 <label>応募作成</label>
                 <div className="detail-value">
                   {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
@@ -1001,7 +992,6 @@ export default function AdminDashboard({
                         ステータス: {selectedRow.status} / 作成:{" "}
                         {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
                       </div>
-                      <div className="meta">応募ID: {selectedRow.applicationId}</div>
                       <div className="meta">面接ラウンド: 第{selectedRow.round}次</div>
                       <div className="detail-actions">
                         <button
