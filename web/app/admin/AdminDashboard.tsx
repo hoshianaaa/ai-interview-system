@@ -1799,7 +1799,7 @@ export default function AdminDashboard({
           min-height: 100vh;
         }
         .sidebar {
-          width: 240px;
+          width: 200px;
           background: #fff;
           border-right: 1px solid #d8e1f0;
           padding: 20px 16px;
@@ -1808,7 +1808,7 @@ export default function AdminDashboard({
           gap: 16px;
         }
         .sidebar.collapsed {
-          width: 72px;
+          width: 56px;
           padding: 20px 10px;
         }
         .content {
