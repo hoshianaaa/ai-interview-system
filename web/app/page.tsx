@@ -14,7 +14,9 @@ export default async function HomePage() {
   const interviews = await prisma.interview.findMany({
     where: { orgId },
     orderBy: { createdAt: "desc" },
-    include: { application: { select: { candidateName: true } } }
+    include: {
+      application: { select: { candidateName: true, createdAt: true, updatedAt: true } }
+    }
   });
   const templates = await prisma.promptTemplate.findMany({
     where: { orgId },
@@ -32,6 +34,12 @@ export default async function HomePage() {
     decision: row.decision,
     round: row.round,
     candidateName: row.application?.candidateName ?? null,
+    applicationCreatedAt: row.application?.createdAt
+      ? row.application.createdAt.toISOString()
+      : row.createdAt.toISOString(),
+    applicationUpdatedAt: row.application?.updatedAt
+      ? row.application.updatedAt.toISOString()
+      : row.createdAt.toISOString(),
     prompt: row.interviewPrompt ?? null,
     notes: row.interviewNotes ?? null,
     createdAt: row.createdAt.toISOString(),

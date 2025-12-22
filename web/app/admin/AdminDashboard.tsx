@@ -14,10 +14,24 @@ type InterviewRow = {
   decision: Decision;
   round: number;
   candidateName: string | null;
+  applicationCreatedAt: string;
+  applicationUpdatedAt: string;
   prompt: string | null;
   notes: string | null;
   createdAt: string;
   hasRecording: boolean;
+};
+
+type ApplicationRow = {
+  applicationId: string;
+  candidateName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  interviewCount: number;
+  latestRound: number;
+  latestDecision: Decision;
+  latestCreatedAt: string;
+  interviews: InterviewRow[];
 };
 
 type ChatItem = {
@@ -66,7 +80,10 @@ export default function AdminDashboard({
     promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [detailMode, setDetailMode] = useState<"interview" | "templates">("interview");
+  const [detailMode, setDetailMode] = useState<"interview" | "templates" | "application">(
+    "application"
+  );
+  const [listMode, setListMode] = useState<"applications" | "interviews">("applications");
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
   const [templateEditBody, setTemplateEditBody] = useState(DEFAULT_INTERVIEW_PROMPT);
@@ -78,6 +95,7 @@ export default function AdminDashboard({
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -275,11 +293,17 @@ export default function AdminDashboard({
     setPrompt(template ? template.body : DEFAULT_INTERVIEW_PROMPT);
   }
 
+  function selectApplication(applicationId: string) {
+    setDetailMode("application");
+    setSelectedApplicationId(applicationId);
+  }
+
   async function loadVideo(row: InterviewRow) {
     const interviewId = row.interviewId;
     setDetailMode("interview");
     setLoadingVideoId(interviewId);
     setSelectedId(interviewId);
+    setSelectedApplicationId(row.applicationId);
     setSelectedVideoUrl(null);
     setSelectedChat([]);
     setCurrentTimeSec(0);
@@ -391,9 +415,57 @@ export default function AdminDashboard({
       [...rows].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [rows]
   );
+  const applicationRows = useMemo(() => {
+    const grouped = new Map<string, ApplicationRow>();
+    for (const row of rows) {
+      const existing = grouped.get(row.applicationId);
+      if (!existing) {
+        grouped.set(row.applicationId, {
+          applicationId: row.applicationId,
+          candidateName: row.candidateName ?? null,
+          createdAt: row.applicationCreatedAt,
+          updatedAt: row.applicationUpdatedAt,
+          interviewCount: 1,
+          latestRound: row.round,
+          latestDecision: row.decision,
+          latestCreatedAt: row.createdAt,
+          interviews: [row]
+        });
+        continue;
+      }
+      existing.interviews.push(row);
+      existing.interviewCount += 1;
+      if (!existing.candidateName && row.candidateName) {
+        existing.candidateName = row.candidateName;
+      }
+      if (row.round > existing.latestRound) {
+        existing.latestRound = row.round;
+        existing.latestDecision = row.decision;
+        existing.latestCreatedAt = row.createdAt;
+      } else if (row.round === existing.latestRound) {
+        if (new Date(row.createdAt).getTime() > new Date(existing.latestCreatedAt).getTime()) {
+          existing.latestDecision = row.decision;
+          existing.latestCreatedAt = row.createdAt;
+        }
+      }
+      if (new Date(row.applicationUpdatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+        existing.updatedAt = row.applicationUpdatedAt;
+      }
+    }
+    return [...grouped.values()].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }, [rows]);
   const selectedRow = useMemo(
     () => (selectedId ? sorted.find((row) => row.interviewId === selectedId) ?? null : null),
     [sorted, selectedId]
+  );
+  const selectedApplication = useMemo(
+    () =>
+      selectedApplicationId
+        ? applicationRows.find((row) => row.applicationId === selectedApplicationId) ?? null
+        : null,
+    [applicationRows, selectedApplicationId]
   );
   const selectedTemplate = useMemo(
     () =>
@@ -433,6 +505,17 @@ export default function AdminDashboard({
     setEditNotes(selectedRow.notes ?? "");
     setEditDecision(selectedRow.decision ?? "undecided");
   }, [selectedRow?.interviewId]);
+
+  useEffect(() => {
+    if (detailMode === "templates") return;
+    if (listMode === "applications") {
+      setSelectedId(null);
+      setDetailMode("application");
+      return;
+    }
+    setSelectedApplicationId(null);
+    setDetailMode("interview");
+  }, [listMode, detailMode]);
 
   useEffect(() => {
     if (selectedTemplateId || prompt.trim() !== DEFAULT_INTERVIEW_PROMPT.trim()) return;
@@ -608,8 +691,65 @@ export default function AdminDashboard({
           </div>
 
           <div className="card list-card">
-            <h2>面接一覧</h2>
-            {sorted.length === 0 ? (
+            <div className="list-header">
+              <h2>{listMode === "applications" ? "応募一覧" : "面接一覧"}</h2>
+              <div className="list-tabs">
+                <button
+                  className={`tab ${listMode === "applications" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setListMode("applications")}
+                >
+                  応募
+                </button>
+                <button
+                  className={`tab ${listMode === "interviews" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => setListMode("interviews")}
+                >
+                  面接
+                </button>
+              </div>
+            </div>
+            {listMode === "applications" ? (
+              applicationRows.length === 0 ? (
+                <div className="empty">応募データがありません</div>
+              ) : (
+                <div className="list">
+                  {applicationRows.map((app) => (
+                    <div
+                      key={app.applicationId}
+                      className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectApplication(app.applicationId)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          selectApplication(app.applicationId);
+                        }
+                      }}
+                    >
+                      <div>
+                        <div className="title-row">
+                          <div className="title">
+                            {app.candidateName ? app.candidateName : "候補者名なし"}
+                          </div>
+                          <span className="round-tag">面接{app.interviewCount}件</span>
+                          <span className={`decision-tag ${app.latestDecision}`}>
+                            {decisionLabel(app.latestDecision)}
+                          </span>
+                        </div>
+                        <div className="meta">応募ID: {app.applicationId}</div>
+                        <div className="meta">
+                          最新面接: 第{app.latestRound}次 / 作成:{" "}
+                          {new Date(app.latestCreatedAt).toLocaleString("ja-JP")}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : sorted.length === 0 ? (
               <div className="empty">面接データがありません</div>
             ) : (
               <div className="list">
@@ -656,7 +796,13 @@ export default function AdminDashboard({
 
         <div className="card detail-card">
           <div className="detail-title">
-            <h2>{detailMode === "templates" ? "プロンプトテンプレート編集" : "面接詳細"}</h2>
+            <h2>
+              {detailMode === "templates"
+                ? "プロンプトテンプレート編集"
+                : detailMode === "application"
+                  ? "応募詳細"
+                  : "面接詳細"}
+            </h2>
           </div>
           {detailMode === "templates" ? (
             <div className="template-editor">
@@ -740,6 +886,77 @@ export default function AdminDashboard({
                 </button>
               )}
             </div>
+          ) : detailMode === "application" ? (
+            !selectedApplication ? (
+              <div className="empty">左の一覧から応募を選択してください</div>
+            ) : (
+              <div className="application-detail">
+                <div className="detail-row">
+                  <label>候補者名</label>
+                  <div className="detail-value">
+                    {selectedApplication.candidateName ?? "未設定"}
+                  </div>
+                </div>
+                <div className="detail-row">
+                  <label>応募ID</label>
+                  <div className="detail-value mono">{selectedApplication.applicationId}</div>
+                </div>
+                <div className="detail-row">
+                  <label>応募作成</label>
+                  <div className="detail-value">
+                    {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
+                  </div>
+                </div>
+                <div className="detail-actions">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() => void createInterview(selectedApplication.applicationId)}
+                  >
+                    次の面接URLを発行
+                  </button>
+                </div>
+                <div className="application-interviews">
+                  <div className="section-title">面接一覧</div>
+                  {selectedApplication.interviews
+                    .slice()
+                    .sort((a, b) => a.round - b.round)
+                    .map((row) => (
+                      <div
+                        key={row.interviewId}
+                        className={`row application-row ${selectedId === row.interviewId ? "selected" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => void loadVideo(row)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            void loadVideo(row);
+                          }
+                        }}
+                      >
+                        <div>
+                          <div className="title-row">
+                            <div className="title">第{row.round}次</div>
+                            <span className={`decision-tag ${row.decision}`}>
+                              {decisionLabel(row.decision)}
+                            </span>
+                          </div>
+                          <div className="meta">
+                            ステータス: {row.status} / 作成:{" "}
+                            {new Date(row.createdAt).toLocaleString("ja-JP")}
+                          </div>
+                          <div className="meta">
+                            <a href={row.url} target="_blank" rel="noreferrer">
+                              {row.url}
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )
           ) : !selectedRow ? (
             <div className="empty">左の一覧から面接を選択してください</div>
           ) : (
@@ -912,6 +1129,31 @@ export default function AdminDashboard({
         .list-card {
           min-height: 420px;
         }
+        .list-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+        .list-tabs {
+          display: flex;
+          gap: 6px;
+        }
+        .tab {
+          padding: 6px 12px;
+          border-radius: 999px;
+          border: 1px solid #c9d3e3;
+          background: #f8fafc;
+          color: #52627a;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .tab.active {
+          background: #1f4fb2;
+          color: #fff;
+          border-color: #1f4fb2;
+        }
         .detail-card {
           min-height: 420px;
           display: flex;
@@ -931,6 +1173,16 @@ export default function AdminDashboard({
         .detail-row label {
           font-size: 12px;
           color: #4b5c72;
+        }
+        .detail-value {
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: #f8fafc;
+          border: 1px solid #d8e1f0;
+        }
+        .mono {
+          font-family: "IBM Plex Mono", "Menlo", "Consolas", monospace;
+          font-size: 12px;
         }
         .detail-row input {
           padding: 10px 12px;
@@ -1180,6 +1432,19 @@ export default function AdminDashboard({
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
+        }
+        .application-interviews {
+          margin-top: 12px;
+          display: grid;
+          gap: 12px;
+        }
+        .section-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1f2f44;
+        }
+        .application-row {
+          background: #f8fafc;
         }
         .ghost:disabled {
           color: #8a97ab;
