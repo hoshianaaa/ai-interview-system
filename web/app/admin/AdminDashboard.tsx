@@ -325,10 +325,10 @@ export default function AdminDashboard({
   }
 
   async function createNextInterview() {
-    if (!selectedRow) return;
+    if (!selectedApplication) return;
     setApplicationInterviewResult(null);
     await createInterviewForApplication(
-      selectedRow.applicationId,
+      selectedApplication.applicationId,
       undefined,
       setApplicationInterviewResult
     );
@@ -1414,24 +1414,6 @@ export default function AdminDashboard({
                   </button>
                 </div>
               )}
-              {canCreateAdditionalInterview && (
-                <div className="detail-actions">
-                  <button
-                    className="ghost"
-                    type="button"
-                    onClick={() => {
-                      setApplicationInterviewResult(null);
-                      void createInterviewForApplication(
-                        selectedApplication.applicationId,
-                        undefined,
-                        setApplicationInterviewResult
-                      );
-                    }}
-                  >
-                    {createInterviewLabel}
-                  </button>
-                </div>
-              )}
               {applicationInterviewResult && "error" in applicationInterviewResult && (
                 <p className="error">作成に失敗しました: {applicationInterviewResult.error}</p>
               )}
@@ -1461,6 +1443,15 @@ export default function AdminDashboard({
               <div className="section-title-row">
                 <div className="section-title">面接詳細</div>
                 <div className="section-title-actions">
+                  {canCreateAdditionalInterview && (
+                    <button
+                      className="ghost"
+                      type="button"
+                      onClick={() => void createNextInterview()}
+                    >
+                      {createInterviewLabel}
+                    </button>
+                  )}
                   {selectedApplication.interviews.length > 0 && (
                     <select
                       value={selectedRow?.interviewId ?? ""}
@@ -1504,14 +1495,20 @@ export default function AdminDashboard({
               </div>
               {selectedRow ? (
                 <div className="interview-detail">
-                  <div className="detail-header">
-                    <div>
-                      <div className="detail-row">
+                  <div className="interview-top-row">
+                    <div className="interview-url">
+                      面接URL:{" "}
+                      <a href={selectedRow.url} target="_blank" rel="noreferrer">
+                        {selectedRow.url}
+                      </a>
+                    </div>
+                    {!isDecisionLocked && (
+                      <div className="decision-select">
                         <label>判定</label>
                         <select
                           value={editDecision}
                           onChange={(e) => handleDecisionChange(e.target.value as Decision)}
-                          disabled={savingInterview || isDecisionLocked}
+                          disabled={savingInterview}
                         >
                           {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
                             <option key={value} value={value}>
@@ -1520,23 +1517,7 @@ export default function AdminDashboard({
                           ))}
                         </select>
                       </div>
-                      <div className="meta">
-                        <a href={selectedRow.url} target="_blank" rel="noreferrer">
-                          {selectedRow.url}
-                        </a>
-                      </div>
-                      {canCreateAdditionalInterview && (
-                        <div className="detail-actions">
-                          <button
-                            className="ghost"
-                            type="button"
-                            onClick={() => void createNextInterview()}
-                          >
-                            {createInterviewLabel}
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                   {canReissueInterview && (
                     <div className="detail-actions">
@@ -1774,11 +1755,27 @@ export default function AdminDashboard({
           border-radius: 12px;
           padding: 16px;
         }
-        .detail-header {
+        .interview-top-row {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           gap: 16px;
+        }
+        .interview-url {
+          flex: 1;
+          font-size: 12px;
+          color: #4b5c72;
+          word-break: break-all;
+        }
+        .decision-select {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          min-width: 140px;
+        }
+        .decision-select label {
+          font-size: 12px;
+          color: #4b5c72;
         }
         .detail-row {
           display: grid;
@@ -2258,7 +2255,7 @@ export default function AdminDashboard({
           .grid {
             grid-template-columns: 1fr;
           }
-          .detail-header {
+          .interview-top-row {
             flex-direction: column;
           }
           .media {
