@@ -2646,7 +2646,7 @@ export default function AdminDashboard({
           align-items: center;
           gap: 12px;
           flex-wrap: wrap;
-          margin-bottom: 12px;
+          margin-bottom: 0;
         }
         .detail-title-fields {
           display: flex;
