@@ -50,7 +50,6 @@ export default function AdminDashboard({
 }) {
   const [rows, setRows] = useState(interviews);
   const [durationMinInput, setDurationMinInput] = useState("10");
-  const [expiresMonths, setExpiresMonths] = useState("0");
   const [expiresWeeks, setExpiresWeeks] = useState("1");
   const [expiresDays, setExpiresDays] = useState("0");
   const [expiresHours, setExpiresHours] = useState("0");
@@ -95,7 +94,6 @@ export default function AdminDashboard({
         durationSec,
         candidateName: candidateName.trim() || undefined,
         prompt,
-        expiresInMonths: Number(expiresMonths),
         expiresInWeeks: Number(expiresWeeks),
         expiresInDays: Number(expiresDays),
         expiresInHours: Number(expiresHours)
@@ -451,17 +449,6 @@ export default function AdminDashboard({
             <div className="form-row">
               <label>URL有効期限</label>
               <div className="expiry-grid">
-                <select
-                  value={expiresMonths}
-                  onChange={(e) => setExpiresMonths(e.target.value)}
-                  aria-label="有効期限の月"
-                >
-                  {Array.from({ length: 13 }, (_, i) => (
-                    <option key={i} value={i}>
-                      {i}ヶ月
-                    </option>
-                  ))}
-                </select>
                 <select
                   value={expiresWeeks}
                   onChange={(e) => setExpiresWeeks(e.target.value)}
@@ -936,7 +923,7 @@ export default function AdminDashboard({
         }
         .expiry-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 8px;
         }
         .helper {
