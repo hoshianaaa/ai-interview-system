@@ -157,6 +157,7 @@ export default function AdminDashboard({
   const [activePanel, setActivePanel] = useState<"create" | "applications" | "settings">(
     "applications"
   );
+  const [applicationsOpen, setApplicationsOpen] = useState(true);
   const [settingsDurationMin, setSettingsDurationMin] = useState(
     String(settings.defaultDurationMin)
   );
@@ -1025,6 +1026,26 @@ export default function AdminDashboard({
           <div className="sidebar-body">
             <nav className="nav">
               <button
+                className={`nav-item ${activePanel === "create" ? "active" : ""}`}
+                type="button"
+                onClick={() => setActivePanel("create")}
+                aria-label="新規応募の追加"
+              >
+                <svg
+                  className="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                {!menuCollapsed && <span>新規応募の追加</span>}
+              </button>
+              <button
                 className={`nav-item ${activePanel === "settings" ? "active" : ""}`}
                 type="button"
                 onClick={() => setActivePanel("settings")}
@@ -1047,241 +1068,91 @@ export default function AdminDashboard({
                 </svg>
                 {!menuCollapsed && <span>設定</span>}
               </button>
-              <button
-                className={`nav-item ${activePanel === "create" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActivePanel("create")}
-                aria-label="新規応募の追加"
-              >
-                <svg
-                  className="nav-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
+              <div className="nav-group">
+                <button
+                  className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    setApplicationsOpen((prev) => {
+                      const next = !prev;
+                      if (next) setActivePanel("applications");
+                      return next;
+                    });
+                  }}
+                  aria-label="応募一覧"
+                  aria-expanded={applicationsOpen}
+                  aria-controls="nav-applications-panel"
                 >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                {!menuCollapsed && <span>新規応募の追加</span>}
-              </button>
-              <button
-                className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
-                type="button"
-                onClick={() => setActivePanel("applications")}
-                aria-label="応募一覧・詳細"
-              >
-                <svg
-                  className="nav-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                {!menuCollapsed && <span>応募一覧・詳細</span>}
-              </button>
-            </nav>
-            {!menuCollapsed && (
-              <div className="nav-panel">
-                {activePanel === "create" && (
-                  <section className="panel">
-                    <div className="card">
-                      <h2>新規応募の追加</h2>
-                      <p className="helper">
-                        候補者名は応募に保存され、面接設定は1次面接に使われます。
-                      </p>
-                      <div className="form-row">
-                        <label>候補者名（任意）</label>
-                        <input
-                          value={newCandidateName}
-                          onChange={(e) => setNewCandidateName(e.target.value)}
-                          placeholder="例）山田 太郎"
-                        />
-                      </div>
-                      <div className="form-row">
-                        <label>面接時間（分）</label>
-                        <select
-                          value={durationMinInput}
-                          onChange={(e) => setDurationMinInput(e.target.value)}
-                        >
-                          {Array.from({ length: 30 }, (_, i) => (
-                            <option key={i + 1} value={i + 1}>
-                              {i + 1}分
-                            </option>
-                          ))}
-                        </select>
-                        <p className="helper">1〜30分の範囲で指定できます。</p>
-                      </div>
-                      <div className="form-row">
-                        <label>URL有効期限</label>
-                        <div className="expiry-grid">
-                          <select
-                            value={expiresWeeks}
-                            onChange={(e) => setExpiresWeeks(e.target.value)}
-                            aria-label="有効期限の週"
-                          >
-                            {Array.from({ length: 5 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}週
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={expiresDays}
-                            onChange={(e) => setExpiresDays(e.target.value)}
-                            aria-label="有効期限の日"
-                          >
-                            {Array.from({ length: 7 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}日
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={expiresHours}
-                            onChange={(e) => setExpiresHours(e.target.value)}
-                            aria-label="有効期限の時間"
-                          >
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}時間
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <p className="helper">デフォルトは設定で変更できます。</p>
-                      </div>
-                      <div className="form-row">
-                        <label>テンプレート</label>
-                        <div className="template-controls">
-                          <select
-                            value={selectedTemplateId}
-                            onChange={(e) => applyTemplate(e.target.value)}
-                          >
-                            <option value="">デフォルト（標準プロンプト）</option>
-                            {templates.map((template) => (
-                              <option key={template.templateId} value={template.templateId}>
-                                {template.name}
-                                {template.isDefault ? "（デフォルト）" : ""}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="ghost"
-                            onClick={() => void reloadTemplates()}
-                            type="button"
-                            disabled={templateLoading}
-                          >
-                            {templateLoading ? "取得中..." : "再読み込み"}
-                          </button>
-                        </div>
-                        <p className="helper">
-                          選択するとプロンプトに反映されます。{defaultTemplate
-                            ? `現在のデフォルト: ${defaultTemplate.name}`
-                            : "デフォルト未設定"}
-                        </p>
-                      </div>
-                      <div className="form-row">
-                        <label>プロンプト</label>
-                        <textarea
-                          value={prompt}
-                          onChange={(e) => setPrompt(e.target.value)}
-                          placeholder="面接AIの指示文を入力してください"
-                        />
-                      </div>
-                      <button className="primary" onClick={() => void createInterview()}>
-                        応募を追加
-                      </button>
-                      {createResult && "error" in createResult && (
-                        <p className="error">作成に失敗しました: {createResult.error}</p>
-                      )}
-                      {hasResult && (
-                        <div className="result">
-                          <div className="result-row">
-                            <span>面接URL</span>
-                            <a href={createResult.url} target="_blank" rel="noreferrer">
-                              {createResult.url}
-                            </a>
+                  <svg
+                    className="nav-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                  {!menuCollapsed && <span>応募一覧</span>}
+                </button>
+                {!menuCollapsed && (
+                  <div
+                    className={`nav-panel ${applicationsOpen ? "open" : ""}`}
+                    id="nav-applications-panel"
+                  >
+                    <section className="grid">
+                      <div className="stack">
+                        <div className="card list-card">
+                          <div className="list-header">
+                            <h2>応募一覧</h2>
                           </div>
-                          <div className="result-row">
-                            <span>候補者名</span>
-                            <strong>{createResult.candidateName ?? "未設定"}</strong>
-                          </div>
-                          <div className="result-row">
-                            <span>面接ラウンド</span>
-                            <strong>第{createResult.round}次</strong>
-                          </div>
-                          {createResult.expiresAt && (
-                            <div className="result-row">
-                              <span>有効期限</span>
-                              <strong>
-                                {new Date(createResult.expiresAt).toLocaleString("ja-JP")}
-                              </strong>
+                          {applicationRows.length === 0 ? (
+                            <div className="empty">応募データがありません</div>
+                          ) : (
+                            <div className="list">
+                              {applicationRows.map((app) => (
+                                <div
+                                  key={app.applicationId}
+                                  className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => selectApplication(app.applicationId)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      selectApplication(app.applicationId);
+                                    }
+                                  }}
+                                >
+                                  <div>
+                                    <div className="title-row">
+                                      <div className="title">
+                                        {app.candidateName ? app.candidateName : "候補者名なし"}
+                                      </div>
+                                      <span className="round-tag">面接{app.interviewCount}件</span>
+                                      <span className={`decision-tag ${app.latestDecision}`}>
+                                        {decisionLabel(app.latestDecision)}
+                                      </span>
+                                    </div>
+                                    <div className="meta">
+                                      {app.interviewCount === 0
+                                        ? "面接未実施"
+                                        : `最新面接: 第${app.latestRound}次 / 作成: ${new Date(app.latestCreatedAt).toLocaleString("ja-JP")}`}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </section>
-                )}
-                {activePanel === "applications" && (
-                  <section className="grid">
-                    <div className="stack">
-                      <div className="card list-card">
-                        <div className="list-header">
-                          <h2>応募一覧</h2>
-                        </div>
-                        {applicationRows.length === 0 ? (
-                          <div className="empty">応募データがありません</div>
-                        ) : (
-                          <div className="list">
-                            {applicationRows.map((app) => (
-                              <div
-                                key={app.applicationId}
-                                className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => selectApplication(app.applicationId)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    selectApplication(app.applicationId);
-                                  }
-                                }}
-                              >
-                                <div>
-                                  <div className="title-row">
-                                    <div className="title">
-                                      {app.candidateName ? app.candidateName : "候補者名なし"}
-                                    </div>
-                                    <span className="round-tag">面接{app.interviewCount}件</span>
-                                    <span className={`decision-tag ${app.latestDecision}`}>
-                                      {decisionLabel(app.latestDecision)}
-                                    </span>
-                                  </div>
-                                  <div className="meta">
-                                    {app.interviewCount === 0
-                                      ? "面接未実施"
-                                      : `最新面接: 第${app.latestRound}次 / 作成: ${new Date(app.latestCreatedAt).toLocaleString("ja-JP")}`}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  </section>
+                    </section>
+                  </div>
                 )}
               </div>
-            )}
+            </nav>
           </div>
         </aside>
         <div className="content">
@@ -1291,6 +1162,145 @@ export default function AdminDashboard({
               <UserButton />
             </div>
           </div>
+          {activePanel === "create" && (
+            <section className="panel">
+              <div className="card">
+                <h2>新規応募の追加</h2>
+                <p className="helper">
+                  候補者名は応募に保存され、面接設定は1次面接に使われます。
+                </p>
+                <div className="form-row">
+                  <label>候補者名（任意）</label>
+                  <input
+                    value={newCandidateName}
+                    onChange={(e) => setNewCandidateName(e.target.value)}
+                    placeholder="例）山田 太郎"
+                  />
+                </div>
+                <div className="form-row">
+                  <label>面接時間（分）</label>
+                  <select
+                    value={durationMinInput}
+                    onChange={(e) => setDurationMinInput(e.target.value)}
+                  >
+                    {Array.from({ length: 30 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        {i + 1}分
+                      </option>
+                    ))}
+                  </select>
+                  <p className="helper">1〜30分の範囲で指定できます。</p>
+                </div>
+                <div className="form-row">
+                  <label>URL有効期限</label>
+                  <div className="expiry-grid">
+                    <select
+                      value={expiresWeeks}
+                      onChange={(e) => setExpiresWeeks(e.target.value)}
+                      aria-label="有効期限の週"
+                    >
+                      {Array.from({ length: 5 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}週
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={expiresDays}
+                      onChange={(e) => setExpiresDays(e.target.value)}
+                      aria-label="有効期限の日"
+                    >
+                      {Array.from({ length: 7 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}日
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={expiresHours}
+                      onChange={(e) => setExpiresHours(e.target.value)}
+                      aria-label="有効期限の時間"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}時間
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="helper">デフォルトは設定で変更できます。</p>
+                </div>
+                <div className="form-row">
+                  <label>テンプレート</label>
+                  <div className="template-controls">
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => applyTemplate(e.target.value)}
+                    >
+                      <option value="">デフォルト（標準プロンプト）</option>
+                      {templates.map((template) => (
+                        <option key={template.templateId} value={template.templateId}>
+                          {template.name}
+                          {template.isDefault ? "（デフォルト）" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="ghost"
+                      onClick={() => void reloadTemplates()}
+                      type="button"
+                      disabled={templateLoading}
+                    >
+                      {templateLoading ? "取得中..." : "再読み込み"}
+                    </button>
+                  </div>
+                  <p className="helper">
+                    選択するとプロンプトに反映されます。{defaultTemplate
+                      ? `現在のデフォルト: ${defaultTemplate.name}`
+                      : "デフォルト未設定"}
+                  </p>
+                </div>
+                <div className="form-row">
+                  <label>プロンプト</label>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="面接AIの指示文を入力してください"
+                  />
+                </div>
+                <button className="primary" onClick={() => void createInterview()}>
+                  応募を追加
+                </button>
+                {createResult && "error" in createResult && (
+                  <p className="error">作成に失敗しました: {createResult.error}</p>
+                )}
+                {hasResult && (
+                  <div className="result">
+                    <div className="result-row">
+                      <span>面接URL</span>
+                      <a href={createResult.url} target="_blank" rel="noreferrer">
+                        {createResult.url}
+                      </a>
+                    </div>
+                    <div className="result-row">
+                      <span>候補者名</span>
+                      <strong>{createResult.candidateName ?? "未設定"}</strong>
+                    </div>
+                    <div className="result-row">
+                      <span>面接ラウンド</span>
+                      <strong>第{createResult.round}次</strong>
+                    </div>
+                    {createResult.expiresAt && (
+                      <div className="result-row">
+                        <span>有効期限</span>
+                        <strong>{new Date(createResult.expiresAt).toLocaleString("ja-JP")}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
           {activePanel === "applications" && (
             <section className="panel">
               <div className="card detail-card">
@@ -1844,7 +1854,7 @@ export default function AdminDashboard({
           min-height: 100vh;
         }
         .sidebar {
-          width: 360px;
+          width: 380px;
           background: #fff;
           border-right: 1px solid #d8e1f0;
           padding: 20px 16px;
@@ -1926,12 +1936,25 @@ export default function AdminDashboard({
         .nav {
           display: flex;
           flex-direction: column;
+          gap: 10px;
+        }
+        .nav-group {
+          display: grid;
           gap: 8px;
         }
         .nav-panel {
-          flex: 1;
-          overflow: auto;
+          max-height: 0;
+          opacity: 0;
+          transform: translateY(-4px);
+          overflow: hidden;
+          transition: max-height 0.45s ease, opacity 0.45s ease, transform 0.45s ease;
           padding-right: 2px;
+        }
+        .nav-panel.open {
+          max-height: 1200px;
+          opacity: 1;
+          transform: translateY(0);
+          overflow: auto;
         }
         .nav-panel .grid {
           grid-template-columns: 1fr;
@@ -1999,6 +2022,7 @@ export default function AdminDashboard({
         }
         .panel {
           display: block;
+          animation: panelFade 0.45s ease;
         }
         .grid {
           display: grid;
@@ -2609,9 +2633,8 @@ export default function AdminDashboard({
             flex: 0 0 auto;
           }
           .nav {
-            flex-direction: row;
+            flex-direction: column;
             flex: 0 0 auto;
-            overflow-x: auto;
           }
           .nav-panel {
             max-height: 60vh;
@@ -2630,6 +2653,16 @@ export default function AdminDashboard({
           }
           .media {
             grid-template-columns: 1fr;
+          }
+        }
+        @keyframes panelFade {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
       `}</style>
