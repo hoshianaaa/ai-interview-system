@@ -59,6 +59,10 @@ export default function InterviewPage({
       try {
         const res = await fetch(`/api/interview/status?publicToken=${encodeURIComponent(publicToken)}`);
         if (cancelled) return;
+        if (res.status === 410) {
+          setBlockedMessage("この面接URLは期限切れです。");
+          return;
+        }
         if (!res.ok) {
           setBlockedMessage("この面接URLは無効です。");
           return;
@@ -95,6 +99,10 @@ export default function InterviewPage({
       if ("error" in data) {
         if (data.error === "INTERVIEW_ALREADY_USED") {
           setBlockedMessage("この面接URLはすでに使用されています。");
+          return;
+        }
+        if (data.error === "INTERVIEW_EXPIRED") {
+          setBlockedMessage("この面接URLは期限切れです。");
           return;
         }
         if (data.error === "not found") {

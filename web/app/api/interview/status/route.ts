@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isInterviewExpired } from "@/lib/interview-status";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,14 @@ export async function GET(req: Request) {
 
   if (!interview) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  if (
+    interview.status === "created" &&
+    !interview.usedAt &&
+    isInterviewExpired(interview.expiresAt)
+  ) {
+    return NextResponse.json({ error: "INTERVIEW_EXPIRED" }, { status: 410 });
   }
 
   return NextResponse.json({ status: interview.status });

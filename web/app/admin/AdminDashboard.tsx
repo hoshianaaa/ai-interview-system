@@ -32,7 +32,13 @@ type PromptTemplate = {
 };
 
 type CreateResponse =
-  | { interviewId: string; roomName: string; url: string; candidateName: string | null }
+  | {
+      interviewId: string;
+      roomName: string;
+      url: string;
+      candidateName: string | null;
+      expiresAt: string | null;
+    }
   | { error: string };
 
 export default function AdminDashboard({
@@ -44,6 +50,10 @@ export default function AdminDashboard({
 }) {
   const [rows, setRows] = useState(interviews);
   const [durationMinInput, setDurationMinInput] = useState("10");
+  const [expiresMonths, setExpiresMonths] = useState("0");
+  const [expiresWeeks, setExpiresWeeks] = useState("1");
+  const [expiresDays, setExpiresDays] = useState("0");
+  const [expiresHours, setExpiresHours] = useState("0");
   const [candidateName, setCandidateName] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [templates, setTemplates] = useState(
@@ -84,7 +94,11 @@ export default function AdminDashboard({
       body: JSON.stringify({
         durationSec,
         candidateName: candidateName.trim() || undefined,
-        prompt
+        prompt,
+        expiresInMonths: Number(expiresMonths),
+        expiresInWeeks: Number(expiresWeeks),
+        expiresInDays: Number(expiresDays),
+        expiresInHours: Number(expiresHours)
       })
     });
     const data = (await res.json()) as CreateResponse;
@@ -435,6 +449,56 @@ export default function AdminDashboard({
               <p className="helper">1〜30分の範囲で指定できます。</p>
             </div>
             <div className="form-row">
+              <label>URL有効期限</label>
+              <div className="expiry-grid">
+                <select
+                  value={expiresMonths}
+                  onChange={(e) => setExpiresMonths(e.target.value)}
+                  aria-label="有効期限の月"
+                >
+                  {Array.from({ length: 13 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}ヶ月
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={expiresWeeks}
+                  onChange={(e) => setExpiresWeeks(e.target.value)}
+                  aria-label="有効期限の週"
+                >
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}週
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={expiresDays}
+                  onChange={(e) => setExpiresDays(e.target.value)}
+                  aria-label="有効期限の日"
+                >
+                  {Array.from({ length: 7 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}日
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={expiresHours}
+                  onChange={(e) => setExpiresHours(e.target.value)}
+                  aria-label="有効期限の時間"
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}時間
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="helper">デフォルトは1週間です。</p>
+            </div>
+            <div className="form-row">
               <label>テンプレート</label>
               <div className="template-controls">
                 <select
@@ -490,6 +554,12 @@ export default function AdminDashboard({
                   <span>候補者名</span>
                   <strong>{createResult.candidateName ?? "未設定"}</strong>
                 </div>
+                {createResult.expiresAt && (
+                  <div className="result-row">
+                    <span>有効期限</span>
+                    <strong>{new Date(createResult.expiresAt).toLocaleString("ja-JP")}</strong>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -863,6 +933,11 @@ export default function AdminDashboard({
         }
         .template-controls select {
           flex: 1;
+        }
+        .expiry-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 8px;
         }
         .helper {
           margin: 6px 0 0;

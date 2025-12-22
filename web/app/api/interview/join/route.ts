@@ -9,6 +9,7 @@ import {
 } from "@/lib/livekit";
 import { makeR2ObjectKey } from "@/lib/recordings";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
+import { isInterviewExpired } from "@/lib/interview-status";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,14 @@ export async function POST(req: Request) {
       }
       if (!current) return null;
 
+      if (
+        current.status === "created" &&
+        !current.usedAt &&
+        isInterviewExpired(current.expiresAt)
+      ) {
+        throw new Error("INTERVIEW_EXPIRED");
+      }
+
       if (current.status !== "created") {
         throw new Error("INTERVIEW_ALREADY_USED");
       }
@@ -51,12 +60,15 @@ export async function POST(req: Request) {
     })
     .catch((e) => {
       if (String(e?.message) === "INTERVIEW_ALREADY_USED") return "ALREADY_USED" as const;
+      if (String(e?.message) === "INTERVIEW_EXPIRED") return "EXPIRED" as const;
       throw e;
     });
 
   if (updated === null) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (updated === "ALREADY_USED")
     return NextResponse.json({ error: "INTERVIEW_ALREADY_USED" }, { status: 409 });
+  if (updated === "EXPIRED")
+    return NextResponse.json({ error: "INTERVIEW_EXPIRED" }, { status: 410 });
 
   try {
     await room.createRoom({ name: updated.roomName });

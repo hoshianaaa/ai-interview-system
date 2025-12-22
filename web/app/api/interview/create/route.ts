@@ -8,6 +8,18 @@ export const runtime = "nodejs";
 
 const MAX_CANDIDATE_NAME = 80;
 const MAX_PROMPT_CHARS = 4000;
+const MAX_EXPIRES_MONTHS = 12;
+const MAX_EXPIRES_WEEKS = 4;
+const MAX_EXPIRES_DAYS = 6;
+const MAX_EXPIRES_HOURS = 23;
+const DEFAULT_EXPIRES_WEEKS = 1;
+
+const parseDurationPart = (value: unknown, max: number) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  const normalized = Math.floor(num);
+  return Math.min(max, Math.max(0, normalized));
+};
 
 export async function POST(req: Request) {
   const { orgId } = await auth();
@@ -31,6 +43,18 @@ export async function POST(req: Request) {
   }
   const prompt = promptTrimmed ? promptTrimmed : DEFAULT_INTERVIEW_PROMPT;
 
+  let expiresInMonths = parseDurationPart(body.expiresInMonths, MAX_EXPIRES_MONTHS);
+  let expiresInWeeks = parseDurationPart(body.expiresInWeeks, MAX_EXPIRES_WEEKS);
+  let expiresInDays = parseDurationPart(body.expiresInDays, MAX_EXPIRES_DAYS);
+  let expiresInHours = parseDurationPart(body.expiresInHours, MAX_EXPIRES_HOURS);
+  if (expiresInMonths + expiresInWeeks + expiresInDays + expiresInHours === 0) {
+    expiresInWeeks = DEFAULT_EXPIRES_WEEKS;
+  }
+  const expiresAt = new Date();
+  expiresAt.setMonth(expiresAt.getMonth() + expiresInMonths);
+  const extraHours = (expiresInWeeks * 7 + expiresInDays) * 24 + expiresInHours;
+  expiresAt.setTime(expiresAt.getTime() + extraHours * 60 * 60 * 1000);
+
   const interviewId = crypto.randomUUID();
   const publicToken = crypto.randomUUID();
   const roomName = makeRoomName(interviewId);
@@ -46,7 +70,8 @@ export async function POST(req: Request) {
       candidateName,
       interviewPrompt: prompt,
       agentName: body.agentName ?? env.agentName,
-      r2Bucket: env.r2Bucket
+      r2Bucket: env.r2Bucket,
+      expiresAt
     }
   });
 
@@ -55,6 +80,7 @@ export async function POST(req: Request) {
     interviewId: interview.interviewId,
     roomName,
     url,
-    candidateName
+    candidateName,
+    expiresAt: interview.expiresAt?.toISOString() ?? null
   });
 }

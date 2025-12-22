@@ -41,6 +41,7 @@ model Interview {
   recordingStartedAt DateTime?
   interviewPrompt   String?         @db.Text
   interviewNotes    String?         @db.Text
+  expiresAt         DateTime?
 
   createdAt         DateTime        @default(now())
   usedAt            DateTime?

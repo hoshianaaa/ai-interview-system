@@ -2,6 +2,7 @@ import AdminDashboard from "./admin/AdminDashboard";
 import OrganizationGate from "./admin/OrganizationGate";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { getProgressStatusLabel } from "@/lib/interview-status";
 
 export default async function HomePage() {
   const { orgId } = await auth();
@@ -18,10 +19,14 @@ export default async function HomePage() {
     where: { orgId },
     orderBy: { createdAt: "desc" }
   });
+  const now = new Date();
   const data = interviews.map((row) => ({
     interviewId: row.interviewId,
     url: `${baseUrl}/interview/${row.publicToken ?? row.interviewId}`,
-    status: row.status,
+    status: getProgressStatusLabel(
+      { status: row.status, expiresAt: row.expiresAt, usedAt: row.usedAt },
+      now
+    ),
     candidateName: row.candidateName ?? null,
     prompt: row.interviewPrompt ?? null,
     notes: row.interviewNotes ?? null,
