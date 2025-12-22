@@ -4,8 +4,6 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-const MAX_NOTES_CHARS = 4000;
-
 export async function PATCH(req: Request) {
   const { orgId } = await auth();
   if (!orgId) {
@@ -14,7 +12,6 @@ export async function PATCH(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const interviewId = typeof body.interviewId === "string" ? body.interviewId.trim() : "";
-  const notesRaw = typeof body.notes === "string" ? body.notes.trim() : "";
   const decisionRaw = typeof body.decision === "string" ? body.decision.trim() : "";
 
   if (!interviewId) {
@@ -24,9 +21,6 @@ export async function PATCH(req: Request) {
   const interview = await prisma.interview.findFirst({ where: { interviewId, orgId } });
   if (!interview) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-  if (notesRaw && notesRaw.length > MAX_NOTES_CHARS) {
-    return NextResponse.json({ error: "NOTES_TOO_LONG" }, { status: 400 });
   }
 
   const decision =
@@ -43,14 +37,12 @@ export async function PATCH(req: Request) {
   const updated = await prisma.interview.update({
     where: { interviewId },
     data: {
-      interviewNotes: notesRaw ? notesRaw : null,
       ...(decision ? { decision } : {})
     }
   });
 
   return NextResponse.json({
     interviewId: updated.interviewId,
-    notes: updated.interviewNotes ?? null,
     decision: updated.decision
   });
 }

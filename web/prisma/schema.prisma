@@ -32,6 +32,7 @@ model Application {
   applicationId String   @id
   orgId         String?
   candidateName String?
+  applicationNotes String? @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -61,7 +62,6 @@ model Interview {
   r2ObjectKey       String?
   recordingStartedAt DateTime?
   interviewPrompt   String?         @db.Text
-  interviewNotes    String?         @db.Text
   expiresAt         DateTime?
 
   createdAt         DateTime        @default(now())

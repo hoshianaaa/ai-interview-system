@@ -14,10 +14,10 @@ type InterviewRow = {
   decision: Decision;
   round: number;
   applicationCandidateName: string | null;
+  applicationNotes: string | null;
   applicationCreatedAt: string;
   applicationUpdatedAt: string;
   prompt: string | null;
-  notes: string | null;
   createdAt: string;
   hasRecording: boolean;
 };
@@ -25,6 +25,7 @@ type InterviewRow = {
 type ApplicationRow = {
   applicationId: string;
   candidateName: string | null;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
   interviewCount: number;
@@ -97,7 +98,7 @@ export default function AdminDashboard({
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
-  const [editNotes, setEditNotes] = useState("");
+  const [editApplicationNotes, setEditApplicationNotes] = useState("");
   const [editDecision, setEditDecision] = useState<Decision>("undecided");
   const [savingInterview, setSavingInterview] = useState(false);
   const [savingApplication, setSavingApplication] = useState(false);
@@ -366,13 +367,11 @@ export default function AdminDashboard({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           interviewId: selectedRow.interviewId,
-          notes: editNotes,
           decision: editDecision
         })
       });
       const data = (await res.json()) as {
         interviewId?: string;
-        notes?: string | null;
         decision?: Decision;
       };
       if (data.interviewId) {
@@ -381,13 +380,11 @@ export default function AdminDashboard({
             row.interviewId === data.interviewId
               ? {
                   ...row,
-                  notes: data.notes ?? null,
                   decision: data.decision ?? row.decision
                 }
               : row
           )
         );
-        setEditNotes(data.notes ?? "");
         setEditDecision(data.decision ?? editDecision);
       }
     } finally {
@@ -405,12 +402,14 @@ export default function AdminDashboard({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           applicationId: selectedApplication.applicationId,
-          candidateName: trimmedName
+          candidateName: trimmedName,
+          notes: editApplicationNotes
         })
       });
       const data = (await res.json()) as {
         applicationId?: string;
         candidateName?: string | null;
+        notes?: string | null;
         updatedAt?: string;
       };
       if (data.applicationId) {
@@ -420,12 +419,14 @@ export default function AdminDashboard({
               ? {
                   ...row,
                   applicationCandidateName: data.candidateName ?? null,
+                  applicationNotes: data.notes ?? null,
                   applicationUpdatedAt: data.updatedAt ?? row.applicationUpdatedAt
                 }
               : row
           )
         );
         setEditApplicationCandidateName(data.candidateName ?? "");
+        setEditApplicationNotes(data.notes ?? "");
       }
     } finally {
       setSavingApplication(false);
@@ -434,13 +435,13 @@ export default function AdminDashboard({
 
   function cancelInterviewEdit() {
     if (!selectedRow) return;
-    setEditNotes(selectedRow.notes ?? "");
     setEditDecision(selectedRow.decision);
   }
 
   function cancelApplicationEdit() {
     if (!selectedApplication) return;
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
+    setEditApplicationNotes(selectedApplication.notes ?? "");
   }
 
   const sorted = useMemo(
@@ -456,6 +457,7 @@ export default function AdminDashboard({
         grouped.set(row.applicationId, {
           applicationId: row.applicationId,
           candidateName: row.applicationCandidateName ?? null,
+          notes: row.applicationNotes ?? null,
           createdAt: row.applicationCreatedAt,
           updatedAt: row.applicationUpdatedAt,
           interviewCount: 1,
@@ -470,6 +472,9 @@ export default function AdminDashboard({
       existing.interviewCount += 1;
       if (!existing.candidateName && row.applicationCandidateName) {
         existing.candidateName = row.applicationCandidateName;
+      }
+      if (row.applicationNotes !== existing.notes) {
+        existing.notes = row.applicationNotes ?? null;
       }
       if (row.round > existing.latestRound) {
         existing.latestRound = row.round;
@@ -518,12 +523,13 @@ export default function AdminDashboard({
   );
   const interviewDirty =
     Boolean(selectedRow) &&
-    (editNotes !== (selectedRow?.notes ?? "") ||
-      editDecision !== (selectedRow?.decision ?? "undecided"));
+    editDecision !== (selectedRow?.decision ?? "undecided");
   const normalizedApplicationName = editApplicationCandidateName.trim();
+  const normalizedApplicationNotes = editApplicationNotes.trim();
   const applicationDirty =
     Boolean(selectedApplication) &&
-    normalizedApplicationName !== (selectedApplication?.candidateName ?? "");
+    (normalizedApplicationName !== (selectedApplication?.candidateName ?? "") ||
+      normalizedApplicationNotes !== (selectedApplication?.notes ?? ""));
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
@@ -537,20 +543,20 @@ export default function AdminDashboard({
 
   useEffect(() => {
     if (!selectedRow) {
-      setEditNotes("");
       setEditDecision("undecided");
       return;
     }
-    setEditNotes(selectedRow.notes ?? "");
     setEditDecision(selectedRow.decision ?? "undecided");
   }, [selectedRow?.interviewId]);
 
   useEffect(() => {
     if (!selectedApplication) {
       setEditApplicationCandidateName("");
+      setEditApplicationNotes("");
       return;
     }
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
+    setEditApplicationNotes(selectedApplication.notes ?? "");
   }, [selectedApplication?.applicationId]);
 
   useEffect(() => {
@@ -892,6 +898,21 @@ export default function AdminDashboard({
                   disabled={savingApplication}
                 />
               </div>
+              <div className="detail-row">
+                <label>応募作成</label>
+                <div className="detail-value">
+                  {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
+                </div>
+              </div>
+              <div className="notes">
+                <label>メモ</label>
+                <textarea
+                  value={editApplicationNotes}
+                  onChange={(e) => setEditApplicationNotes(e.target.value)}
+                  placeholder="応募に関するメモを記録できます"
+                  disabled={savingApplication}
+                />
+              </div>
               {applicationDirty && (
                 <div className="detail-actions">
                   <button
@@ -912,12 +933,6 @@ export default function AdminDashboard({
                   </button>
                 </div>
               )}
-              <div className="detail-row">
-                <label>応募作成</label>
-                <div className="detail-value">
-                  {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
-                </div>
-              </div>
               <div className="detail-actions">
                 <button
                   className="ghost"
@@ -1050,14 +1065,6 @@ export default function AdminDashboard({
                         )}
                       </div>
                     </div>
-                  </div>
-                  <div className="notes">
-                    <label>メモ</label>
-                    <textarea
-                      value={editNotes}
-                      onChange={(e) => setEditNotes(e.target.value)}
-                      placeholder="面接の気づきや評価メモを記録できます"
-                    />
                   </div>
                   <details className="prompt">
                     <summary>プロンプトを見る</summary>

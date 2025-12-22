@@ -15,7 +15,9 @@ export default async function HomePage() {
     where: { orgId },
     orderBy: { createdAt: "desc" },
     include: {
-      application: { select: { candidateName: true, createdAt: true, updatedAt: true } }
+      application: {
+        select: { candidateName: true, applicationNotes: true, createdAt: true, updatedAt: true }
+      }
     }
   });
   const templates = await prisma.promptTemplate.findMany({
@@ -34,6 +36,7 @@ export default async function HomePage() {
     decision: row.decision,
     round: row.round,
     applicationCandidateName: row.application?.candidateName ?? null,
+    applicationNotes: row.application?.applicationNotes ?? null,
     applicationCreatedAt: row.application?.createdAt
       ? row.application.createdAt.toISOString()
       : row.createdAt.toISOString(),
@@ -41,7 +44,6 @@ export default async function HomePage() {
       ? row.application.updatedAt.toISOString()
       : row.createdAt.toISOString(),
     prompt: row.interviewPrompt ?? null,
-    notes: row.interviewNotes ?? null,
     createdAt: row.createdAt.toISOString(),
     hasRecording: Boolean(row.r2ObjectKey)
   }));
