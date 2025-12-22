@@ -14,6 +14,7 @@ type InterviewRow = {
   decision: Decision;
   round: number;
   applicationCandidateName: string | null;
+  applicationEmail: string | null;
   applicationNotes: string | null;
   applicationCreatedAt: string;
   applicationUpdatedAt: string;
@@ -27,6 +28,7 @@ type InterviewRow = {
 type ApplicationData = {
   applicationId: string;
   candidateName: string | null;
+  candidateEmail: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -35,6 +37,7 @@ type ApplicationData = {
 type ApplicationRow = {
   applicationId: string;
   candidateName: string | null;
+  candidateEmail: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -77,6 +80,7 @@ type CreateResponse =
       roomName: string;
       url: string;
       candidateName: string | null;
+      candidateEmail?: string | null;
       expiresAt: string | null;
       interviewCreatedAt?: string | null;
       applicationCreatedAt?: string | null;
@@ -236,6 +240,7 @@ export default function AdminDashboard({
     return {
       applicationId: data.applicationId,
       candidateName: data.candidateName ?? fallback?.candidateName ?? null,
+      candidateEmail: data.candidateEmail ?? fallback?.candidateEmail ?? null,
       notes: fallback?.notes ?? null,
       createdAt,
       updatedAt
@@ -254,6 +259,7 @@ export default function AdminDashboard({
       decision: "undecided",
       round: data.round,
       applicationCandidateName: data.candidateName ?? app.candidateName,
+      applicationEmail: data.candidateEmail ?? app.candidateEmail,
       applicationNotes: app.notes,
       applicationCreatedAt: app.createdAt,
       applicationUpdatedAt: app.updatedAt,
@@ -294,12 +300,15 @@ export default function AdminDashboard({
       expiresInHours: Number(expiresHours)
     };
     const trimmedName = newCandidateName.trim();
+    const trimmedEmail = newCandidateEmail.trim();
     if (trimmedName) payload.candidateName = trimmedName;
+    if (trimmedEmail) payload.candidateEmail = trimmedEmail;
     const data = await requestInterview(payload);
     setCreateResult(data);
     if ("url" in data) {
       const application = buildApplicationFromResponse(data, {
         candidateName: trimmedName || null,
+        candidateEmail: trimmedEmail || null,
         notes: null
       });
       upsertApplication(application);
@@ -684,6 +693,7 @@ export default function AdminDashboard({
     if (!selectedApplication) return;
     setSavingApplication(true);
     const trimmedName = editApplicationCandidateName.trim();
+    const trimmedEmail = editApplicationEmail.trim();
     try {
       const res = await fetch("/api/admin/application/update", {
         method: "PATCH",
@@ -691,12 +701,14 @@ export default function AdminDashboard({
         body: JSON.stringify({
           applicationId: selectedApplication.applicationId,
           candidateName: trimmedName,
+          candidateEmail: trimmedEmail,
           notes: editApplicationNotes
         })
       });
       const data = (await res.json()) as {
         applicationId?: string;
         candidateName?: string | null;
+        candidateEmail?: string | null;
         notes?: string | null;
         updatedAt?: string;
       };
@@ -707,6 +719,7 @@ export default function AdminDashboard({
               ? {
                   ...row,
                   candidateName: data.candidateName ?? null,
+                  candidateEmail: data.candidateEmail ?? null,
                   notes: data.notes ?? null,
                   updatedAt: data.updatedAt ?? row.updatedAt
                 }
@@ -714,6 +727,7 @@ export default function AdminDashboard({
           )
         );
         setEditApplicationCandidateName(data.candidateName ?? "");
+        setEditApplicationEmail(data.candidateEmail ?? "");
         setEditApplicationNotes(data.notes ?? "");
       }
     } finally {
@@ -802,7 +816,7 @@ export default function AdminDashboard({
   function cancelApplicationEdit() {
     if (!selectedApplication) return;
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
-    setEditApplicationEmail("");
+    setEditApplicationEmail(selectedApplication.candidateEmail ?? "");
     setEditApplicationNotes(selectedApplication.notes ?? "");
   }
 
@@ -817,6 +831,7 @@ export default function AdminDashboard({
       grouped.set(app.applicationId, {
         applicationId: app.applicationId,
         candidateName: app.candidateName ?? null,
+        candidateEmail: app.candidateEmail ?? null,
         notes: app.notes ?? null,
         createdAt: app.createdAt,
         updatedAt: app.updatedAt,
@@ -834,6 +849,7 @@ export default function AdminDashboard({
         existing = {
           applicationId: row.applicationId,
           candidateName: row.applicationCandidateName ?? null,
+          candidateEmail: row.applicationEmail ?? null,
           notes: row.applicationNotes ?? null,
           createdAt: row.applicationCreatedAt,
           updatedAt: row.applicationUpdatedAt,
@@ -850,6 +866,9 @@ export default function AdminDashboard({
       existing.interviewCount += 1;
       if (!existing.candidateName && row.applicationCandidateName) {
         existing.candidateName = row.applicationCandidateName;
+      }
+      if (!existing.candidateEmail && row.applicationEmail) {
+        existing.candidateEmail = row.applicationEmail;
       }
       if (!existing.notes && row.applicationNotes) {
         existing.notes = row.applicationNotes;
@@ -944,10 +963,12 @@ export default function AdminDashboard({
   );
   const isDecisionLocked = selectedRow?.status === "実施待ち";
   const normalizedApplicationName = editApplicationCandidateName.trim();
+  const normalizedApplicationEmail = editApplicationEmail.trim();
   const normalizedApplicationNotes = editApplicationNotes.trim();
   const applicationDirty =
     Boolean(selectedApplication) &&
     (normalizedApplicationName !== (selectedApplication?.candidateName ?? "") ||
+      normalizedApplicationEmail !== (selectedApplication?.candidateEmail ?? "") ||
       normalizedApplicationNotes !== (selectedApplication?.notes ?? ""));
   const canCreateAdditionalInterview = Boolean(
     selectedApplication &&
@@ -1003,7 +1024,7 @@ export default function AdminDashboard({
       return;
     }
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
-    setEditApplicationEmail("");
+    setEditApplicationEmail(selectedApplication.candidateEmail ?? "");
     setEditApplicationNotes(selectedApplication.notes ?? "");
     setApplicationInterviewResult(null);
   }, [selectedApplication?.applicationId]);
@@ -1373,19 +1394,23 @@ export default function AdminDashboard({
               <div className="card">
                 <h2>新規応募の追加</h2>
                 <div className="form-row form-row-inline">
-                  <label className="inline-label">候補者名：</label>
-                  <input
-                    value={newCandidateName}
-                    onChange={(e) => setNewCandidateName(e.target.value)}
-                    placeholder="例）山田 太郎"
-                  />
-                  <label className="inline-label">メールアドレス：</label>
-                  <input
-                    type="email"
-                    value={newCandidateEmail}
-                    onChange={(e) => setNewCandidateEmail(e.target.value)}
-                    placeholder="example@example.com"
-                  />
+                  <div className="inline-pair">
+                    <label className="inline-label">候補者名：</label>
+                    <input
+                      value={newCandidateName}
+                      onChange={(e) => setNewCandidateName(e.target.value)}
+                      placeholder="例）山田 太郎"
+                    />
+                  </div>
+                  <div className="inline-pair">
+                    <label className="inline-label">メールアドレス：</label>
+                    <input
+                      type="email"
+                      value={newCandidateEmail}
+                      onChange={(e) => setNewCandidateEmail(e.target.value)}
+                      placeholder="example@example.com"
+                    />
+                  </div>
                 </div>
                 <div className="form-row">
                   <label>面接時間（分）</label>
@@ -1531,20 +1556,24 @@ export default function AdminDashboard({
                 ) : (
                   <div className="application-detail">
                     <div className="detail-row detail-row-inline">
-                      <label>候補者名：</label>
-                      <input
-                        value={editApplicationCandidateName}
-                        onChange={(e) => setEditApplicationCandidateName(e.target.value)}
-                        placeholder="候補者名を入力"
-                        disabled={savingApplication}
-                      />
-                      <label>メールアドレス：</label>
-                      <input
-                        type="email"
-                        value={editApplicationEmail}
-                        onChange={(e) => setEditApplicationEmail(e.target.value)}
-                        placeholder="example@example.com"
-                      />
+                      <div className="inline-pair">
+                        <label>候補者名：</label>
+                        <input
+                          value={editApplicationCandidateName}
+                          onChange={(e) => setEditApplicationCandidateName(e.target.value)}
+                          placeholder="候補者名を入力"
+                          disabled={savingApplication}
+                        />
+                      </div>
+                      <div className="inline-pair">
+                        <label>メールアドレス：</label>
+                        <input
+                          type="email"
+                          value={editApplicationEmail}
+                          onChange={(e) => setEditApplicationEmail(e.target.value)}
+                          placeholder="example@example.com"
+                        />
+                      </div>
                     </div>
                     {applicationInterviewResult && "error" in applicationInterviewResult && (
                       <p className="error">
@@ -2392,18 +2421,10 @@ export default function AdminDashboard({
           gap: 6px;
         }
         .detail-row-inline {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+          display: flex;
+          flex-wrap: wrap;
           align-items: center;
-          gap: 8px;
-        }
-        .detail-row-inline label {
-          margin: 0;
-          white-space: nowrap;
-        }
-        .detail-row-inline input {
-          width: 100%;
-          min-width: 0;
+          gap: 12px;
         }
         .detail-row label {
           font-size: 12px;
@@ -2438,19 +2459,31 @@ export default function AdminDashboard({
           margin-bottom: 12px;
         }
         .form-row-inline {
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 12px;
+        }
+        .inline-pair {
+          display: flex;
           align-items: center;
           gap: 8px;
+          flex: 0 1 320px;
+          max-width: 360px;
+          min-width: 0;
         }
+        .inline-pair label,
         .form-row-inline .inline-label {
           font-size: 12px;
           color: #4b5c72;
           white-space: nowrap;
+          text-align: left;
+          margin: 0;
         }
-        .form-row-inline input {
+        .inline-pair input {
           width: 100%;
           min-width: 0;
+          flex: 1;
         }
         label {
           font-size: 12px;
@@ -2755,6 +2788,8 @@ export default function AdminDashboard({
           display: grid;
           grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
           gap: 14px;
+          align-items: stretch;
+          margin-bottom: 16px;
         }
         .media > * {
           min-width: 0;
@@ -2767,9 +2802,10 @@ export default function AdminDashboard({
           display: flex;
           flex-direction: column;
           gap: 10px;
-          max-height: 280px;
           min-width: 0;
           overflow: hidden;
+          height: 100%;
+          min-height: 240px;
         }
         .chat-title {
           font-size: 12px;
@@ -2842,6 +2878,7 @@ export default function AdminDashboard({
           min-width: 0;
           width: 100%;
           align-self: stretch;
+          padding-bottom: 12px;
         }
         .notes-panel label {
           font-size: 12px;
@@ -2855,7 +2892,8 @@ export default function AdminDashboard({
           border: 1px solid #c7d3e6;
           font-size: 14px;
           background: #f8fafc;
-          resize: vertical;
+          resize: none;
+          margin-bottom: 12px;
         }
         .prompt {
           display: block;
@@ -2870,6 +2908,7 @@ export default function AdminDashboard({
           width: 100%;
           max-width: 100%;
           overflow: hidden;
+          margin-top: 16px;
         }
         .prompt summary {
           cursor: pointer;

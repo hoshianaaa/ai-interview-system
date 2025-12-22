@@ -16,7 +16,13 @@ export default async function HomePage() {
     orderBy: { createdAt: "desc" },
     include: {
       application: {
-        select: { candidateName: true, applicationNotes: true, createdAt: true, updatedAt: true }
+        select: {
+          candidateName: true,
+          candidateEmail: true,
+          applicationNotes: true,
+          createdAt: true,
+          updatedAt: true
+        }
       }
     }
   });
@@ -43,6 +49,7 @@ export default async function HomePage() {
     decision: row.decision,
     round: row.round,
     applicationCandidateName: row.application?.candidateName ?? null,
+    applicationEmail: row.application?.candidateEmail ?? null,
     applicationNotes: row.application?.applicationNotes ?? null,
     applicationCreatedAt: row.application?.createdAt
       ? row.application.createdAt.toISOString()
@@ -59,6 +66,7 @@ export default async function HomePage() {
   const applicationData = applications.map((row) => ({
     applicationId: row.applicationId,
     candidateName: row.candidateName ?? null,
+    candidateEmail: row.candidateEmail ?? null,
     notes: row.applicationNotes ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()

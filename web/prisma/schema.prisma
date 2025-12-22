@@ -32,6 +32,7 @@ model Application {
   applicationId String   @id
   orgId         String?
   candidateName String?
+  candidateEmail String?
   applicationNotes String? @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

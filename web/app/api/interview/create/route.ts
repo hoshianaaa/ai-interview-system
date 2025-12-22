@@ -7,6 +7,7 @@ import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 export const runtime = "nodejs";
 
 const MAX_CANDIDATE_NAME = 80;
+const MAX_CANDIDATE_EMAIL = 254;
 const MAX_PROMPT_CHARS = 4000;
 const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
@@ -37,10 +38,18 @@ export async function POST(req: Request) {
     Number.isFinite(roundRaw) && roundRaw > 0 ? Math.floor(roundRaw) : null;
   const candidateName =
     typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
+  const candidateEmail =
+    typeof body.candidateEmail === "string" ? body.candidateEmail.trim() || null : null;
   const promptRaw = typeof body.prompt === "string" ? body.prompt : "";
   const promptTrimmed = promptRaw.trim();
   if (!applicationIdRaw && candidateName && candidateName.length > MAX_CANDIDATE_NAME) {
     return NextResponse.json({ error: "CANDIDATE_NAME_TOO_LONG" }, { status: 400 });
+  }
+  if (!applicationIdRaw && candidateEmail && candidateEmail.length > MAX_CANDIDATE_EMAIL) {
+    return NextResponse.json({ error: "CANDIDATE_EMAIL_TOO_LONG" }, { status: 400 });
+  }
+  if (!applicationIdRaw && candidateEmail && !candidateEmail.includes("@")) {
+    return NextResponse.json({ error: "CANDIDATE_EMAIL_INVALID" }, { status: 400 });
   }
   if (promptTrimmed.length > MAX_PROMPT_CHARS) {
     return NextResponse.json({ error: "PROMPT_TOO_LONG" }, { status: 400 });
@@ -63,8 +72,10 @@ export async function POST(req: Request) {
 
   let applicationId = applicationIdRaw;
   let applicationCandidateName = candidateName;
+  let applicationCandidateEmail = candidateEmail;
   let applicationRecord: {
     candidateName: string | null;
+    candidateEmail: string | null;
     createdAt: Date;
     updatedAt: Date;
   } | null = null;
@@ -78,8 +89,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "APPLICATION_NOT_FOUND" }, { status: 404 });
     }
     applicationCandidateName = application.candidateName ?? null;
+    applicationCandidateEmail = application.candidateEmail ?? null;
     applicationRecord = {
       candidateName: application.candidateName ?? null,
+      candidateEmail: application.candidateEmail ?? null,
       createdAt: application.createdAt,
       updatedAt: application.updatedAt
     };
@@ -94,11 +107,13 @@ export async function POST(req: Request) {
       data: {
         applicationId,
         orgId,
-        candidateName: applicationCandidateName
+        candidateName: applicationCandidateName,
+        candidateEmail: applicationCandidateEmail
       }
     });
     applicationRecord = {
       candidateName: created.candidateName ?? null,
+      candidateEmail: created.candidateEmail ?? null,
       createdAt: created.createdAt,
       updatedAt: created.updatedAt
     };
@@ -129,6 +144,7 @@ export async function POST(req: Request) {
     roomName,
     url,
     candidateName: applicationCandidateName ?? null,
+    candidateEmail: applicationCandidateEmail ?? null,
     expiresAt: interview.expiresAt?.toISOString() ?? null,
     interviewCreatedAt: interview.createdAt.toISOString(),
     applicationCreatedAt: applicationRecord?.createdAt.toISOString() ?? null,
