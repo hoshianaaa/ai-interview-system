@@ -1,0 +1,30 @@
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
+
+export async function DELETE(req: Request) {
+  const { orgId } = await auth();
+  if (!orgId) {
+    return NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const interviewId = typeof body.interviewId === "string" ? body.interviewId.trim() : "";
+  if (!interviewId) {
+    return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
+  }
+
+  const interview = await prisma.interview.findFirst({ where: { interviewId, orgId } });
+  if (!interview) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  await prisma.interview.delete({ where: { interviewId } });
+
+  return NextResponse.json({
+    interviewId: interview.interviewId,
+    applicationId: interview.applicationId
+  });
+}

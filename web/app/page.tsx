@@ -20,6 +20,10 @@ export default async function HomePage() {
       }
     }
   });
+  const applications = await prisma.application.findMany({
+    where: { orgId },
+    orderBy: { createdAt: "desc" }
+  });
   const templates = await prisma.promptTemplate.findMany({
     where: { orgId },
     orderBy: { createdAt: "desc" }
@@ -44,8 +48,17 @@ export default async function HomePage() {
       ? row.application.updatedAt.toISOString()
       : row.createdAt.toISOString(),
     prompt: row.interviewPrompt ?? null,
+    durationSec: row.durationSec,
+    expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     hasRecording: Boolean(row.r2ObjectKey)
+  }));
+  const applicationData = applications.map((row) => ({
+    applicationId: row.applicationId,
+    candidateName: row.candidateName ?? null,
+    notes: row.applicationNotes ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
   }));
   const templateData = templates.map((row) => ({
     templateId: row.templateId,
@@ -55,5 +68,11 @@ export default async function HomePage() {
     createdAt: row.createdAt.toISOString()
   }));
 
-  return <AdminDashboard interviews={data} promptTemplates={templateData} />;
+  return (
+    <AdminDashboard
+      interviews={data}
+      applications={applicationData}
+      promptTemplates={templateData}
+    />
+  );
 }

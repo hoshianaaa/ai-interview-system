@@ -18,8 +18,18 @@ type InterviewRow = {
   applicationCreatedAt: string;
   applicationUpdatedAt: string;
   prompt: string | null;
+  durationSec: number;
+  expiresAt: string | null;
   createdAt: string;
   hasRecording: boolean;
+};
+
+type ApplicationData = {
+  applicationId: string;
+  candidateName: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type ApplicationRow = {
@@ -63,14 +73,22 @@ type CreateResponse =
     }
   | { error: string };
 
+const MAX_EXPIRES_WEEKS = 4;
+const MAX_EXPIRES_DAYS = 6;
+const MAX_EXPIRES_HOURS = 23;
+const DEFAULT_EXPIRES_WEEKS = 1;
+
 export default function AdminDashboard({
   interviews,
+  applications: initialApplications,
   promptTemplates
 }: {
   interviews: InterviewRow[];
+  applications: ApplicationData[];
   promptTemplates: PromptTemplate[];
 }) {
   const [rows, setRows] = useState(interviews);
+  const [applications, setApplications] = useState(initialApplications);
   const [durationMinInput, setDurationMinInput] = useState("10");
   const [expiresWeeks, setExpiresWeeks] = useState("1");
   const [expiresDays, setExpiresDays] = useState("0");
@@ -102,16 +120,43 @@ export default function AdminDashboard({
   const [editDecision, setEditDecision] = useState<Decision>("undecided");
   const [savingInterview, setSavingInterview] = useState(false);
   const [savingApplication, setSavingApplication] = useState(false);
+  const [reissueOpen, setReissueOpen] = useState(false);
+  const [reissuePrompt, setReissuePrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
+  const [reissueWeeks, setReissueWeeks] = useState("1");
+  const [reissueDays, setReissueDays] = useState("0");
+  const [reissueHours, setReissueHours] = useState("0");
+  const [reissueResult, setReissueResult] = useState<CreateResponse | null>(null);
+  const [reissueSaving, setReissueSaving] = useState(false);
+  const [applicationInterviewResult, setApplicationInterviewResult] =
+    useState<CreateResponse | null>(null);
+  const [deletingInterview, setDeletingInterview] = useState(false);
+  const [deletingApplication, setDeletingApplication] = useState(false);
 
   const hasResult = createResult && "url" in createResult;
+  const hasReissueResult = reissueResult && "url" in reissueResult;
+  const hasApplicationInterviewResult =
+    applicationInterviewResult && "url" in applicationInterviewResult;
 
-  async function createInterview(applicationId?: string) {
-    setCreateResult(null);
+  const getDefaultDurationSec = () => {
     const parsedMin = Number(durationMinInput);
     const fallbackMin = 10;
     const normalizedMin = Number.isFinite(parsedMin) ? parsedMin : fallbackMin;
     const clampedMin = Math.min(30, Math.max(1, normalizedMin));
-    const durationSec = Math.round(clampedMin * 60);
+    return Math.round(clampedMin * 60);
+  };
+
+  async function requestInterview(payload: Record<string, unknown>) {
+    const res = await fetch("/api/interview/create", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return (await res.json()) as CreateResponse;
+  }
+
+  async function createInterview() {
+    setCreateResult(null);
+    const durationSec = getDefaultDurationSec();
     const payload: Record<string, unknown> = {
       durationSec,
       prompt,
@@ -119,24 +164,48 @@ export default function AdminDashboard({
       expiresInDays: Number(expiresDays),
       expiresInHours: Number(expiresHours)
     };
-    if (applicationId) {
-      payload.applicationId = applicationId;
-    } else {
-      const trimmedName = newCandidateName.trim();
-      if (trimmedName) payload.candidateName = trimmedName;
-    }
-    const res = await fetch("/api/interview/create", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const data = (await res.json()) as CreateResponse;
+    const trimmedName = newCandidateName.trim();
+    if (trimmedName) payload.candidateName = trimmedName;
+    const data = await requestInterview(payload);
     setCreateResult(data);
+  }
+
+  async function createInterviewForApplication(
+    applicationId: string,
+    overrides?: {
+      prompt?: string;
+      expiresWeeks?: number;
+      expiresDays?: number;
+      expiresHours?: number;
+      durationSec?: number;
+      round?: number;
+    },
+    onResult?: (data: CreateResponse) => void
+  ) {
+    const payload: Record<string, unknown> = {
+      applicationId,
+      durationSec: overrides?.durationSec ?? getDefaultDurationSec(),
+      prompt: overrides?.prompt ?? prompt,
+      expiresInWeeks: overrides?.expiresWeeks ?? Number(expiresWeeks),
+      expiresInDays: overrides?.expiresDays ?? Number(expiresDays),
+      expiresInHours: overrides?.expiresHours ?? Number(expiresHours)
+    };
+    if (overrides?.round) {
+      payload.round = overrides.round;
+    }
+    const data = await requestInterview(payload);
+    if (onResult) onResult(data);
+    return data;
   }
 
   async function createNextInterview() {
     if (!selectedRow) return;
-    await createInterview(selectedRow.applicationId);
+    setApplicationInterviewResult(null);
+    await createInterviewForApplication(
+      selectedRow.applicationId,
+      undefined,
+      setApplicationInterviewResult
+    );
   }
 
   async function reloadTemplates() {
@@ -353,12 +422,38 @@ export default function AdminDashboard({
     return "未判定";
   };
 
+  const getExpiryParts = (createdAt: string, expiresAt: string | null) => {
+    if (!expiresAt) {
+      return {
+        weeks: String(DEFAULT_EXPIRES_WEEKS),
+        days: "0",
+        hours: "0"
+      };
+    }
+    const createdMs = new Date(createdAt).getTime();
+    const expiresMs = new Date(expiresAt).getTime();
+    const totalHours = Math.max(0, Math.round((expiresMs - createdMs) / (60 * 60 * 1000)));
+    let weeks = Math.min(MAX_EXPIRES_WEEKS, Math.floor(totalHours / 168));
+    let remaining = totalHours - weeks * 168;
+    let days = Math.min(MAX_EXPIRES_DAYS, Math.floor(remaining / 24));
+    remaining -= days * 24;
+    let hours = Math.min(MAX_EXPIRES_HOURS, remaining);
+    if (weeks + days + hours === 0) {
+      weeks = DEFAULT_EXPIRES_WEEKS;
+    }
+    return {
+      weeks: String(weeks),
+      days: String(days),
+      hours: String(hours)
+    };
+  };
+
   const seekTo = (offsetMs: number) => {
     if (!videoRef.current) return;
     videoRef.current.currentTime = offsetMs / 1000;
   };
 
-  async function saveInterviewDetails() {
+  async function saveInterviewDecision(nextDecision: Decision) {
     if (!selectedRow) return;
     setSavingInterview(true);
     try {
@@ -367,7 +462,7 @@ export default function AdminDashboard({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           interviewId: selectedRow.interviewId,
-          decision: editDecision
+          decision: nextDecision
         })
       });
       const data = (await res.json()) as {
@@ -385,7 +480,7 @@ export default function AdminDashboard({
               : row
           )
         );
-        setEditDecision(data.decision ?? editDecision);
+        setEditDecision(data.decision ?? nextDecision);
       }
     } finally {
       setSavingInterview(false);
@@ -413,14 +508,14 @@ export default function AdminDashboard({
         updatedAt?: string;
       };
       if (data.applicationId) {
-        setRows((prev) =>
+        setApplications((prev) =>
           prev.map((row) =>
             row.applicationId === data.applicationId
               ? {
                   ...row,
-                  applicationCandidateName: data.candidateName ?? null,
-                  applicationNotes: data.notes ?? null,
-                  applicationUpdatedAt: data.updatedAt ?? row.applicationUpdatedAt
+                  candidateName: data.candidateName ?? null,
+                  notes: data.notes ?? null,
+                  updatedAt: data.updatedAt ?? row.updatedAt
                 }
               : row
           )
@@ -433,9 +528,82 @@ export default function AdminDashboard({
     }
   }
 
-  function cancelInterviewEdit() {
+  const handleDecisionChange = (value: Decision) => {
+    setEditDecision(value);
     if (!selectedRow) return;
-    setEditDecision(selectedRow.decision);
+    if (isDecisionLocked) return;
+    if (value === selectedRow.decision) return;
+    void saveInterviewDecision(value);
+  };
+
+  async function reissueInterview() {
+    if (!selectedRow) return;
+    setReissueSaving(true);
+    setReissueResult(null);
+    try {
+      await createInterviewForApplication(
+        selectedRow.applicationId,
+        {
+          prompt: reissuePrompt,
+          expiresWeeks: Number(reissueWeeks),
+          expiresDays: Number(reissueDays),
+          expiresHours: Number(reissueHours),
+          durationSec: selectedRow.durationSec,
+          round: selectedRow.round
+        },
+        setReissueResult
+      );
+    } finally {
+      setReissueSaving(false);
+    }
+  }
+
+  async function deleteInterview() {
+    if (!selectedRow) return;
+    const ok = window.confirm("この面接を削除しますか？");
+    if (!ok) return;
+    setDeletingInterview(true);
+    try {
+      const res = await fetch("/api/admin/interview/delete", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interviewId: selectedRow.interviewId })
+      });
+      if (!res.ok) return;
+      setRows((prev) => prev.filter((row) => row.interviewId !== selectedRow.interviewId));
+      setSelectedId(null);
+      setSelectedVideoUrl(null);
+      setSelectedChat([]);
+    } finally {
+      setDeletingInterview(false);
+    }
+  }
+
+  async function deleteApplication() {
+    if (!selectedApplication) return;
+    const ok = window.confirm("この応募を削除しますか？関連する面接も削除されます。");
+    if (!ok) return;
+    setDeletingApplication(true);
+    try {
+      const res = await fetch("/api/admin/application/delete", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ applicationId: selectedApplication.applicationId })
+      });
+      if (!res.ok) return;
+      setApplications((prev) =>
+        prev.filter((row) => row.applicationId !== selectedApplication.applicationId)
+      );
+      setRows((prev) =>
+        prev.filter((row) => row.applicationId !== selectedApplication.applicationId)
+      );
+      setSelectedApplicationId(null);
+      setSelectedId(null);
+      setSelectedVideoUrl(null);
+      setSelectedChat([]);
+    } finally {
+      setDeletingApplication(false);
+    }
   }
 
   function cancelApplicationEdit() {
@@ -451,30 +619,44 @@ export default function AdminDashboard({
   );
   const applicationRows = useMemo(() => {
     const grouped = new Map<string, ApplicationRow>();
+    for (const app of applications) {
+      grouped.set(app.applicationId, {
+        applicationId: app.applicationId,
+        candidateName: app.candidateName ?? null,
+        notes: app.notes ?? null,
+        createdAt: app.createdAt,
+        updatedAt: app.updatedAt,
+        interviewCount: 0,
+        latestRound: 0,
+        latestDecision: "undecided",
+        latestCreatedAt: app.createdAt,
+        interviews: []
+      });
+    }
     for (const row of rows) {
-      const existing = grouped.get(row.applicationId);
+      let existing = grouped.get(row.applicationId);
       if (!existing) {
-        grouped.set(row.applicationId, {
+        existing = {
           applicationId: row.applicationId,
           candidateName: row.applicationCandidateName ?? null,
           notes: row.applicationNotes ?? null,
           createdAt: row.applicationCreatedAt,
           updatedAt: row.applicationUpdatedAt,
-          interviewCount: 1,
-          latestRound: row.round,
-          latestDecision: row.decision,
+          interviewCount: 0,
+          latestRound: 0,
+          latestDecision: "undecided",
           latestCreatedAt: row.createdAt,
-          interviews: [row]
-        });
-        continue;
+          interviews: []
+        };
+        grouped.set(row.applicationId, existing);
       }
       existing.interviews.push(row);
       existing.interviewCount += 1;
       if (!existing.candidateName && row.applicationCandidateName) {
         existing.candidateName = row.applicationCandidateName;
       }
-      if (row.applicationNotes !== existing.notes) {
-        existing.notes = row.applicationNotes ?? null;
+      if (!existing.notes && row.applicationNotes) {
+        existing.notes = row.applicationNotes;
       }
       if (row.round > existing.latestRound) {
         existing.latestRound = row.round;
@@ -493,7 +675,7 @@ export default function AdminDashboard({
     return [...grouped.values()].sort(
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-  }, [rows]);
+  }, [applications, rows]);
   const selectedApplication = useMemo(
     () =>
       selectedApplicationId
@@ -521,15 +703,21 @@ export default function AdminDashboard({
     () => templates.find((row) => row.isDefault) ?? null,
     [templates]
   );
-  const interviewDirty =
-    Boolean(selectedRow) &&
-    editDecision !== (selectedRow?.decision ?? "undecided");
+  const isDecisionLocked = selectedRow?.status === "実施待ち";
   const normalizedApplicationName = editApplicationCandidateName.trim();
   const normalizedApplicationNotes = editApplicationNotes.trim();
   const applicationDirty =
     Boolean(selectedApplication) &&
     (normalizedApplicationName !== (selectedApplication?.candidateName ?? "") ||
       normalizedApplicationNotes !== (selectedApplication?.notes ?? ""));
+  const canCreateAdditionalInterview = Boolean(
+    selectedApplication &&
+      (selectedApplication.interviewCount === 0 || selectedApplication.latestDecision === "pass")
+  );
+  const createInterviewLabel =
+    selectedApplication?.interviewCount === 0 ? "面接を追加" : "次の面接URLを発行";
+  const canReissueInterview =
+    selectedRow?.status === "未参加" || selectedRow?.status === "失敗（エラー）";
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
@@ -544,19 +732,34 @@ export default function AdminDashboard({
   useEffect(() => {
     if (!selectedRow) {
       setEditDecision("undecided");
+      setReissueOpen(false);
+      setReissueResult(null);
+      setReissuePrompt(DEFAULT_INTERVIEW_PROMPT);
+      setReissueWeeks(String(DEFAULT_EXPIRES_WEEKS));
+      setReissueDays("0");
+      setReissueHours("0");
       return;
     }
     setEditDecision(selectedRow.decision ?? "undecided");
+    setReissueOpen(false);
+    setReissueResult(null);
+    setReissuePrompt(selectedRow.prompt ?? DEFAULT_INTERVIEW_PROMPT);
+    const expiry = getExpiryParts(selectedRow.createdAt, selectedRow.expiresAt);
+    setReissueWeeks(expiry.weeks);
+    setReissueDays(expiry.days);
+    setReissueHours(expiry.hours);
   }, [selectedRow?.interviewId]);
 
   useEffect(() => {
     if (!selectedApplication) {
       setEditApplicationCandidateName("");
       setEditApplicationNotes("");
+      setApplicationInterviewResult(null);
       return;
     }
     setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
     setEditApplicationNotes(selectedApplication.notes ?? "");
+    setApplicationInterviewResult(null);
   }, [selectedApplication?.applicationId]);
 
   useEffect(() => {
@@ -784,8 +987,9 @@ export default function AdminDashboard({
                         </span>
                       </div>
                       <div className="meta">
-                        最新面接: 第{app.latestRound}次 / 作成:{" "}
-                        {new Date(app.latestCreatedAt).toLocaleString("ja-JP")}
+                        {app.interviewCount === 0
+                          ? "面接未実施"
+                          : `最新面接: 第${app.latestRound}次 / 作成: ${new Date(app.latestCreatedAt).toLocaleString("ja-JP")}`}
                       </div>
                     </div>
                   </div>
@@ -933,13 +1137,53 @@ export default function AdminDashboard({
                   </button>
                 </div>
               )}
+              {canCreateAdditionalInterview && (
+                <div className="detail-actions">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() => {
+                      setApplicationInterviewResult(null);
+                      void createInterviewForApplication(
+                        selectedApplication.applicationId,
+                        undefined,
+                        setApplicationInterviewResult
+                      );
+                    }}
+                  >
+                    {createInterviewLabel}
+                  </button>
+                </div>
+              )}
+              {applicationInterviewResult && "error" in applicationInterviewResult && (
+                <p className="error">作成に失敗しました: {applicationInterviewResult.error}</p>
+              )}
+              {hasApplicationInterviewResult && (
+                <div className="result">
+                  <div className="result-row">
+                    <span>面接URL</span>
+                    <a href={applicationInterviewResult.url} target="_blank" rel="noreferrer">
+                      {applicationInterviewResult.url}
+                    </a>
+                  </div>
+                  {applicationInterviewResult.expiresAt && (
+                    <div className="result-row">
+                      <span>有効期限</span>
+                      <strong>
+                        {new Date(applicationInterviewResult.expiresAt).toLocaleString("ja-JP")}
+                      </strong>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="detail-actions">
                 <button
-                  className="ghost"
+                  className="danger"
                   type="button"
-                  onClick={() => void createInterview(selectedApplication.applicationId)}
+                  onClick={() => void deleteApplication()}
+                  disabled={deletingApplication}
                 >
-                  次の面接URLを発行
+                  {deletingApplication ? "削除中..." : "応募を削除"}
                 </button>
               </div>
               <div className="application-interviews">
@@ -988,8 +1232,8 @@ export default function AdminDashboard({
                         <label>判定</label>
                         <select
                           value={editDecision}
-                          onChange={(e) => setEditDecision(e.target.value as Decision)}
-                          disabled={savingInterview}
+                          onChange={(e) => handleDecisionChange(e.target.value as Decision)}
+                          disabled={savingInterview || isDecisionLocked}
                         >
                           {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
                             <option key={value} value={value}>
@@ -1008,19 +1252,126 @@ export default function AdminDashboard({
                         {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
                       </div>
                       <div className="meta">面接ラウンド: 第{selectedRow.round}次</div>
-                      <div className="detail-actions">
-                        <button
-                          className="ghost"
-                          type="button"
-                          onClick={() => void createNextInterview()}
-                        >
-                          次の面接URLを発行
-                        </button>
-                      </div>
+                      {canCreateAdditionalInterview && (
+                        <div className="detail-actions">
+                          <button
+                            className="ghost"
+                            type="button"
+                            onClick={() => void createNextInterview()}
+                          >
+                            {createInterviewLabel}
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div className="badge">
                       {selectedRow.hasRecording ? "録画あり" : "録画なし"}
                     </div>
+                  </div>
+                  {canReissueInterview && (
+                    <div className="detail-actions">
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => {
+                          setReissueResult(null);
+                          setReissueOpen((prev) => !prev);
+                        }}
+                      >
+                        {reissueOpen ? "再発行設定を閉じる" : "URLを再発行"}
+                      </button>
+                    </div>
+                  )}
+                  {reissueOpen && canReissueInterview && (
+                    <div className="reissue-panel">
+                      <div className="form-row">
+                        <label>URL有効期限</label>
+                        <div className="expiry-grid">
+                          <select
+                            value={reissueWeeks}
+                            onChange={(e) => setReissueWeeks(e.target.value)}
+                            aria-label="有効期限の週"
+                          >
+                            {Array.from({ length: MAX_EXPIRES_WEEKS + 1 }, (_, i) => (
+                              <option key={i} value={i}>
+                                {i}週
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={reissueDays}
+                            onChange={(e) => setReissueDays(e.target.value)}
+                            aria-label="有効期限の日"
+                          >
+                            {Array.from({ length: MAX_EXPIRES_DAYS + 1 }, (_, i) => (
+                              <option key={i} value={i}>
+                                {i}日
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={reissueHours}
+                            onChange={(e) => setReissueHours(e.target.value)}
+                            aria-label="有効期限の時間"
+                          >
+                            {Array.from({ length: MAX_EXPIRES_HOURS + 1 }, (_, i) => (
+                              <option key={i} value={i}>
+                                {i}時間
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <label>プロンプト</label>
+                        <textarea
+                          value={reissuePrompt}
+                          onChange={(e) => setReissuePrompt(e.target.value)}
+                          placeholder="面接AIの指示文を入力してください"
+                        />
+                      </div>
+                      <div className="detail-actions">
+                        <button
+                          className="primary"
+                          type="button"
+                          onClick={() => void reissueInterview()}
+                          disabled={reissueSaving}
+                        >
+                          {reissueSaving ? "再発行中..." : "再発行する"}
+                        </button>
+                      </div>
+                      {reissueResult && "error" in reissueResult && (
+                        <p className="error">再発行に失敗しました: {reissueResult.error}</p>
+                      )}
+                      {hasReissueResult && (
+                        <div className="result">
+                          <div className="result-row">
+                            <span>面接URL</span>
+                            <a href={reissueResult.url} target="_blank" rel="noreferrer">
+                              {reissueResult.url}
+                            </a>
+                          </div>
+                          {reissueResult.expiresAt && (
+                            <div className="result-row">
+                              <span>有効期限</span>
+                              <strong>
+                                {new Date(reissueResult.expiresAt).toLocaleString("ja-JP")}
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="detail-actions">
+                    <button
+                      className="danger"
+                      type="button"
+                      onClick={() => void deleteInterview()}
+                      disabled={deletingInterview}
+                    >
+                      {deletingInterview ? "削除中..." : "面接を削除"}
+                    </button>
                   </div>
 
                   <div className="media">
@@ -1070,24 +1421,6 @@ export default function AdminDashboard({
                     <summary>プロンプトを見る</summary>
                     <textarea value={selectedRow.prompt ?? ""} readOnly />
                   </details>
-                  {interviewDirty && (
-                    <div className="edit-actions">
-                      <button
-                        className="ghost"
-                        onClick={cancelInterviewEdit}
-                        disabled={savingInterview}
-                      >
-                        キャンセル
-                      </button>
-                      <button
-                        className="primary"
-                        onClick={() => void saveInterviewDetails()}
-                        disabled={savingInterview}
-                      >
-                        {savingInterview ? "保存中..." : "変更を保存"}
-                      </button>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="empty">面接を選択してください</div>
@@ -1441,6 +1774,15 @@ export default function AdminDashboard({
         }
         .application-interviews {
           margin-top: 12px;
+          display: grid;
+          gap: 12px;
+        }
+        .reissue-panel {
+          margin-top: 12px;
+          padding: 12px;
+          border-radius: 12px;
+          border: 1px solid #d8e1f0;
+          background: #f8fafc;
           display: grid;
           gap: 12px;
         }

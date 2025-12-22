@@ -32,6 +32,9 @@ export async function POST(req: Request) {
   const durationSec = Math.min(1800, Math.max(60, normalizedDuration));
   const applicationIdRaw =
     typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const roundRaw = Number(body.round);
+  const roundOverride =
+    Number.isFinite(roundRaw) && roundRaw > 0 ? Math.floor(roundRaw) : null;
   const candidateName =
     typeof body.candidateName === "string" ? body.candidateName.trim() || null : null;
   const promptRaw = typeof body.prompt === "string" ? body.prompt : "";
@@ -74,7 +77,7 @@ export async function POST(req: Request) {
       where: { applicationId },
       _max: { round: true }
     });
-    round = (maxRound._max.round ?? 0) + 1;
+    round = roundOverride ?? (maxRound._max.round ?? 0) + 1;
   } else {
     applicationId = crypto.randomUUID();
     await prisma.application.create({
