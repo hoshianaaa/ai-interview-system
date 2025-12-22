@@ -42,6 +42,7 @@ type ApplicationRow = {
   latestRound: number;
   latestDecision: Decision;
   latestCreatedAt: string;
+  latestStatus: string | null;
   interviews: InterviewRow[];
 };
 
@@ -89,6 +90,7 @@ const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
 const MAX_EXPIRES_HOURS = 23;
 const DEFAULT_EXPIRES_WEEKS = 1;
+const INTERVIEW_STATUS_OPTIONS = ["実施待ち", "完了", "未参加", "失敗（エラー）"] as const;
 
 export default function AdminDashboard({
   interviews,
@@ -158,6 +160,18 @@ export default function AdminDashboard({
     "applications"
   );
   const [applicationsOpen, setApplicationsOpen] = useState(true);
+  const [applicationQuery, setApplicationQuery] = useState("");
+  const [applicationDecision, setApplicationDecision] = useState<Decision | "all">("all");
+  const [applicationInterviewCount, setApplicationInterviewCount] = useState<
+    "all" | "none" | "some"
+  >("all");
+  const [applicationLatestRound, setApplicationLatestRound] = useState("all");
+  const [applicationStatus, setApplicationStatus] = useState<
+    "all" | (typeof INTERVIEW_STATUS_OPTIONS)[number]
+  >("all");
+  const [applicationDateFrom, setApplicationDateFrom] = useState("");
+  const [applicationDateTo, setApplicationDateTo] = useState("");
+  const [applicationFiltersOpen, setApplicationFiltersOpen] = useState(false);
   const [settingsDurationMin, setSettingsDurationMin] = useState(
     String(settings.defaultDurationMin)
   );
@@ -807,6 +821,7 @@ export default function AdminDashboard({
         latestRound: 0,
         latestDecision: "undecided",
         latestCreatedAt: app.createdAt,
+        latestStatus: null,
         interviews: []
       });
     }
@@ -823,6 +838,7 @@ export default function AdminDashboard({
           latestRound: 0,
           latestDecision: "undecided",
           latestCreatedAt: row.createdAt,
+          latestStatus: null,
           interviews: []
         };
         grouped.set(row.applicationId, existing);
@@ -839,10 +855,12 @@ export default function AdminDashboard({
         existing.latestRound = row.round;
         existing.latestDecision = row.decision;
         existing.latestCreatedAt = row.createdAt;
+        existing.latestStatus = row.status;
       } else if (row.round === existing.latestRound) {
         if (new Date(row.createdAt).getTime() > new Date(existing.latestCreatedAt).getTime()) {
           existing.latestDecision = row.decision;
           existing.latestCreatedAt = row.createdAt;
+          existing.latestStatus = row.status;
         }
       }
       if (new Date(row.applicationUpdatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
@@ -853,6 +871,47 @@ export default function AdminDashboard({
       (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
   }, [applications, rows]);
+  const availableRounds = useMemo(() => {
+    const unique = new Set<number>();
+    for (const row of applicationRows) {
+      if (row.latestRound > 0) unique.add(row.latestRound);
+    }
+    return [...unique].sort((a, b) => a - b);
+  }, [applicationRows]);
+  const filteredApplicationRows = useMemo(() => {
+    const query = applicationQuery.trim().toLowerCase();
+    const fromDate = applicationDateFrom ? new Date(`${applicationDateFrom}T00:00:00`) : null;
+    const toDate = applicationDateTo ? new Date(`${applicationDateTo}T23:59:59.999`) : null;
+    return applicationRows.filter((row) => {
+      if (query) {
+        const name = (row.candidateName ?? "").toLowerCase();
+        const notes = (row.notes ?? "").toLowerCase();
+        if (!name.includes(query) && !notes.includes(query)) return false;
+      }
+      if (applicationDecision !== "all" && row.latestDecision !== applicationDecision) {
+        return false;
+      }
+      if (applicationInterviewCount === "none" && row.interviewCount !== 0) return false;
+      if (applicationInterviewCount === "some" && row.interviewCount === 0) return false;
+      if (applicationLatestRound !== "all") {
+        const round = Number(applicationLatestRound);
+        if (Number.isFinite(round) && row.latestRound !== round) return false;
+      }
+      if (applicationStatus !== "all" && row.latestStatus !== applicationStatus) return false;
+      if (fromDate && new Date(row.createdAt).getTime() < fromDate.getTime()) return false;
+      if (toDate && new Date(row.createdAt).getTime() > toDate.getTime()) return false;
+      return true;
+    });
+  }, [
+    applicationRows,
+    applicationQuery,
+    applicationDecision,
+    applicationInterviewCount,
+    applicationLatestRound,
+    applicationStatus,
+    applicationDateFrom,
+    applicationDateTo
+  ]);
   const selectedApplication = useMemo(
     () =>
       selectedApplicationId
@@ -1105,11 +1164,125 @@ export default function AdminDashboard({
                     <section className="grid">
                       <div className="stack">
                         <div className="card list-card">
+                          <div className="list-filters">
+                            <button
+                              className="ghost"
+                              type="button"
+                              onClick={() => setApplicationFiltersOpen((prev) => !prev)}
+                              aria-expanded={applicationFiltersOpen}
+                              aria-controls="application-filter-panel"
+                            >
+                              {applicationFiltersOpen ? "検索条件を閉じる" : "検索条件を開く"}
+                            </button>
+                            {applicationFiltersOpen && (
+                              <div id="application-filter-panel" className="filter-body">
+                                <input
+                                  type="text"
+                                  value={applicationQuery}
+                                  onChange={(e) => setApplicationQuery(e.target.value)}
+                                  placeholder="候補者名・メモで検索"
+                                />
+                                <div className="filter-grid">
+                                  <select
+                                    value={applicationDecision}
+                                    onChange={(e) =>
+                                      setApplicationDecision(e.target.value as Decision | "all")
+                                    }
+                                  >
+                                    <option value="all">判定: すべて</option>
+                                    <option value="undecided">判定: 未判定</option>
+                                    <option value="pass">判定: 合格</option>
+                                    <option value="fail">判定: 不合格</option>
+                                    <option value="hold">判定: 保留</option>
+                                  </select>
+                                  <select
+                                    value={applicationInterviewCount}
+                                    onChange={(e) =>
+                                      setApplicationInterviewCount(
+                                        e.target.value as "all" | "none" | "some"
+                                      )
+                                    }
+                                  >
+                                    <option value="all">面接回数: すべて</option>
+                                    <option value="none">面接回数: 0件</option>
+                                    <option value="some">面接回数: 1件以上</option>
+                                  </select>
+                                  <select
+                                    value={applicationLatestRound}
+                                    onChange={(e) => setApplicationLatestRound(e.target.value)}
+                                  >
+                                    <option value="all">最新ラウンド: すべて</option>
+                                    {availableRounds.map((round) => (
+                                      <option key={round} value={round}>
+                                        最新ラウンド: 第{round}次
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    value={applicationStatus}
+                                    onChange={(e) =>
+                                      setApplicationStatus(
+                                        e.target.value as
+                                          | "all"
+                                          | (typeof INTERVIEW_STATUS_OPTIONS)[number]
+                                      )
+                                    }
+                                  >
+                                    <option value="all">最新面接: すべて</option>
+                                    {INTERVIEW_STATUS_OPTIONS.map((status) => (
+                                      <option key={status} value={status}>
+                                        最新面接: {status}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="filter-grid">
+                                  <div className="date-range">
+                                    <label className="date-range-label">
+                                      <span>検索期間</span>
+                                      <div className="date-range-inputs">
+                                        <input
+                                          type="date"
+                                          value={applicationDateFrom}
+                                          onChange={(e) => setApplicationDateFrom(e.target.value)}
+                                          aria-label="作成日（開始）"
+                                        />
+                                        <span className="date-range-separator">〜</span>
+                                        <input
+                                          type="date"
+                                          value={applicationDateTo}
+                                          onChange={(e) => setApplicationDateTo(e.target.value)}
+                                          aria-label="作成日（終了）"
+                                        />
+                                      </div>
+                                    </label>
+                                  </div>
+                                  <button
+                                    className="ghost"
+                                    type="button"
+                                    onClick={() => {
+                                      setApplicationQuery("");
+                                      setApplicationDecision("all");
+                                      setApplicationInterviewCount("all");
+                                      setApplicationLatestRound("all");
+                                      setApplicationStatus("all");
+                                      setApplicationDateFrom("");
+                                      setApplicationDateTo("");
+                                    }}
+                                  >
+                                    条件をリセット
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           {applicationRows.length === 0 ? (
                             <div className="empty">応募データがありません</div>
+                          ) : filteredApplicationRows.length === 0 ? (
+                            <div className="empty">条件に一致する応募がありません</div>
                           ) : (
                             <div className="list">
-                              {applicationRows.map((app) => (
+                              {filteredApplicationRows.map((app) => (
                                 <div
                                   key={app.applicationId}
                                   className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
@@ -1159,6 +1332,31 @@ export default function AdminDashboard({
               <UserButton />
             </div>
           </div>
+          {activePanel === "applications" && (
+            <div
+              className={`floating-actions ${applicationDirty ? "show" : ""}`}
+              role="status"
+              aria-live="polite"
+              aria-hidden={!applicationDirty}
+            >
+              <button
+                className="ghost"
+                type="button"
+                onClick={cancelApplicationEdit}
+                disabled={savingApplication}
+              >
+                キャンセル
+              </button>
+              <button
+                className="primary"
+                type="button"
+                onClick={() => void saveApplicationDetails()}
+                disabled={savingApplication}
+              >
+                {savingApplication ? "保存中..." : "応募を保存"}
+              </button>
+            </div>
+          )}
           {activePanel === "create" && (
             <section className="panel">
               <div className="card">
@@ -1333,26 +1531,6 @@ export default function AdminDashboard({
                         disabled={savingApplication}
                       />
                     </div>
-                    {applicationDirty && (
-                      <div className="detail-actions">
-                        <button
-                          className="ghost"
-                          type="button"
-                          onClick={cancelApplicationEdit}
-                          disabled={savingApplication}
-                        >
-                          キャンセル
-                        </button>
-                        <button
-                          className="primary"
-                          type="button"
-                          onClick={() => void saveApplicationDetails()}
-                          disabled={savingApplication}
-                        >
-                          {savingApplication ? "保存中..." : "応募を保存"}
-                        </button>
-                      </div>
-                    )}
                     {applicationInterviewResult && "error" in applicationInterviewResult && (
                       <p className="error">
                         作成に失敗しました: {applicationInterviewResult.error}
@@ -2021,8 +2199,93 @@ export default function AdminDashboard({
           box-shadow: 0 16px 40px rgba(19, 41, 72, 0.12);
           border: 1px solid rgba(28, 48, 74, 0.08);
         }
+        .floating-actions {
+          position: fixed;
+          left: 50%;
+          bottom: 24px;
+          transform: translateX(-50%) translateY(8px);
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 16px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.96);
+          border: 1px solid #d8e1f0;
+          box-shadow: 0 18px 36px rgba(15, 32, 64, 0.18);
+          z-index: 20;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+        .floating-actions.show {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translateX(-50%) translateY(0);
+        }
+        .floating-actions .primary,
+        .floating-actions .ghost {
+          min-width: 120px;
+        }
         .list-card {
           min-height: 420px;
+        }
+        .list-filters {
+          display: grid;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        .filter-body {
+          display: grid;
+          gap: 10px;
+        }
+        .list-filters input[type="text"],
+        .list-filters input[type="date"],
+        .list-filters select {
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 10px;
+          border: 1px solid #c7d3e6;
+          background: #f8fafc;
+          font-size: 12px;
+          color: #1c2a3a;
+        }
+        .filter-grid {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          align-items: center;
+        }
+        .date-range {
+          display: grid;
+          gap: 8px;
+          grid-template-columns: minmax(0, 1fr);
+          grid-column: 1 / -1;
+        }
+        .date-range-label {
+          display: grid;
+          gap: 6px;
+          font-size: 12px;
+          color: #4b5c72;
+        }
+        .date-range-inputs {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+          align-items: center;
+          gap: 6px;
+        }
+        .date-range-separator {
+          font-size: 12px;
+          color: #6b7a90;
+        }
+        .date-range input {
+          min-width: 0;
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        .filter-grid .ghost {
+          justify-self: start;
+          grid-column: 1 / -1;
         }
         .list-header {
           display: flex;
