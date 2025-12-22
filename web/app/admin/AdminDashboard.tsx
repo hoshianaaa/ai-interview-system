@@ -2653,6 +2653,11 @@ export default function AdminDashboard({
             grid-template-columns: 1fr;
           }
         }
+        @media (max-width: 1200px) {
+          .application-split {
+            grid-template-columns: 1fr;
+          }
+        }
         @keyframes panelFade {
           from {
             opacity: 0;
