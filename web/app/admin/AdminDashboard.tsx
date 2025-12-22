@@ -1132,6 +1132,12 @@ export default function AdminDashboard({
                   className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
                   type="button"
                   onClick={() => {
+                    if (menuCollapsed) {
+                      setMenuCollapsed(false);
+                      setActivePanel("applications");
+                      setApplicationsOpen(true);
+                      return;
+                    }
                     setApplicationsOpen((prev) => {
                       const next = !prev;
                       if (next) setActivePanel("applications");
