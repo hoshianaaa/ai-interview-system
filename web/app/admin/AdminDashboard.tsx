@@ -1593,6 +1593,7 @@ export default function AdminDashboard({
                       <div className="inline-pair">
                         <label>候補者名：</label>
                         <input
+                          className="candidate-name-input"
                           value={editApplicationCandidateName}
                           onChange={(e) => setEditApplicationCandidateName(e.target.value)}
                           placeholder="候補者名を入力"
@@ -2657,6 +2658,10 @@ export default function AdminDashboard({
         .detail-title-fields .inline-pair {
           flex: 1 1 260px;
           max-width: 360px;
+        }
+        .detail-title-fields .candidate-name-input {
+          width: 50%;
+          flex: 0 1 50%;
         }
         .detail-title-actions {
           display: flex;
