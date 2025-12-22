@@ -63,7 +63,8 @@ web/
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && next build --webpack",
+    "migrate:deploy": "prisma migrate deploy",
     "start": "next start",
     "lint": "next lint"
   },

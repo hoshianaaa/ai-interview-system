@@ -11,9 +11,17 @@ import {
 import { RemoteParticipant, RoomEvent, Track } from "livekit-client";
 import "@livekit/components-styles";
 
-type JoinResponse =
-  | { livekitUrl: string; roomName: string; token: string; durationSec: number }
-  | { error: string };
+type JoinSuccessResponse = {
+  livekitUrl: string;
+  roomName: string;
+  token: string;
+  durationSec: number;
+};
+
+type JoinResponse = JoinSuccessResponse | { error: string };
+
+const isJoinSuccess = (value: JoinResponse | null): value is JoinSuccessResponse =>
+  Boolean(value && "token" in value && "livekitUrl" in value);
 
 type ChatMessage = {
   id: string;
@@ -41,8 +49,7 @@ export default function InterviewPage({
   const [connected, setConnected] = useState(false);
   const endingRef = useRef(false);
 
-  const hasActiveJoin =
-    Boolean(join && "token" in join && typeof join.token === "string");
+  const hasActiveJoin = isJoinSuccess(join);
 
   const startError =
     join && "error" in join
@@ -365,7 +372,7 @@ export default function InterviewPage({
     );
   }
 
-  if (!hasActiveJoin) {
+  if (!isJoinSuccess(join)) {
     return (
       <main className="intro">
         <div className="intro-card">

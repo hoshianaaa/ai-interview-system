@@ -72,23 +72,27 @@ type OrgSettings = {
   defaultExpiresHours: number;
 };
 
-type CreateResponse =
-  | {
-      interviewId: string;
-      applicationId: string;
-      round: number;
-      roomName: string;
-      url: string;
-      candidateName: string | null;
-      candidateEmail?: string | null;
-      expiresAt: string | null;
-      interviewCreatedAt?: string | null;
-      applicationCreatedAt?: string | null;
-      applicationUpdatedAt?: string | null;
-      durationSec?: number | null;
-      prompt?: string | null;
-    }
-  | { error: string };
+type CreateSuccessResponse = {
+  interviewId: string;
+  applicationId: string;
+  round: number;
+  roomName: string;
+  url: string;
+  candidateName: string | null;
+  candidateEmail?: string | null;
+  expiresAt: string | null;
+  interviewCreatedAt?: string | null;
+  applicationCreatedAt?: string | null;
+  applicationUpdatedAt?: string | null;
+  durationSec?: number | null;
+  prompt?: string | null;
+};
+
+type CreateResponse = CreateSuccessResponse | { error: string };
+
+const isCreateSuccess = (
+  value: CreateResponse | null
+): value is CreateSuccessResponse => Boolean(value && "url" in value);
 
 const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
@@ -197,10 +201,9 @@ export default function AdminDashboard({
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  const hasResult = createResult && "url" in createResult;
-  const hasReissueResult = reissueResult && "url" in reissueResult;
-  const hasApplicationInterviewResult =
-    applicationInterviewResult && "url" in applicationInterviewResult;
+  const hasResult = isCreateSuccess(createResult);
+  const hasReissueResult = isCreateSuccess(reissueResult);
+  const hasApplicationInterviewResult = isCreateSuccess(applicationInterviewResult);
 
   const normalizeDurationMin = (value: string, fallback: number) => {
     const parsed = Number(value);
@@ -234,7 +237,7 @@ export default function AdminDashboard({
   }
 
   function buildApplicationFromResponse(
-    data: CreateResponse & { url: string },
+    data: CreateSuccessResponse,
     fallback?: Partial<ApplicationData>
   ): ApplicationData {
     const createdAt =
@@ -252,7 +255,7 @@ export default function AdminDashboard({
   }
 
   function buildInterviewFromResponse(
-    data: CreateResponse & { url: string },
+    data: CreateSuccessResponse,
     app: ApplicationData
   ): InterviewRow {
     return {
@@ -309,7 +312,7 @@ export default function AdminDashboard({
     if (trimmedEmail) payload.candidateEmail = trimmedEmail;
     const data = await requestInterview(payload);
     setCreateResult(data);
-    if ("url" in data) {
+    if (isCreateSuccess(data)) {
       const application = buildApplicationFromResponse(data, {
         candidateName: trimmedName || null,
         candidateEmail: trimmedEmail || null,
@@ -345,7 +348,7 @@ export default function AdminDashboard({
       payload.round = overrides.round;
     }
     const data = await requestInterview(payload);
-    if ("url" in data) {
+    if (isCreateSuccess(data)) {
       const existing = applications.find((row) => row.applicationId === applicationId);
       const application = buildApplicationFromResponse(data, existing ?? undefined);
       upsertApplication(application);

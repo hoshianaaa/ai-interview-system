@@ -486,17 +486,20 @@ python app.py
 
    * `.env` の `DATABASE_URL`
    * `.env.local` の LiveKit/R2 も全て
-4. build に migration を含める（推奨）
+4. build と migration を分離（推奨）
 
 `web/package.json`：
 
 ```json
 {
   "scripts": {
-    "build": "prisma generate && prisma migrate deploy && next build"
+    "build": "prisma generate && next build --webpack",
+    "migrate:deploy": "prisma migrate deploy"
   }
 }
 ```
+
+* 本番デプロイ時は `npm run migrate:deploy` を別ステップで実行
 
 ## 18. agent → Fly.io
 
@@ -532,4 +535,3 @@ https://<vercel-domain>/api/livekit/webhook
 をセットで出すと最短です。
 
 必要なら次の返信で、**web のファイル一式（パス付き）を完全に貼ります**。
-
