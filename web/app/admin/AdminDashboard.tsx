@@ -1541,9 +1541,6 @@ export default function AdminDashboard({
                         </div>
                       )}
                     </div>
-                    <div className="badge">
-                      {selectedRow.hasRecording ? "録画あり" : "録画なし"}
-                    </div>
                   </div>
                   {canReissueInterview && (
                     <div className="detail-actions">
@@ -1777,6 +1774,9 @@ export default function AdminDashboard({
         .interview-detail {
           display: grid;
           gap: 16px;
+          border: 1px solid #111;
+          border-radius: 12px;
+          padding: 16px;
         }
         .detail-header {
           display: flex;
@@ -1809,16 +1809,6 @@ export default function AdminDashboard({
           font-size: 14px;
           background: #f8fafc;
           width: min(320px, 100%);
-        }
-        .badge {
-          padding: 6px 10px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 600;
-          background: #eff3fb;
-          color: #1f4fb2;
-          border: 1px solid #d3dcf0;
-          white-space: nowrap;
         }
         h2 {
           margin: 0 0 16px;
