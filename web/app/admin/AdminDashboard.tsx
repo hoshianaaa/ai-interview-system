@@ -1105,9 +1105,6 @@ export default function AdminDashboard({
                     <section className="grid">
                       <div className="stack">
                         <div className="card list-card">
-                          <div className="list-header">
-                            <h2>応募一覧</h2>
-                          </div>
                           {applicationRows.length === 0 ? (
                             <div className="empty">応募データがありません</div>
                           ) : (
