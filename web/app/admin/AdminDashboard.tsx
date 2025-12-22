@@ -1193,14 +1193,19 @@ export default function AdminDashboard({
               {detailMode === "settings" ? "設定" : "応募詳細"}
             </h2>
             {detailMode !== "settings" && selectedApplication && (
-              <button
-                className="danger"
-                type="button"
-                onClick={() => void deleteApplication()}
-                disabled={deletingApplication}
-              >
-                {deletingApplication ? "削除中..." : "応募を削除"}
-              </button>
+              <div className="detail-title-actions">
+                <span className="detail-caption">
+                  応募作成: {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
+                </span>
+                <button
+                  className="danger"
+                  type="button"
+                  onClick={() => void deleteApplication()}
+                  disabled={deletingApplication}
+                >
+                  {deletingApplication ? "削除中..." : "応募を削除"}
+                </button>
+              </div>
             )}
           </div>
           {detailMode === "settings" ? (
@@ -1380,12 +1385,6 @@ export default function AdminDashboard({
                   disabled={savingApplication}
                 />
               </div>
-              <div className="detail-row">
-                <label>応募作成</label>
-                <div className="detail-value">
-                  {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
-                </div>
-              </div>
               <div className="notes">
                 <label>メモ</label>
                 <textarea
@@ -1455,12 +1454,14 @@ export default function AdminDashboard({
                 </div>
               )}
               <div className="application-interviews">
-                <div className="section-title">面接一覧</div>
-                {selectedApplication.interviews.length === 0 ? (
+                {selectedApplication.interviews.length === 0 && (
                   <div className="empty">面接がありません</div>
-                ) : (
-                  <div className="form-row">
-                    <label>面接を選択</label>
+                )}
+              </div>
+              <div className="section-title-row">
+                <div className="section-title">面接詳細</div>
+                <div className="section-title-actions">
+                  {selectedApplication.interviews.length > 0 && (
                     <select
                       value={selectedRow?.interviewId ?? ""}
                       onChange={(e) => {
@@ -1487,22 +1488,18 @@ export default function AdminDashboard({
                           </option>
                         ))}
                     </select>
-                    <p className="helper">最新の面接が初期選択されます。</p>
-                  </div>
-                )}
-              </div>
-              <div className="section-title-row">
-                <div className="section-title">面接詳細</div>
-                {selectedRow && (
-                  <button
-                    className="danger"
-                    type="button"
-                    onClick={() => void deleteInterview()}
-                    disabled={deletingInterview}
-                  >
-                    {deletingInterview ? "削除中..." : "面接を削除"}
-                  </button>
-                )}
+                  )}
+                  {selectedRow && (
+                    <button
+                      className="danger"
+                      type="button"
+                      onClick={() => void deleteInterview()}
+                      disabled={deletingInterview}
+                    >
+                      {deletingInterview ? "削除中..." : "面接を削除"}
+                    </button>
+                  )}
+                </div>
               </div>
               {selectedRow ? (
                 <div className="interview-detail">
@@ -1886,6 +1883,16 @@ export default function AdminDashboard({
           gap: 12px;
           margin-bottom: 12px;
         }
+        .detail-title-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .detail-caption {
+          font-size: 12px;
+          color: #6b7a90;
+          white-space: nowrap;
+        }
         .detail-title h2 {
           margin: 0;
         }
@@ -2098,6 +2105,11 @@ export default function AdminDashboard({
           align-items: center;
           justify-content: space-between;
           gap: 12px;
+        }
+        .section-title-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
         .ghost:disabled {
           color: #8a97ab;
