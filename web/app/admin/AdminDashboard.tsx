@@ -1809,6 +1809,7 @@ export default function AdminDashboard({
           flex-direction: column;
           gap: 16px;
           overflow: visible;
+          transition: width 0.35s ease, padding 0.35s ease;
         }
         .sidebar.collapsed {
           width: 56px;
@@ -1912,8 +1913,7 @@ export default function AdminDashboard({
           padding: 10px;
         }
         .sidebar.collapsed .collapse-button {
-          justify-content: center;
-          right: -36px;
+          right: -24px;
         }
         .collapse-button {
           display: flex;
