@@ -3024,10 +3024,11 @@ export default function AdminDashboard({
           min-width: 0;
           width: 100%;
           align-self: stretch;
+          padding-top: 24px;
           padding-bottom: 20px;
         }
         .notes-panel textarea {
-          min-height: 360px;
+          min-height: calc(360px - 24px);
           height: 100%;
           padding: 10px 12px;
           border-radius: 12px;
