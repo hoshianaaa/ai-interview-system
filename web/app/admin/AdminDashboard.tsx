@@ -986,6 +986,41 @@ export default function AdminDashboard({
             <img src="/logo.png" alt="" className="brand-logo" />
             {!menuCollapsed && <span className="brand-text">AI Interview</span>}
           </button>
+          <button
+            className="collapse-button"
+            type="button"
+            onClick={() => setMenuCollapsed((prev) => !prev)}
+            aria-label={menuCollapsed ? "メニューを開く" : "メニューを閉じる"}
+          >
+            {menuCollapsed ? (
+              <svg
+                className="nav-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 5l6 7-6 7" />
+              </svg>
+            ) : (
+              <svg
+                className="nav-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 19l-6-7 6-7" />
+              </svg>
+            )}
+            {!menuCollapsed && <span>閉じる</span>}
+          </button>
           <nav className="nav">
             <button
               className={`nav-item ${activePanel === "create" ? "active" : ""}`}
@@ -1051,41 +1086,6 @@ export default function AdminDashboard({
               {!menuCollapsed && <span>設定</span>}
             </button>
           </nav>
-          <button
-            className="collapse-button"
-            type="button"
-            onClick={() => setMenuCollapsed((prev) => !prev)}
-            aria-label={menuCollapsed ? "メニューを開く" : "メニューを閉じる"}
-          >
-            {menuCollapsed ? (
-              <svg
-                className="nav-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 5l6 7-6 7" />
-              </svg>
-            ) : (
-              <svg
-                className="nav-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M15 19l-6-7 6-7" />
-              </svg>
-            )}
-            {!menuCollapsed && <span>閉じる</span>}
-          </button>
         </aside>
         <div className="content">
           <div className="topbar">
@@ -1908,7 +1908,7 @@ export default function AdminDashboard({
           font-size: 13px;
           color: #4b5c72;
           cursor: pointer;
-          margin-top: auto;
+          align-self: flex-end;
         }
         .panel {
           display: block;
@@ -2511,6 +2511,10 @@ export default function AdminDashboard({
             flex-direction: row;
             align-items: center;
             padding: 12px 16px;
+          }
+          .collapse-button {
+            align-self: center;
+            order: 3;
           }
           .nav {
             flex-direction: row;
