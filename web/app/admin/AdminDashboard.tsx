@@ -1385,15 +1385,6 @@ export default function AdminDashboard({
                   disabled={savingApplication}
                 />
               </div>
-              <div className="notes">
-                <label>メモ</label>
-                <textarea
-                  value={editApplicationNotes}
-                  onChange={(e) => setEditApplicationNotes(e.target.value)}
-                  placeholder="応募に関するメモを記録できます"
-                  disabled={savingApplication}
-                />
-              </div>
               {applicationDirty && (
                 <div className="detail-actions">
                   <button
@@ -1417,265 +1408,278 @@ export default function AdminDashboard({
               {applicationInterviewResult && "error" in applicationInterviewResult && (
                 <p className="error">作成に失敗しました: {applicationInterviewResult.error}</p>
               )}
-              {hasApplicationInterviewResult && (
-                <div className="result">
-                  <div className="result-row">
-                    <span>面接URL</span>
-                    <a href={applicationInterviewResult.url} target="_blank" rel="noreferrer">
-                      {applicationInterviewResult.url}
-                    </a>
-                  </div>
-                  {applicationInterviewResult.expiresAt && (
-                    <div className="result-row">
-                      <span>有効期限</span>
-                      <strong>
-                        {new Date(applicationInterviewResult.expiresAt).toLocaleString("ja-JP")}
-                      </strong>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="application-interviews">
-                {selectedApplication.interviews.length === 0 && (
-                  <div className="empty">面接がありません</div>
-                )}
-              </div>
-              <div className="section-title-row">
-                <div className="section-title">面接詳細</div>
-                <div className="section-title-actions">
-                  {canCreateAdditionalInterview && (
-                    <button
-                      className="ghost"
-                      type="button"
-                      onClick={() => void createNextInterview()}
-                    >
-                      {createInterviewLabel}
-                    </button>
-                  )}
-                  {selectedApplication.interviews.length > 0 && (
-                    <select
-                      value={selectedRow?.interviewId ?? ""}
-                      onChange={(e) => {
-                        const interviewId = e.target.value;
-                        const next = selectedApplication.interviews.find(
-                          (row) => row.interviewId === interviewId
-                        );
-                        if (next) void loadVideo(next);
-                      }}
-                      disabled={selectedApplication.interviews.length <= 1}
-                    >
-                      <option value="" disabled>
-                        面接を選択してください
-                      </option>
-                      {selectedApplication.interviews
-                        .slice()
-                        .sort((a, b) => {
-                          if (a.round !== b.round) return b.round - a.round;
-                          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                        })
-                        .map((row) => (
-                          <option key={row.interviewId} value={row.interviewId}>
-                            第{row.round}次（{decisionLabel(row.decision)}）{" "}
-                            {new Date(row.createdAt).toLocaleString("ja-JP")}
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                  {selectedRow && (
-                    <button
-                      className="danger"
-                      type="button"
-                      onClick={() => void deleteInterview()}
-                      disabled={deletingInterview}
-                    >
-                      {deletingInterview ? "削除中..." : "面接を削除"}
-                    </button>
-                  )}
-                </div>
-              </div>
-              {selectedRow ? (
-                <div className="interview-detail">
-                  <div className="interview-top-row">
-                    {isDecisionLocked && (
-                      <div className="interview-url">
-                        面接URL:{" "}
-                        <a href={selectedRow.url} target="_blank" rel="noreferrer">
-                          {selectedRow.url}
+              <div className="application-split">
+                <div className="application-left">
+                  {hasApplicationInterviewResult && (
+                    <div className="result">
+                      <div className="result-row">
+                        <span>面接URL</span>
+                        <a href={applicationInterviewResult.url} target="_blank" rel="noreferrer">
+                          {applicationInterviewResult.url}
                         </a>
                       </div>
-                    )}
-                    {!isDecisionLocked && (
-                      <div className="decision-select">
-                        <fieldset
-                          className="decision-options"
-                          disabled={savingInterview}
-                          aria-label="判定"
-                        >
-                          {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
-                            <label
-                              key={value}
-                              className={`decision-option ${value} ${editDecision === value ? "selected" : ""}`}
-                            >
-                              <input
-                                type="radio"
-                                name={`decision-${selectedRow.interviewId}`}
-                                value={value}
-                                checked={editDecision === value}
-                                onChange={() => handleDecisionChange(value)}
-                              />
-                              <span>{decisionLabel(value)}</span>
-                            </label>
-                          ))}
-                        </fieldset>
-                      </div>
-                    )}
-                  </div>
-                  {canReissueInterview && (
-                    <div className="detail-actions">
-                      <button
-                        className="ghost"
-                        type="button"
-                        onClick={() => {
-                          setReissueResult(null);
-                          setReissueOpen((prev) => !prev);
-                        }}
-                      >
-                        {reissueOpen ? "再発行設定を閉じる" : "URLを再発行"}
-                      </button>
+                      {applicationInterviewResult.expiresAt && (
+                        <div className="result-row">
+                          <span>有効期限</span>
+                          <strong>
+                            {new Date(applicationInterviewResult.expiresAt).toLocaleString("ja-JP")}
+                          </strong>
+                        </div>
+                      )}
                     </div>
                   )}
-                  {reissueOpen && canReissueInterview && (
-                    <div className="reissue-panel">
-                      <div className="form-row">
-                        <label>URL有効期限</label>
-                        <div className="expiry-grid">
-                          <select
-                            value={reissueWeeks}
-                            onChange={(e) => setReissueWeeks(e.target.value)}
-                            aria-label="有効期限の週"
-                          >
-                            {Array.from({ length: MAX_EXPIRES_WEEKS + 1 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}週
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={reissueDays}
-                            onChange={(e) => setReissueDays(e.target.value)}
-                            aria-label="有効期限の日"
-                          >
-                            {Array.from({ length: MAX_EXPIRES_DAYS + 1 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}日
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={reissueHours}
-                            onChange={(e) => setReissueHours(e.target.value)}
-                            aria-label="有効期限の時間"
-                          >
-                            {Array.from({ length: MAX_EXPIRES_HOURS + 1 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i}時間
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                      <div className="form-row">
-                        <label>プロンプト</label>
-                        <textarea
-                          value={reissuePrompt}
-                          onChange={(e) => setReissuePrompt(e.target.value)}
-                          placeholder="面接AIの指示文を入力してください"
-                        />
-                      </div>
-                      <div className="detail-actions">
+                  <div className="application-interviews">
+                    {selectedApplication.interviews.length === 0 && (
+                      <div className="empty">面接がありません</div>
+                    )}
+                  </div>
+                  <div className="section-title-row">
+                    <div className="section-title">面接詳細</div>
+                    <div className="section-title-actions">
+                      {canCreateAdditionalInterview && (
                         <button
-                          className="primary"
+                          className="ghost"
                           type="button"
-                          onClick={() => void reissueInterview()}
-                          disabled={reissueSaving}
+                          onClick={() => void createNextInterview()}
                         >
-                          {reissueSaving ? "再発行中..." : "再発行する"}
+                          {createInterviewLabel}
                         </button>
-                      </div>
-                      {reissueResult && "error" in reissueResult && (
-                        <p className="error">再発行に失敗しました: {reissueResult.error}</p>
                       )}
-                      {hasReissueResult && (
-                        <div className="result">
-                          <div className="result-row">
-                            <span>面接URL</span>
-                            <a href={reissueResult.url} target="_blank" rel="noreferrer">
-                              {reissueResult.url}
+                      {selectedApplication.interviews.length > 0 && (
+                        <select
+                          value={selectedRow?.interviewId ?? ""}
+                          onChange={(e) => {
+                            const interviewId = e.target.value;
+                            const next = selectedApplication.interviews.find(
+                              (row) => row.interviewId === interviewId
+                            );
+                            if (next) void loadVideo(next);
+                          }}
+                          disabled={selectedApplication.interviews.length <= 1}
+                        >
+                          <option value="" disabled>
+                            面接を選択してください
+                          </option>
+                          {selectedApplication.interviews
+                            .slice()
+                            .sort((a, b) => {
+                              if (a.round !== b.round) return b.round - a.round;
+                              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                            })
+                            .map((row) => (
+                              <option key={row.interviewId} value={row.interviewId}>
+                                第{row.round}次（{decisionLabel(row.decision)}）{" "}
+                                {new Date(row.createdAt).toLocaleString("ja-JP")}
+                              </option>
+                            ))}
+                        </select>
+                      )}
+                      {selectedRow && (
+                        <button
+                          className="danger"
+                          type="button"
+                          onClick={() => void deleteInterview()}
+                          disabled={deletingInterview}
+                        >
+                          {deletingInterview ? "削除中..." : "面接を削除"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {selectedRow ? (
+                    <div className="interview-detail">
+                      <div className="interview-top-row">
+                        {isDecisionLocked && (
+                          <div className="interview-url">
+                            面接URL:{" "}
+                            <a href={selectedRow.url} target="_blank" rel="noreferrer">
+                              {selectedRow.url}
                             </a>
                           </div>
-                          {reissueResult.expiresAt && (
-                            <div className="result-row">
-                              <span>有効期限</span>
-                              <strong>
-                                {new Date(reissueResult.expiresAt).toLocaleString("ja-JP")}
-                              </strong>
+                        )}
+                        {!isDecisionLocked && (
+                          <div className="decision-select">
+                            <fieldset
+                              className="decision-options"
+                              disabled={savingInterview}
+                              aria-label="判定"
+                            >
+                              {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
+                                <label
+                                  key={value}
+                                  className={`decision-option ${value} ${editDecision === value ? "selected" : ""}`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`decision-${selectedRow.interviewId}`}
+                                    value={value}
+                                    checked={editDecision === value}
+                                    onChange={() => handleDecisionChange(value)}
+                                  />
+                                  <span>{decisionLabel(value)}</span>
+                                </label>
+                              ))}
+                            </fieldset>
+                          </div>
+                        )}
+                      </div>
+                      {canReissueInterview && (
+                        <div className="detail-actions">
+                          <button
+                            className="ghost"
+                            type="button"
+                            onClick={() => {
+                              setReissueResult(null);
+                              setReissueOpen((prev) => !prev);
+                            }}
+                          >
+                            {reissueOpen ? "再発行設定を閉じる" : "URLを再発行"}
+                          </button>
+                        </div>
+                      )}
+                      {reissueOpen && canReissueInterview && (
+                        <div className="reissue-panel">
+                          <div className="form-row">
+                            <label>URL有効期限</label>
+                            <div className="expiry-grid">
+                              <select
+                                value={reissueWeeks}
+                                onChange={(e) => setReissueWeeks(e.target.value)}
+                                aria-label="有効期限の週"
+                              >
+                                {Array.from({ length: MAX_EXPIRES_WEEKS + 1 }, (_, i) => (
+                                  <option key={i} value={i}>
+                                    {i}週
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={reissueDays}
+                                onChange={(e) => setReissueDays(e.target.value)}
+                                aria-label="有効期限の日"
+                              >
+                                {Array.from({ length: MAX_EXPIRES_DAYS + 1 }, (_, i) => (
+                                  <option key={i} value={i}>
+                                    {i}日
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={reissueHours}
+                                onChange={(e) => setReissueHours(e.target.value)}
+                                aria-label="有効期限の時間"
+                              >
+                                {Array.from({ length: MAX_EXPIRES_HOURS + 1 }, (_, i) => (
+                                  <option key={i} value={i}>
+                                    {i}時間
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="form-row">
+                            <label>プロンプト</label>
+                            <textarea
+                              value={reissuePrompt}
+                              onChange={(e) => setReissuePrompt(e.target.value)}
+                              placeholder="面接AIの指示文を入力してください"
+                            />
+                          </div>
+                          <div className="detail-actions">
+                            <button
+                              className="primary"
+                              type="button"
+                              onClick={() => void reissueInterview()}
+                              disabled={reissueSaving}
+                            >
+                              {reissueSaving ? "再発行中..." : "再発行する"}
+                            </button>
+                          </div>
+                          {reissueResult && "error" in reissueResult && (
+                            <p className="error">再発行に失敗しました: {reissueResult.error}</p>
+                          )}
+                          {hasReissueResult && (
+                            <div className="result">
+                              <div className="result-row">
+                                <span>面接URL</span>
+                                <a href={reissueResult.url} target="_blank" rel="noreferrer">
+                                  {reissueResult.url}
+                                </a>
+                              </div>
+                              {reissueResult.expiresAt && (
+                                <div className="result-row">
+                                  <span>有効期限</span>
+                                  <strong>
+                                    {new Date(reissueResult.expiresAt).toLocaleString("ja-JP")}
+                                  </strong>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
                       )}
-                    </div>
-                  )}
-                  <div className="media">
-                    <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
-                      {selectedVideoUrl ? (
-                        <video
-                          ref={videoRef}
-                          controls
-                          src={selectedVideoUrl}
-                          onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
-                        />
-                      ) : (
-                        <div className="video-empty">
-                          {loadingVideoId === selectedRow.interviewId
-                            ? "動画を読み込み中..."
-                            : selectedRow.hasRecording
-                              ? "動画の取得に失敗しました"
-                              : "録画がありません"}
+                      <div className="media">
+                        <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
+                          {selectedVideoUrl ? (
+                            <video
+                              ref={videoRef}
+                              controls
+                              src={selectedVideoUrl}
+                              onTimeUpdate={(e) => setCurrentTimeSec(e.currentTarget.currentTime)}
+                            />
+                          ) : (
+                            <div className="video-empty">
+                              {loadingVideoId === selectedRow.interviewId
+                                ? "動画を読み込み中..."
+                                : selectedRow.hasRecording
+                                  ? "動画の取得に失敗しました"
+                                  : "録画がありません"}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div className="chat-panel">
-                      <div className="chat-title">Chat Timeline</div>
-                      <div className="chat-list">
-                        {selectedChat.length === 0 ? (
-                          <div className="chat-empty">チャットはまだありません</div>
-                        ) : (
-                          selectedChat.map((msg) => (
-                            <button
-                              key={msg.messageId}
-                              className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
-                              onClick={() => seekTo(msg.offsetMs)}
-                              type="button"
-                            >
-                              <span className="time">{formatTime(msg.offsetMs)}</span>
-                              <span className="speaker">
-                                {msg.role === "interviewer" ? "面接官" : "候補者"}
-                              </span>
-                              <span className="text">{msg.text}</span>
-                            </button>
-                          ))
-                        )}
+                        <div className="chat-panel">
+                          <div className="chat-title">Chat Timeline</div>
+                          <div className="chat-list">
+                            {selectedChat.length === 0 ? (
+                              <div className="chat-empty">チャットはまだありません</div>
+                            ) : (
+                              selectedChat.map((msg) => (
+                                <button
+                                  key={msg.messageId}
+                                  className={`chat-item ${msg.role} ${msg.messageId === activeMessageId ? "active" : ""}`}
+                                  onClick={() => seekTo(msg.offsetMs)}
+                                  type="button"
+                                >
+                                  <span className="time">{formatTime(msg.offsetMs)}</span>
+                                  <span className="speaker">
+                                    {msg.role === "interviewer" ? "面接官" : "候補者"}
+                                  </span>
+                                  <span className="text">{msg.text}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
                       </div>
+                      <details className="prompt">
+                        <summary>プロンプトを見る</summary>
+                        <textarea value={selectedRow.prompt ?? ""} readOnly />
+                      </details>
                     </div>
-                  </div>
-                  <details className="prompt">
-                    <summary>プロンプトを見る</summary>
-                    <textarea value={selectedRow.prompt ?? ""} readOnly />
-                  </details>
+                  ) : (
+                    <div className="empty">面接を選択してください</div>
+                  )}
                 </div>
-              ) : (
-                <div className="empty">面接を選択してください</div>
-              )}
+                <div className="notes-panel">
+                  <label>メモ</label>
+                  <textarea
+                    value={editApplicationNotes}
+                    onChange={(e) => setEditApplicationNotes(e.target.value)}
+                    placeholder="応募に関するメモを記録できます"
+                    disabled={savingApplication}
+                  />
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -2242,16 +2246,28 @@ export default function AdminDashboard({
           font-size: 13px;
           color: #1c2a3a;
         }
-        .notes {
+        .application-split {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+          gap: 16px;
+          align-items: stretch;
+        }
+        .application-left {
+          display: grid;
+          gap: 12px;
+        }
+        .notes-panel {
           display: grid;
           gap: 6px;
+          grid-template-rows: auto 1fr;
         }
-        .notes label {
+        .notes-panel label {
           font-size: 12px;
           color: #4b5c72;
         }
-        .notes textarea {
-          min-height: 110px;
+        .notes-panel textarea {
+          min-height: 360px;
+          height: 100%;
           padding: 10px 12px;
           border-radius: 12px;
           border: 1px solid #c7d3e6;
@@ -2311,6 +2327,9 @@ export default function AdminDashboard({
           }
           .interview-top-row {
             flex-direction: column;
+          }
+          .application-split {
+            grid-template-columns: 1fr;
           }
           .media {
             grid-template-columns: 1fr;
