@@ -1395,6 +1395,12 @@ export default function AdminDashboard({
                 )}
               </div>
             </nav>
+            <div className="sidebar-footer">
+              <div className="user">
+                {!menuCollapsed && <OrganizationSwitcher />}
+                <UserButton />
+              </div>
+            </div>
           </div>
           {!menuCollapsed && (
             <div
@@ -1412,12 +1418,6 @@ export default function AdminDashboard({
           )}
         </aside>
         <div className="content">
-          <div className="topbar">
-            <div className="user">
-              <OrganizationSwitcher />
-              <UserButton />
-            </div>
-          </div>
           {activePanel === "applications" && (
             <div
               className={`floating-actions ${applicationDirty ? "show" : ""}`}
@@ -2148,6 +2148,19 @@ export default function AdminDashboard({
           gap: 12px;
           flex: 1;
           min-height: 0;
+        }
+        .sidebar-footer {
+          margin-top: auto;
+          display: flex;
+        }
+        .sidebar-footer .user {
+          width: 100%;
+        }
+        .sidebar.collapsed .sidebar-footer {
+          justify-content: center;
+        }
+        .sidebar.collapsed .sidebar-footer .user {
+          justify-content: center;
         }
         .sidebar.collapsed .sidebar-header {
           padding-right: 0;
