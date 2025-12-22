@@ -1361,9 +1361,6 @@ export default function AdminDashboard({
             <section className="panel">
               <div className="card">
                 <h2>新規応募の追加</h2>
-                <p className="helper">
-                  候補者名は応募に保存され、面接設定は1次面接に使われます。
-                </p>
                 <div className="form-row">
                   <label>候補者名（任意）</label>
                   <input
@@ -1384,7 +1381,6 @@ export default function AdminDashboard({
                       </option>
                     ))}
                   </select>
-                  <p className="helper">1〜30分の範囲で指定できます。</p>
                 </div>
                 <div className="form-row">
                   <label>URL有効期限</label>
@@ -1423,7 +1419,6 @@ export default function AdminDashboard({
                       ))}
                     </select>
                   </div>
-                  <p className="helper">デフォルトは設定で変更できます。</p>
                 </div>
                 <div className="form-row">
                   <label>テンプレート</label>
@@ -1449,11 +1444,6 @@ export default function AdminDashboard({
                       {templateLoading ? "取得中..." : "再読み込み"}
                     </button>
                   </div>
-                  <p className="helper">
-                    選択するとプロンプトに反映されます。{defaultTemplate
-                      ? `現在のデフォルト: ${defaultTemplate.name}`
-                      : "デフォルト未設定"}
-                  </p>
                 </div>
                 <div className="form-row">
                   <label>プロンプト</label>
@@ -1845,7 +1835,6 @@ export default function AdminDashboard({
                           </option>
                         ))}
                       </select>
-                      <p className="helper">1〜30分の範囲で指定できます。</p>
                     </div>
                     <div className="form-row">
                       <label>URL有効期限</label>
@@ -1884,7 +1873,6 @@ export default function AdminDashboard({
                           ))}
                         </select>
                       </div>
-                      <p className="helper">新規応募/面接作成時の初期値に反映されます。</p>
                     </div>
                     {settingsError && <p className="error">{settingsError}</p>}
                     <div className="edit-actions">
@@ -1959,9 +1947,6 @@ export default function AdminDashboard({
                           />
                           <span>このテンプレートをデフォルトにする</span>
                         </label>
-                        <p className="helper">
-                          新規面接の初期プロンプトに自動反映されます。
-                        </p>
                       </div>
                       {templateEditError && <p className="error">{templateEditError}</p>}
                       <div className="edit-actions">
