@@ -934,6 +934,12 @@ export default function AdminDashboard({
     applicationDateFrom,
     applicationDateTo
   ]);
+  useEffect(() => {
+    if (activePanel !== "applications") return;
+    if (selectedApplicationId) return;
+    const first = filteredApplicationRows[0];
+    if (first) setSelectedApplicationId(first.applicationId);
+  }, [activePanel, filteredApplicationRows, selectedApplicationId]);
   const selectedApplication = useMemo(
     () =>
       selectedApplicationId
