@@ -2945,10 +2945,10 @@ export default function AdminDashboard({
           gap: 10px;
           min-width: 0;
           overflow: hidden;
-          height: 100%;
+          height: calc(100% - 24px);
           min-height: 0;
-          max-height: 100%;
-          transform: translateY(2px);
+          max-height: calc(100% - 24px);
+          transform: translateY(0);
           width: 100%;
         }
         .chat-title {
