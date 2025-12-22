@@ -2336,7 +2336,7 @@ export default function AdminDashboard({
         }
         .application-detail {
           display: grid;
-          gap: 16px;
+          gap: 2px;
         }
         .interview-detail {
           display: grid;
@@ -2438,7 +2438,7 @@ export default function AdminDashboard({
         }
         .detail-row {
           display: grid;
-          gap: 6px;
+          gap: 1px;
         }
         .detail-row-inline {
           display: flex;
