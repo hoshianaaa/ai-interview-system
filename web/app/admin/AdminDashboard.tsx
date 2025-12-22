@@ -1471,6 +1471,7 @@ export default function AdminDashboard({
                         );
                         if (next) void loadVideo(next);
                       }}
+                      disabled={selectedApplication.interviews.length <= 1}
                     >
                       <option value="" disabled>
                         面接を選択してください
@@ -1524,11 +1525,6 @@ export default function AdminDashboard({
                           {selectedRow.url}
                         </a>
                       </div>
-                      <div className="meta">
-                        ステータス: {selectedRow.status} / 作成:{" "}
-                        {new Date(selectedRow.createdAt).toLocaleString("ja-JP")}
-                      </div>
-                      <div className="meta">面接ラウンド: 第{selectedRow.round}次</div>
                       {canCreateAdditionalInterview && (
                         <div className="detail-actions">
                           <button
