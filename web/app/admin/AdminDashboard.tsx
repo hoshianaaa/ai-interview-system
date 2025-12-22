@@ -70,6 +70,11 @@ type CreateResponse =
       url: string;
       candidateName: string | null;
       expiresAt: string | null;
+      interviewCreatedAt?: string | null;
+      applicationCreatedAt?: string | null;
+      applicationUpdatedAt?: string | null;
+      durationSec?: number | null;
+      prompt?: string | null;
     }
   | { error: string };
 
@@ -154,6 +159,64 @@ export default function AdminDashboard({
     return (await res.json()) as CreateResponse;
   }
 
+  function buildApplicationFromResponse(
+    data: CreateResponse & { url: string },
+    fallback?: Partial<ApplicationData>
+  ): ApplicationData {
+    const createdAt =
+      data.applicationCreatedAt ?? fallback?.createdAt ?? new Date().toISOString();
+    const updatedAt =
+      data.applicationUpdatedAt ?? fallback?.updatedAt ?? createdAt;
+    return {
+      applicationId: data.applicationId,
+      candidateName: data.candidateName ?? fallback?.candidateName ?? null,
+      notes: fallback?.notes ?? null,
+      createdAt,
+      updatedAt
+    };
+  }
+
+  function buildInterviewFromResponse(
+    data: CreateResponse & { url: string },
+    app: ApplicationData
+  ): InterviewRow {
+    return {
+      interviewId: data.interviewId,
+      applicationId: data.applicationId,
+      url: data.url,
+      status: "実施待ち",
+      decision: "undecided",
+      round: data.round,
+      applicationCandidateName: data.candidateName ?? app.candidateName,
+      applicationNotes: app.notes,
+      applicationCreatedAt: app.createdAt,
+      applicationUpdatedAt: app.updatedAt,
+      prompt: data.prompt ?? prompt,
+      durationSec: data.durationSec ?? getDefaultDurationSec(),
+      expiresAt: data.expiresAt ?? null,
+      createdAt: data.interviewCreatedAt ?? new Date().toISOString(),
+      hasRecording: false
+    };
+  }
+
+  function upsertApplication(app: ApplicationData) {
+    setApplications((prev) => {
+      if (prev.some((row) => row.applicationId === app.applicationId)) {
+        return prev;
+      }
+      return [app, ...prev];
+    });
+  }
+
+  function insertInterview(row: InterviewRow) {
+    setRows((prev) => {
+      if (prev.some((existing) => existing.interviewId === row.interviewId)) {
+        return prev;
+      }
+      return [row, ...prev];
+    });
+  }
+
   async function createInterview() {
     setCreateResult(null);
     const durationSec = getDefaultDurationSec();
@@ -168,6 +231,14 @@ export default function AdminDashboard({
     if (trimmedName) payload.candidateName = trimmedName;
     const data = await requestInterview(payload);
     setCreateResult(data);
+    if ("url" in data) {
+      const application = buildApplicationFromResponse(data, {
+        candidateName: trimmedName || null,
+        notes: null
+      });
+      upsertApplication(application);
+      insertInterview(buildInterviewFromResponse(data, application));
+    }
   }
 
   async function createInterviewForApplication(
@@ -194,6 +265,12 @@ export default function AdminDashboard({
       payload.round = overrides.round;
     }
     const data = await requestInterview(payload);
+    if ("url" in data) {
+      const existing = applications.find((row) => row.applicationId === applicationId);
+      const application = buildApplicationFromResponse(data, existing ?? undefined);
+      upsertApplication(application);
+      insertInterview(buildInterviewFromResponse(data, application));
+    }
     if (onResult) onResult(data);
     return data;
   }

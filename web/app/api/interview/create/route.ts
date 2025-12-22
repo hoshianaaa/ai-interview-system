@@ -63,6 +63,11 @@ export async function POST(req: Request) {
 
   let applicationId = applicationIdRaw;
   let applicationCandidateName = candidateName;
+  let applicationRecord: {
+    candidateName: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null = null;
   let round = 1;
 
   if (applicationId) {
@@ -73,6 +78,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "APPLICATION_NOT_FOUND" }, { status: 404 });
     }
     applicationCandidateName = application.candidateName ?? null;
+    applicationRecord = {
+      candidateName: application.candidateName ?? null,
+      createdAt: application.createdAt,
+      updatedAt: application.updatedAt
+    };
     const maxRound = await prisma.interview.aggregate({
       where: { applicationId },
       _max: { round: true }
@@ -80,13 +90,18 @@ export async function POST(req: Request) {
     round = roundOverride ?? (maxRound._max.round ?? 0) + 1;
   } else {
     applicationId = crypto.randomUUID();
-    await prisma.application.create({
+    const created = await prisma.application.create({
       data: {
         applicationId,
         orgId,
         candidateName: applicationCandidateName
       }
     });
+    applicationRecord = {
+      candidateName: created.candidateName ?? null,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt
+    };
   }
 
   const interview = await prisma.interview.create({
@@ -114,6 +129,11 @@ export async function POST(req: Request) {
     roomName,
     url,
     candidateName: applicationCandidateName ?? null,
-    expiresAt: interview.expiresAt?.toISOString() ?? null
+    expiresAt: interview.expiresAt?.toISOString() ?? null,
+    interviewCreatedAt: interview.createdAt.toISOString(),
+    applicationCreatedAt: applicationRecord?.createdAt.toISOString() ?? null,
+    applicationUpdatedAt: applicationRecord?.updatedAt.toISOString() ?? null,
+    durationSec: interview.durationSec,
+    prompt: interview.interviewPrompt ?? null
   });
 }
