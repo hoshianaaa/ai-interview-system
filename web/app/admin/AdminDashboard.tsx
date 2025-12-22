@@ -2145,7 +2145,8 @@ export default function AdminDashboard({
           min-height: 0;
         }
         .sidebar.collapsed .sidebar-header {
-          padding-right: 8px;
+          padding-right: 0;
+          justify-content: center;
         }
         .brand-button {
           border: none;
@@ -2160,7 +2161,10 @@ export default function AdminDashboard({
           text-align: left;
         }
         .sidebar.collapsed .brand-button {
+          width: auto;
           justify-content: center;
+          padding: 10px;
+          border-radius: 12px;
         }
         .brand-button:focus-visible {
           outline: 2px solid #1f4fb2;
@@ -2184,13 +2188,13 @@ export default function AdminDashboard({
         }
         .sidebar-resizer {
           position: absolute;
-          top: 0;
+          top: var(--header-row-height);
           right: -3px;
           width: 6px;
-          height: 100%;
+          height: calc(100% - var(--header-row-height));
           cursor: col-resize;
           background: transparent;
-          z-index: 5;
+          z-index: 1;
         }
         .sidebar-resizer::after {
           content: "";
@@ -2270,13 +2274,18 @@ export default function AdminDashboard({
           justify-content: center;
           padding: 10px;
         }
+        .sidebar.collapsed .brand-logo {
+          margin-left: 0;
+          margin-right: 0;
+          display: block;
+        }
         .collapse-button {
           display: flex;
           align-items: center;
           justify-content: center;
           position: absolute;
           top: calc((var(--header-row-height) - var(--collapse-button-size)) * 0.5);
-          right: -32px;
+          right: -36px;
           height: var(--collapse-button-size);
           width: var(--collapse-button-size);
           border-radius: 12px;
@@ -2286,7 +2295,7 @@ export default function AdminDashboard({
           font-size: 13px;
           color: #4b5c72;
           cursor: pointer;
-          z-index: 2;
+          z-index: 6;
         }
         .panel {
           display: block;
