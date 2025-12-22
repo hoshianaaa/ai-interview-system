@@ -1447,24 +1447,22 @@ export default function AdminDashboard({
             <section className="panel">
               <div className="card">
                 <h2>新規応募の追加</h2>
-                <div className="form-row form-row-inline">
-                  <div className="inline-pair">
-                    <label className="inline-label">候補者名：</label>
-                    <input
-                      value={newCandidateName}
-                      onChange={(e) => setNewCandidateName(e.target.value)}
-                      placeholder="例）山田 太郎"
-                    />
-                  </div>
-                  <div className="inline-pair">
-                    <label className="inline-label">メールアドレス：</label>
-                    <input
-                      type="email"
-                      value={newCandidateEmail}
-                      onChange={(e) => setNewCandidateEmail(e.target.value)}
-                      placeholder="example@example.com"
-                    />
-                  </div>
+                <div className="form-row">
+                  <label>候補者名</label>
+                  <input
+                    value={newCandidateName}
+                    onChange={(e) => setNewCandidateName(e.target.value)}
+                    placeholder="例）山田 太郎"
+                  />
+                </div>
+                <div className="form-row">
+                  <label>メールアドレス</label>
+                  <input
+                    type="email"
+                    value={newCandidateEmail}
+                    onChange={(e) => setNewCandidateEmail(e.target.value)}
+                    placeholder="example@example.com"
+                  />
                 </div>
                 <div className="form-row">
                   <label>面接時間（分）</label>
