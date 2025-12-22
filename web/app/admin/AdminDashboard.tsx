@@ -1546,7 +1546,7 @@ export default function AdminDashboard({
                     </button>
                   </div>
                 </div>
-                <div className="form-row">
+                <div className="form-row prompt-row">
                   <label>プロンプト</label>
                   <textarea
                     value={prompt}
@@ -2640,6 +2640,9 @@ export default function AdminDashboard({
           line-height: 1.4;
           background: #f8fafc;
           resize: vertical;
+        }
+        .prompt-row textarea {
+          min-height: 300px;
         }
         .template-controls {
           display: flex;
