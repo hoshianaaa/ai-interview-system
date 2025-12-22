@@ -1589,6 +1589,28 @@ export default function AdminDashboard({
                 <div className="detail-title">
                   <h2>応募詳細</h2>
                   {selectedApplication && (
+                    <div className="detail-title-fields">
+                      <div className="inline-pair">
+                        <label>候補者名：</label>
+                        <input
+                          value={editApplicationCandidateName}
+                          onChange={(e) => setEditApplicationCandidateName(e.target.value)}
+                          placeholder="候補者名を入力"
+                          disabled={savingApplication}
+                        />
+                      </div>
+                      <div className="inline-pair">
+                        <label>メールアドレス：</label>
+                        <input
+                          type="email"
+                          value={editApplicationEmail}
+                          onChange={(e) => setEditApplicationEmail(e.target.value)}
+                          placeholder="example@example.com"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {selectedApplication && (
                     <div className="detail-title-actions">
                       <span className="detail-caption">
                         応募作成:{" "}
@@ -1609,26 +1631,6 @@ export default function AdminDashboard({
                   <div className="empty">左の一覧から応募を選択してください</div>
                 ) : (
                   <div className="application-detail">
-                    <div className="detail-row detail-row-inline">
-                      <div className="inline-pair">
-                        <label>候補者名：</label>
-                        <input
-                          value={editApplicationCandidateName}
-                          onChange={(e) => setEditApplicationCandidateName(e.target.value)}
-                          placeholder="候補者名を入力"
-                          disabled={savingApplication}
-                        />
-                      </div>
-                      <div className="inline-pair">
-                        <label>メールアドレス：</label>
-                        <input
-                          type="email"
-                          value={editApplicationEmail}
-                          onChange={(e) => setEditApplicationEmail(e.target.value)}
-                          placeholder="example@example.com"
-                        />
-                      </div>
-                    </div>
                     {applicationInterviewResult && "error" in applicationInterviewResult && (
                       <p className="error">
                         作成に失敗しました: {applicationInterviewResult.error}
@@ -2641,14 +2643,26 @@ export default function AdminDashboard({
         .detail-title {
           display: flex;
           align-items: center;
-          justify-content: space-between;
           gap: 12px;
+          flex-wrap: wrap;
           margin-bottom: 12px;
+        }
+        .detail-title-fields {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1 1 520px;
+          min-width: 240px;
+        }
+        .detail-title-fields .inline-pair {
+          flex: 1 1 260px;
+          max-width: 360px;
         }
         .detail-title-actions {
           display: flex;
           align-items: center;
           gap: 12px;
+          margin-left: auto;
         }
         .detail-caption {
           font-size: 12px;
