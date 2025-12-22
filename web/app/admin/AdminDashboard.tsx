@@ -13,7 +13,7 @@ type InterviewRow = {
   status: string;
   decision: Decision;
   round: number;
-  candidateName: string | null;
+  applicationCandidateName: string | null;
   applicationCreatedAt: string;
   applicationUpdatedAt: string;
   prompt: string | null;
@@ -74,7 +74,7 @@ export default function AdminDashboard({
   const [expiresWeeks, setExpiresWeeks] = useState("1");
   const [expiresDays, setExpiresDays] = useState("0");
   const [expiresHours, setExpiresHours] = useState("0");
-  const [candidateName, setCandidateName] = useState("");
+  const [newCandidateName, setNewCandidateName] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [templates, setTemplates] = useState(
     promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
@@ -96,10 +96,11 @@ export default function AdminDashboard({
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [editCandidateName, setEditCandidateName] = useState("");
+  const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editDecision, setEditDecision] = useState<Decision>("undecided");
-  const [saving, setSaving] = useState(false);
+  const [savingInterview, setSavingInterview] = useState(false);
+  const [savingApplication, setSavingApplication] = useState(false);
 
   const hasResult = createResult && "url" in createResult;
 
@@ -120,7 +121,7 @@ export default function AdminDashboard({
     if (applicationId) {
       payload.applicationId = applicationId;
     } else {
-      const trimmedName = candidateName.trim();
+      const trimmedName = newCandidateName.trim();
       if (trimmedName) payload.candidateName = trimmedName;
     }
     const res = await fetch("/api/interview/create", {
@@ -356,55 +357,90 @@ export default function AdminDashboard({
     videoRef.current.currentTime = offsetMs / 1000;
   };
 
-  async function saveDetails() {
+  async function saveInterviewDetails() {
     if (!selectedRow) return;
-    setSaving(true);
+    setSavingInterview(true);
     try {
       const res = await fetch("/api/admin/interview/update", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           interviewId: selectedRow.interviewId,
-          candidateName: editCandidateName.trim(),
           notes: editNotes,
           decision: editDecision
         })
       });
       const data = (await res.json()) as {
         interviewId?: string;
-        candidateName?: string | null;
         notes?: string | null;
         decision?: Decision;
       };
       if (data.interviewId) {
         setRows((prev) =>
           prev.map((row) =>
-            row.applicationId === selectedRow.applicationId
-              ? row.interviewId === data.interviewId
-                ? {
-                    ...row,
-                    candidateName: data.candidateName ?? null,
-                    notes: data.notes ?? null,
-                    decision: data.decision ?? row.decision
-                  }
-                : { ...row, candidateName: data.candidateName ?? null }
+            row.interviewId === data.interviewId
+              ? {
+                  ...row,
+                  notes: data.notes ?? null,
+                  decision: data.decision ?? row.decision
+                }
               : row
           )
         );
-        setEditCandidateName(data.candidateName ?? "");
         setEditNotes(data.notes ?? "");
         setEditDecision(data.decision ?? editDecision);
       }
     } finally {
-      setSaving(false);
+      setSavingInterview(false);
     }
   }
 
-  function cancelEdit() {
+  async function saveApplicationDetails() {
+    if (!selectedApplication) return;
+    setSavingApplication(true);
+    const trimmedName = editApplicationCandidateName.trim();
+    try {
+      const res = await fetch("/api/admin/application/update", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          applicationId: selectedApplication.applicationId,
+          candidateName: trimmedName
+        })
+      });
+      const data = (await res.json()) as {
+        applicationId?: string;
+        candidateName?: string | null;
+        updatedAt?: string;
+      };
+      if (data.applicationId) {
+        setRows((prev) =>
+          prev.map((row) =>
+            row.applicationId === data.applicationId
+              ? {
+                  ...row,
+                  applicationCandidateName: data.candidateName ?? null,
+                  applicationUpdatedAt: data.updatedAt ?? row.applicationUpdatedAt
+                }
+              : row
+          )
+        );
+        setEditApplicationCandidateName(data.candidateName ?? "");
+      }
+    } finally {
+      setSavingApplication(false);
+    }
+  }
+
+  function cancelInterviewEdit() {
     if (!selectedRow) return;
-    setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
     setEditDecision(selectedRow.decision);
+  }
+
+  function cancelApplicationEdit() {
+    if (!selectedApplication) return;
+    setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
   }
 
   const sorted = useMemo(
@@ -419,7 +455,7 @@ export default function AdminDashboard({
       if (!existing) {
         grouped.set(row.applicationId, {
           applicationId: row.applicationId,
-          candidateName: row.candidateName ?? null,
+          candidateName: row.applicationCandidateName ?? null,
           createdAt: row.applicationCreatedAt,
           updatedAt: row.applicationUpdatedAt,
           interviewCount: 1,
@@ -432,8 +468,8 @@ export default function AdminDashboard({
       }
       existing.interviews.push(row);
       existing.interviewCount += 1;
-      if (!existing.candidateName && row.candidateName) {
-        existing.candidateName = row.candidateName;
+      if (!existing.candidateName && row.applicationCandidateName) {
+        existing.candidateName = row.applicationCandidateName;
       }
       if (row.round > existing.latestRound) {
         existing.latestRound = row.round;
@@ -480,11 +516,14 @@ export default function AdminDashboard({
     () => templates.find((row) => row.isDefault) ?? null,
     [templates]
   );
-  const isDirty =
+  const interviewDirty =
     Boolean(selectedRow) &&
-    (editCandidateName !== (selectedRow?.candidateName ?? "") ||
-      editNotes !== (selectedRow?.notes ?? "") ||
+    (editNotes !== (selectedRow?.notes ?? "") ||
       editDecision !== (selectedRow?.decision ?? "undecided"));
+  const normalizedApplicationName = editApplicationCandidateName.trim();
+  const applicationDirty =
+    Boolean(selectedApplication) &&
+    normalizedApplicationName !== (selectedApplication?.candidateName ?? "");
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
@@ -498,15 +537,21 @@ export default function AdminDashboard({
 
   useEffect(() => {
     if (!selectedRow) {
-      setEditCandidateName("");
       setEditNotes("");
       setEditDecision("undecided");
       return;
     }
-    setEditCandidateName(selectedRow.candidateName ?? "");
     setEditNotes(selectedRow.notes ?? "");
     setEditDecision(selectedRow.decision ?? "undecided");
   }, [selectedRow?.interviewId]);
+
+  useEffect(() => {
+    if (!selectedApplication) {
+      setEditApplicationCandidateName("");
+      return;
+    }
+    setEditApplicationCandidateName(selectedApplication.candidateName ?? "");
+  }, [selectedApplication?.applicationId]);
 
   useEffect(() => {
     if (!selectedApplication) {
@@ -555,12 +600,13 @@ export default function AdminDashboard({
       <section className="grid">
         <div className="stack">
           <div className="card">
-            <h2>新規面接URLの発行</h2>
+            <h2>新規応募の追加</h2>
+            <p className="helper">候補者名は応募に保存され、面接設定は1次面接に使われます。</p>
             <div className="form-row">
               <label>候補者名（任意）</label>
               <input
-                value={candidateName}
-                onChange={(e) => setCandidateName(e.target.value)}
+                value={newCandidateName}
+                onChange={(e) => setNewCandidateName(e.target.value)}
                 placeholder="例）山田 太郎"
               />
             </div>
@@ -656,7 +702,7 @@ export default function AdminDashboard({
               />
             </div>
             <button className="primary" onClick={() => void createInterview()}>
-              URLを発行
+              応募を追加
             </button>
             {createResult && "error" in createResult && (
               <p className="error">作成に失敗しました: {createResult.error}</p>
@@ -844,10 +890,33 @@ export default function AdminDashboard({
             <div className="application-detail">
               <div className="detail-row">
                 <label>候補者名</label>
-                <div className="detail-value">
-                  {selectedApplication.candidateName ?? "未設定"}
-                </div>
+                <input
+                  value={editApplicationCandidateName}
+                  onChange={(e) => setEditApplicationCandidateName(e.target.value)}
+                  placeholder="候補者名を入力"
+                  disabled={savingApplication}
+                />
               </div>
+              {applicationDirty && (
+                <div className="detail-actions">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={cancelApplicationEdit}
+                    disabled={savingApplication}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    className="primary"
+                    type="button"
+                    onClick={() => void saveApplicationDetails()}
+                    disabled={savingApplication}
+                  >
+                    {savingApplication ? "保存中..." : "応募を保存"}
+                  </button>
+                </div>
+              )}
               <div className="detail-row">
                 <label>応募ID</label>
                 <div className="detail-value mono">{selectedApplication.applicationId}</div>
@@ -910,19 +979,11 @@ export default function AdminDashboard({
                   <div className="detail-header">
                     <div>
                       <div className="detail-row">
-                        <label>候補者名</label>
-                        <input
-                          value={editCandidateName}
-                          onChange={(e) => setEditCandidateName(e.target.value)}
-                          placeholder="候補者名を入力"
-                        />
-                      </div>
-                      <div className="detail-row">
                         <label>判定</label>
                         <select
                           value={editDecision}
                           onChange={(e) => setEditDecision(e.target.value as Decision)}
-                          disabled={saving}
+                          disabled={savingInterview}
                         >
                           {(["undecided", "pass", "fail", "hold"] as const).map((value) => (
                             <option key={value} value={value}>
@@ -1012,13 +1073,21 @@ export default function AdminDashboard({
                     <summary>プロンプトを見る</summary>
                     <textarea value={selectedRow.prompt ?? ""} readOnly />
                   </details>
-                  {isDirty && (
+                  {interviewDirty && (
                     <div className="edit-actions">
-                      <button className="ghost" onClick={cancelEdit} disabled={saving}>
+                      <button
+                        className="ghost"
+                        onClick={cancelInterviewEdit}
+                        disabled={savingInterview}
+                      >
                         キャンセル
                       </button>
-                      <button className="primary" onClick={() => void saveDetails()} disabled={saving}>
-                        {saving ? "保存中..." : "変更を保存"}
+                      <button
+                        className="primary"
+                        onClick={() => void saveInterviewDetails()}
+                        disabled={savingInterview}
+                      >
+                        {savingInterview ? "保存中..." : "変更を保存"}
                       </button>
                     </div>
                   )}

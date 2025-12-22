@@ -33,7 +33,7 @@ export default async function HomePage() {
     ),
     decision: row.decision,
     round: row.round,
-    candidateName: row.application?.candidateName ?? null,
+    applicationCandidateName: row.application?.candidateName ?? null,
     applicationCreatedAt: row.application?.createdAt
       ? row.application.createdAt.toISOString()
       : row.createdAt.toISOString(),

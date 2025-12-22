@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-const MAX_CANDIDATE_NAME = 80;
 const MAX_NOTES_CHARS = 4000;
 
 export async function PATCH(req: Request) {
@@ -15,8 +14,6 @@ export async function PATCH(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const interviewId = typeof body.interviewId === "string" ? body.interviewId.trim() : "";
-  const candidateNameRaw =
-    typeof body.candidateName === "string" ? body.candidateName.trim() : "";
   const notesRaw = typeof body.notes === "string" ? body.notes.trim() : "";
   const decisionRaw = typeof body.decision === "string" ? body.decision.trim() : "";
 
@@ -24,15 +21,9 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
   }
 
-  const interview = await prisma.interview.findFirst({
-    where: { interviewId, orgId },
-    include: { application: true }
-  });
+  const interview = await prisma.interview.findFirst({ where: { interviewId, orgId } });
   if (!interview) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-  if (candidateNameRaw && candidateNameRaw.length > MAX_CANDIDATE_NAME) {
-    return NextResponse.json({ error: "CANDIDATE_NAME_TOO_LONG" }, { status: 400 });
   }
   if (notesRaw && notesRaw.length > MAX_NOTES_CHARS) {
     return NextResponse.json({ error: "NOTES_TOO_LONG" }, { status: 400 });
@@ -49,26 +40,17 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "INVALID_DECISION" }, { status: 400 });
   }
 
-  const candidateName = candidateNameRaw ? candidateNameRaw : null;
-  const updated = await prisma.$transaction(async (tx) => {
-    const updatedInterview = await tx.interview.update({
-      where: { interviewId },
-      data: {
-        interviewNotes: notesRaw ? notesRaw : null,
-        ...(decision ? { decision } : {})
-      }
-    });
-    const updatedApplication = await tx.application.update({
-      where: { applicationId: interview.applicationId },
-      data: { candidateName }
-    });
-    return { updatedInterview, updatedApplication };
+  const updated = await prisma.interview.update({
+    where: { interviewId },
+    data: {
+      interviewNotes: notesRaw ? notesRaw : null,
+      ...(decision ? { decision } : {})
+    }
   });
 
   return NextResponse.json({
-    interviewId: updated.updatedInterview.interviewId,
-    candidateName: updated.updatedApplication.candidateName ?? null,
-    notes: updated.updatedInterview.interviewNotes ?? null,
-    decision: updated.updatedInterview.decision
+    interviewId: updated.interviewId,
+    notes: updated.interviewNotes ?? null,
+    decision: updated.decision
   });
 }
