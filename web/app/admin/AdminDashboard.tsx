@@ -2925,7 +2925,7 @@ export default function AdminDashboard({
           border-radius: 12px;
           border: 1px dashed #c2cde1;
           background: #f7f9fc;
-          min-height: 240px;
+          min-height: 360px;
           display: grid;
           place-items: center;
           color: #6b7a90;
@@ -2938,7 +2938,7 @@ export default function AdminDashboard({
         .video {
           display: flex;
           align-items: stretch;
-          min-height: 240px;
+          min-height: 360px;
         }
         .media {
           display: flex;
