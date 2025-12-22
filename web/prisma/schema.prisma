@@ -105,3 +105,13 @@ model PromptTemplate {
   @@index([orgId])
   @@unique([orgId, name])
 }
+
+model OrgSetting {
+  orgId               String   @id
+  defaultDurationMin  Int      @default(10)
+  defaultExpiresWeeks Int      @default(1)
+  defaultExpiresDays  Int      @default(0)
+  defaultExpiresHours Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

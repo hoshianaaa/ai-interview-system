@@ -61,6 +61,13 @@ type PromptTemplate = {
   createdAt: string;
 };
 
+type OrgSettings = {
+  defaultDurationMin: number;
+  defaultExpiresWeeks: number;
+  defaultExpiresDays: number;
+  defaultExpiresHours: number;
+};
+
 type CreateResponse =
   | {
       interviewId: string;
@@ -86,25 +93,38 @@ const DEFAULT_EXPIRES_WEEKS = 1;
 export default function AdminDashboard({
   interviews,
   applications: initialApplications,
-  promptTemplates
+  promptTemplates,
+  settings
 }: {
   interviews: InterviewRow[];
   applications: ApplicationData[];
   promptTemplates: PromptTemplate[];
+  settings: OrgSettings;
 }) {
   const [rows, setRows] = useState(interviews);
   const [applications, setApplications] = useState(initialApplications);
-  const [durationMinInput, setDurationMinInput] = useState("10");
-  const [expiresWeeks, setExpiresWeeks] = useState("1");
-  const [expiresDays, setExpiresDays] = useState("0");
-  const [expiresHours, setExpiresHours] = useState("0");
+  const [orgSettings, setOrgSettings] = useState(settings);
+  const [durationMinInput, setDurationMinInput] = useState(
+    String(settings.defaultDurationMin)
+  );
+  const [expiresWeeks, setExpiresWeeks] = useState(
+    String(settings.defaultExpiresWeeks)
+  );
+  const [expiresDays, setExpiresDays] = useState(
+    String(settings.defaultExpiresDays)
+  );
+  const [expiresHours, setExpiresHours] = useState(
+    String(settings.defaultExpiresHours)
+  );
   const [newCandidateName, setNewCandidateName] = useState("");
   const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
   const [templates, setTemplates] = useState(
     promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [detailMode, setDetailMode] = useState<"templates" | "application">("application");
+  const [detailMode, setDetailMode] = useState<"settings" | "application">(
+    "application"
+  );
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
   const [templateEditBody, setTemplateEditBody] = useState(DEFAULT_INTERVIEW_PROMPT);
@@ -136,17 +156,45 @@ export default function AdminDashboard({
     useState<CreateResponse | null>(null);
   const [deletingInterview, setDeletingInterview] = useState(false);
   const [deletingApplication, setDeletingApplication] = useState(false);
+  const [settingsDurationMin, setSettingsDurationMin] = useState(
+    String(settings.defaultDurationMin)
+  );
+  const [settingsExpiresWeeks, setSettingsExpiresWeeks] = useState(
+    String(settings.defaultExpiresWeeks)
+  );
+  const [settingsExpiresDays, setSettingsExpiresDays] = useState(
+    String(settings.defaultExpiresDays)
+  );
+  const [settingsExpiresHours, setSettingsExpiresHours] = useState(
+    String(settings.defaultExpiresHours)
+  );
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const hasResult = createResult && "url" in createResult;
   const hasReissueResult = reissueResult && "url" in reissueResult;
   const hasApplicationInterviewResult =
     applicationInterviewResult && "url" in applicationInterviewResult;
 
+  const normalizeDurationMin = (value: string, fallback: number) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    const normalized = Math.floor(parsed);
+    return Math.min(30, Math.max(1, normalized));
+  };
+
+  const parseExpiryPart = (value: string, max: number) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    const normalized = Math.floor(parsed);
+    return Math.min(max, Math.max(0, normalized));
+  };
+
   const getDefaultDurationSec = () => {
-    const parsedMin = Number(durationMinInput);
-    const fallbackMin = 10;
-    const normalizedMin = Number.isFinite(parsedMin) ? parsedMin : fallbackMin;
-    const clampedMin = Math.min(30, Math.max(1, normalizedMin));
+    const clampedMin = normalizeDurationMin(
+      durationMinInput,
+      orgSettings.defaultDurationMin
+    );
     return Math.round(clampedMin * 60);
   };
 
@@ -394,6 +442,57 @@ export default function AdminDashboard({
     } finally {
       setTemplateEditSaving(false);
     }
+  }
+
+  async function saveSettings() {
+    setSettingsSaving(true);
+    setSettingsError(null);
+    let defaultExpiresWeeks = parseExpiryPart(settingsExpiresWeeks, MAX_EXPIRES_WEEKS);
+    let defaultExpiresDays = parseExpiryPart(settingsExpiresDays, MAX_EXPIRES_DAYS);
+    let defaultExpiresHours = parseExpiryPart(settingsExpiresHours, MAX_EXPIRES_HOURS);
+    if (defaultExpiresWeeks + defaultExpiresDays + defaultExpiresHours === 0) {
+      defaultExpiresWeeks = DEFAULT_EXPIRES_WEEKS;
+    }
+    const payload = {
+      defaultDurationMin: normalizeDurationMin(
+        settingsDurationMin,
+        orgSettings.defaultDurationMin
+      ),
+      defaultExpiresWeeks,
+      defaultExpiresDays,
+      defaultExpiresHours
+    };
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = (await res.json()) as { settings?: OrgSettings; error?: string };
+      if (!res.ok || !data.settings) {
+        setSettingsError("保存に失敗しました");
+        return;
+      }
+      setOrgSettings(data.settings);
+      setSettingsDurationMin(String(data.settings.defaultDurationMin));
+      setSettingsExpiresWeeks(String(data.settings.defaultExpiresWeeks));
+      setSettingsExpiresDays(String(data.settings.defaultExpiresDays));
+      setSettingsExpiresHours(String(data.settings.defaultExpiresHours));
+      setDurationMinInput(String(data.settings.defaultDurationMin));
+      setExpiresWeeks(String(data.settings.defaultExpiresWeeks));
+      setExpiresDays(String(data.settings.defaultExpiresDays));
+      setExpiresHours(String(data.settings.defaultExpiresHours));
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  function resetSettings() {
+    setSettingsError(null);
+    setSettingsDurationMin(String(orgSettings.defaultDurationMin));
+    setSettingsExpiresWeeks(String(orgSettings.defaultExpiresWeeks));
+    setSettingsExpiresDays(String(orgSettings.defaultExpiresDays));
+    setSettingsExpiresHours(String(orgSettings.defaultExpiresHours));
   }
 
   function resetTemplateEditor() {
@@ -806,6 +905,11 @@ export default function AdminDashboard({
   const canSaveTemplate =
     Boolean(templateEditName.trim() && templateEditBody.trim()) &&
     (selectedTemplate ? templateDirty : true);
+  const settingsDirty =
+    settingsDurationMin !== String(orgSettings.defaultDurationMin) ||
+    settingsExpiresWeeks !== String(orgSettings.defaultExpiresWeeks) ||
+    settingsExpiresDays !== String(orgSettings.defaultExpiresDays) ||
+    settingsExpiresHours !== String(orgSettings.defaultExpiresHours);
 
   useEffect(() => {
     if (!selectedRow) {
@@ -954,7 +1058,7 @@ export default function AdminDashboard({
                   ))}
                 </select>
               </div>
-              <p className="helper">デフォルトは1週間です。</p>
+              <p className="helper">デフォルトは設定で変更できます。</p>
             </div>
             <div className="form-row">
               <label>テンプレート</label>
@@ -1026,18 +1130,6 @@ export default function AdminDashboard({
             )}
           </div>
 
-          <div className="card template-card">
-            <h2>プロンプトテンプレート</h2>
-            <p className="helper">面接で使うプロンプトのテンプレートを管理します。</p>
-            <button
-              className="ghost"
-              type="button"
-              onClick={() => setDetailMode("templates")}
-            >
-              プロンプトテンプレート編集
-            </button>
-          </div>
-
           <div className="card list-card">
             <div className="list-header">
               <h2>応募一覧</h2>
@@ -1081,97 +1173,189 @@ export default function AdminDashboard({
               </div>
             )}
           </div>
+
+          <div className="card settings-card">
+            <h2>設定</h2>
+            <p className="helper">面接のデフォルト設定とテンプレートを管理します。</p>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => setDetailMode("settings")}
+            >
+              設定を開く
+            </button>
+          </div>
         </div>
 
         <div className="card detail-card">
           <div className="detail-title">
             <h2>
-              {detailMode === "templates"
-                ? "プロンプトテンプレート編集"
-                : "応募詳細"}
+              {detailMode === "settings" ? "設定" : "応募詳細"}
             </h2>
           </div>
-          {detailMode === "templates" ? (
-            <div className="template-editor">
-              <div className="form-row">
-                <label>テンプレート一覧</label>
-                <div className="template-controls">
-                <select
-                  value={templateEditorId}
-                  onChange={(e) => selectTemplateForEdit(e.target.value)}
-                >
-                  <option value="">新規テンプレート</option>
-                  {templates.map((template) => (
-                    <option key={template.templateId} value={template.templateId}>
-                      {template.name}
-                      {template.isDefault ? "（デフォルト）" : ""}
-                    </option>
-                  ))}
-                </select>
-                <button
-                    className="ghost"
-                    onClick={() => void reloadTemplates()}
-                    type="button"
-                    disabled={templateLoading}
+          {detailMode === "settings" ? (
+            <div className="settings">
+              <div className="settings-section">
+                <h3>デフォルト面接設定</h3>
+                <div className="form-row">
+                  <label>面接時間（分）</label>
+                  <select
+                    value={settingsDurationMin}
+                    onChange={(e) => setSettingsDurationMin(e.target.value)}
                   >
-                    {templateLoading ? "取得中..." : "再読み込み"}
+                    {Array.from({ length: 30 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        {i + 1}分
+                      </option>
+                    ))}
+                  </select>
+                  <p className="helper">1〜30分の範囲で指定できます。</p>
+                </div>
+                <div className="form-row">
+                  <label>URL有効期限</label>
+                  <div className="expiry-grid">
+                    <select
+                      value={settingsExpiresWeeks}
+                      onChange={(e) => setSettingsExpiresWeeks(e.target.value)}
+                      aria-label="有効期限の週"
+                    >
+                      {Array.from({ length: MAX_EXPIRES_WEEKS + 1 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}週
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={settingsExpiresDays}
+                      onChange={(e) => setSettingsExpiresDays(e.target.value)}
+                      aria-label="有効期限の日"
+                    >
+                      {Array.from({ length: MAX_EXPIRES_DAYS + 1 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}日
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={settingsExpiresHours}
+                      onChange={(e) => setSettingsExpiresHours(e.target.value)}
+                      aria-label="有効期限の時間"
+                    >
+                      {Array.from({ length: MAX_EXPIRES_HOURS + 1 }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i}時間
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="helper">新規応募/面接作成時の初期値に反映されます。</p>
+                </div>
+                {settingsError && <p className="error">{settingsError}</p>}
+                <div className="edit-actions">
+                  <button
+                    className="ghost"
+                    onClick={resetSettings}
+                    disabled={!settingsDirty || settingsSaving}
+                  >
+                    リセット
+                  </button>
+                  <button
+                    className="primary"
+                    onClick={() => void saveSettings()}
+                    disabled={!settingsDirty || settingsSaving}
+                  >
+                    {settingsSaving ? "保存中..." : "保存"}
                   </button>
                 </div>
-                <p className="helper">テンプレートの作成・編集・削除ができます。</p>
               </div>
-              <div className="form-row">
-                <label>テンプレート名</label>
-                <input
-                  value={templateEditName}
-                  onChange={(e) => setTemplateEditName(e.target.value)}
-                  placeholder="例）PM候補者向け"
-                />
+              <div className="settings-section">
+                <h3>プロンプトテンプレート</h3>
+                <div className="template-editor">
+                  <div className="form-row">
+                    <label>テンプレート一覧</label>
+                    <div className="template-controls">
+                      <select
+                        value={templateEditorId}
+                        onChange={(e) => selectTemplateForEdit(e.target.value)}
+                      >
+                        <option value="">新規テンプレート</option>
+                        {templates.map((template) => (
+                          <option key={template.templateId} value={template.templateId}>
+                            {template.name}
+                            {template.isDefault ? "（デフォルト）" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="ghost"
+                        onClick={() => void reloadTemplates()}
+                        type="button"
+                        disabled={templateLoading}
+                      >
+                        {templateLoading ? "取得中..." : "再読み込み"}
+                      </button>
+                    </div>
+                    <p className="helper">テンプレートの作成・編集・削除ができます。</p>
+                  </div>
+                  <div className="form-row">
+                    <label>テンプレート名</label>
+                    <input
+                      value={templateEditName}
+                      onChange={(e) => setTemplateEditName(e.target.value)}
+                      placeholder="例）PM候補者向け"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>本文</label>
+                    <textarea
+                      value={templateEditBody}
+                      onChange={(e) => setTemplateEditBody(e.target.value)}
+                      placeholder="テンプレート本文を入力してください"
+                    />
+                  </div>
+                  <div className="form-row">
+                    <label>デフォルト設定</label>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={templateEditDefault}
+                        onChange={(e) => setTemplateEditDefault(e.target.checked)}
+                      />
+                      <span>このテンプレートをデフォルトにする</span>
+                    </label>
+                    <p className="helper">
+                      新規面接の初期プロンプトに自動反映されます。
+                    </p>
+                  </div>
+                  {templateEditError && <p className="error">{templateEditError}</p>}
+                  <div className="edit-actions">
+                    <button
+                      className="ghost"
+                      onClick={resetTemplateEditor}
+                      disabled={templateEditSaving}
+                    >
+                      リセット
+                    </button>
+                    <button
+                      className="primary"
+                      onClick={() => void saveTemplate()}
+                      disabled={!canSaveTemplate || templateEditSaving}
+                    >
+                      {templateEditSaving ? "保存中..." : "保存"}
+                    </button>
+                  </div>
+                  {templateEditorId && (
+                    <button
+                      className="danger"
+                      type="button"
+                      onClick={() => void deleteTemplate()}
+                      disabled={templateEditSaving}
+                    >
+                      テンプレートを削除
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="form-row">
-                <label>本文</label>
-                <textarea
-                  value={templateEditBody}
-                  onChange={(e) => setTemplateEditBody(e.target.value)}
-                  placeholder="テンプレート本文を入力してください"
-                />
-              </div>
-              <div className="form-row">
-                <label>デフォルト設定</label>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={templateEditDefault}
-                    onChange={(e) => setTemplateEditDefault(e.target.checked)}
-                  />
-                  <span>このテンプレートをデフォルトにする</span>
-                </label>
-                <p className="helper">
-                  新規面接の初期プロンプトに自動反映されます。
-                </p>
-              </div>
-              {templateEditError && <p className="error">{templateEditError}</p>}
-              <div className="edit-actions">
-                <button className="ghost" onClick={resetTemplateEditor} disabled={templateEditSaving}>
-                  リセット
-                </button>
-                <button
-                  className="primary"
-                  onClick={() => void saveTemplate()}
-                  disabled={!canSaveTemplate || templateEditSaving}
-                >
-                  {templateEditSaving ? "保存中..." : "保存"}
-                </button>
-              </div>
-              {templateEditorId && (
-                <button
-                  className="danger"
-                  type="button"
-                  onClick={() => void deleteTemplate()}
-                  disabled={templateEditSaving}
-                >
-                  テンプレートを削除
-                </button>
-              )}
             </div>
           ) : !selectedApplication ? (
             <div className="empty">左の一覧から応募を選択してください</div>
@@ -1704,12 +1888,29 @@ export default function AdminDashboard({
         .detail-title h2 {
           margin: 0;
         }
-        .template-card {
+        .settings-card {
           display: grid;
           gap: 10px;
         }
-        .template-card .ghost {
+        .settings-card .ghost {
           width: 100%;
+        }
+        .settings {
+          display: grid;
+          gap: 20px;
+        }
+        .settings-section {
+          padding: 16px;
+          border-radius: 12px;
+          border: 1px solid #d8e1f0;
+          background: #f8fafc;
+          display: grid;
+          gap: 12px;
+        }
+        .settings-section h3 {
+          margin: 0;
+          font-size: 15px;
+          color: #1f2f44;
         }
         .template-editor {
           display: grid;

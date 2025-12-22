@@ -28,6 +28,9 @@ export default async function HomePage() {
     where: { orgId },
     orderBy: { createdAt: "desc" }
   });
+  const settings = await prisma.orgSetting.findUnique({
+    where: { orgId }
+  });
   const now = new Date();
   const data = interviews.map((row) => ({
     interviewId: row.interviewId,
@@ -67,12 +70,19 @@ export default async function HomePage() {
     isDefault: row.isDefault,
     createdAt: row.createdAt.toISOString()
   }));
+  const settingsData = {
+    defaultDurationMin: settings?.defaultDurationMin ?? 10,
+    defaultExpiresWeeks: settings?.defaultExpiresWeeks ?? 1,
+    defaultExpiresDays: settings?.defaultExpiresDays ?? 0,
+    defaultExpiresHours: settings?.defaultExpiresHours ?? 0
+  };
 
   return (
     <AdminDashboard
       interviews={data}
       applications={applicationData}
       promptTemplates={templateData}
+      settings={settingsData}
     />
   );
 }
