@@ -1496,12 +1496,14 @@ export default function AdminDashboard({
               {selectedRow ? (
                 <div className="interview-detail">
                   <div className="interview-top-row">
-                    <div className="interview-url">
-                      面接URL:{" "}
-                      <a href={selectedRow.url} target="_blank" rel="noreferrer">
-                        {selectedRow.url}
-                      </a>
-                    </div>
+                    {isDecisionLocked && (
+                      <div className="interview-url">
+                        面接URL:{" "}
+                        <a href={selectedRow.url} target="_blank" rel="noreferrer">
+                          {selectedRow.url}
+                        </a>
+                      </div>
+                    )}
                     {!isDecisionLocked && (
                       <div className="decision-select">
                         <label>判定</label>
@@ -1772,6 +1774,7 @@ export default function AdminDashboard({
           flex-direction: column;
           gap: 6px;
           min-width: 140px;
+          margin-left: auto;
         }
         .decision-select label {
           font-size: 12px;
