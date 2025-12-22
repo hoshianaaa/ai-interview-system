@@ -2468,9 +2468,9 @@ export default function AdminDashboard({
           display: flex;
           align-items: center;
           gap: 8px;
-          flex: 0 1 320px;
-          max-width: 360px;
-          min-width: 0;
+          flex: 1 1 320px;
+          max-width: 420px;
+          min-width: 220px;
         }
         .inline-pair label,
         .form-row-inline .inline-label {
