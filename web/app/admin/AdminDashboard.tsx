@@ -869,42 +869,40 @@ export default function AdminDashboard({
               </div>
               <div className="application-interviews">
                 <div className="section-title">面接一覧</div>
-                {selectedApplication.interviews
-                  .slice()
-                  .sort((a, b) => a.round - b.round)
-                  .map((row) => (
-                    <div
-                      key={row.interviewId}
-                      className={`row application-row ${selectedId === row.interviewId ? "selected" : ""}`}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => void loadVideo(row)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          void loadVideo(row);
-                        }
+                {selectedApplication.interviews.length === 0 ? (
+                  <div className="empty">面接がありません</div>
+                ) : (
+                  <div className="form-row">
+                    <label>面接を選択</label>
+                    <select
+                      value={selectedRow?.interviewId ?? ""}
+                      onChange={(e) => {
+                        const interviewId = e.target.value;
+                        const next = selectedApplication.interviews.find(
+                          (row) => row.interviewId === interviewId
+                        );
+                        if (next) void loadVideo(next);
                       }}
                     >
-                      <div>
-                        <div className="title-row">
-                          <div className="title">第{row.round}次</div>
-                          <span className={`decision-tag ${row.decision}`}>
-                            {decisionLabel(row.decision)}
-                          </span>
-                        </div>
-                        <div className="meta">
-                          ステータス: {row.status} / 作成:{" "}
-                          {new Date(row.createdAt).toLocaleString("ja-JP")}
-                        </div>
-                        <div className="meta">
-                          <a href={row.url} target="_blank" rel="noreferrer">
-                            {row.url}
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      <option value="" disabled>
+                        面接を選択してください
+                      </option>
+                      {selectedApplication.interviews
+                        .slice()
+                        .sort((a, b) => {
+                          if (a.round !== b.round) return b.round - a.round;
+                          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                        })
+                        .map((row) => (
+                          <option key={row.interviewId} value={row.interviewId}>
+                            第{row.round}次（{decisionLabel(row.decision)}）{" "}
+                            {new Date(row.createdAt).toLocaleString("ja-JP")}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="helper">最新の面接が初期選択されます。</p>
+                  </div>
+                )}
               </div>
               <div className="section-title">面接詳細</div>
               {selectedRow ? (
@@ -1384,9 +1382,6 @@ export default function AdminDashboard({
           font-size: 13px;
           font-weight: 600;
           color: #1f2f44;
-        }
-        .application-row {
-          background: #f8fafc;
         }
         .ghost:disabled {
           color: #8a97ab;
