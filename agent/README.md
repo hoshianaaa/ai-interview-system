@@ -12,4 +12,19 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
+```
 
+## Env
+`.env.local` を用意します（`agent/.env.local.example` を参照）。
+
+```bash
+cp .env.local.example .env.local
+```
+
+## Run
+```bash
+python app.py start
+```
+
+## Deploy (Fly.io)
+`agent/DEPLOY_FLY.md` を参照してください。

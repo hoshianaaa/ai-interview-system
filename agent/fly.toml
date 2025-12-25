@@ -1,0 +1,16 @@
+app = "ai-interview-agent"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  AGENT_HTTP_PORT = "8081"
+
+[processes]
+  app = "python app.py start"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
