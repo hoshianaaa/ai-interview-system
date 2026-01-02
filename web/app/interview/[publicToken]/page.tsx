@@ -21,7 +21,9 @@ type JoinResponse = JoinSuccessResponse | { error: string };
 const isJoinSuccess = (value: JoinResponse | null): value is JoinSuccessResponse =>
   Boolean(value && "token" in value && "livekitUrl" in value);
 
-type StreamUploadResponse = { uploadUrl: string; uid: string } | { error: string };
+type StreamUploadResponse =
+  | { uploadUrl: string; uid: string; uploadFileName?: string }
+  | { error: string };
 
 type ChatMessage = {
   id: string;
@@ -43,9 +45,9 @@ const pickRecorderMimeType = () => {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 };
 
-async function uploadToStream(uploadUrl: string, blob: Blob) {
+async function uploadToStream(uploadUrl: string, blob: Blob, fileName = "interview.webm") {
   const form = new FormData();
-  form.append("file", blob, "interview.webm");
+  form.append("file", blob, fileName);
   const res = await fetch(uploadUrl, { method: "POST", body: form });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -866,7 +868,7 @@ function InterviewCanvas({ publicToken }: { publicToken: string }) {
             if (!res.ok || "error" in data || !data.uploadUrl) {
               throw new Error("UPLOAD_URL_FAILED");
             }
-            await uploadToStream(data.uploadUrl, blob);
+            await uploadToStream(data.uploadUrl, blob, data.uploadFileName ?? "interview.webm");
           } catch (err) {
             console.error("[stream] upload failed", err);
           } finally {

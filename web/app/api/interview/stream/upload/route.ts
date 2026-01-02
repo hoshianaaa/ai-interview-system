@@ -6,6 +6,11 @@ export const runtime = "nodejs";
 
 const MAX_TOKEN_LENGTH = 128;
 
+const sanitizePart = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+const formatTimestamp = (value: Date) =>
+  value.toISOString().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "_");
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const publicToken = typeof body.publicToken === "string" ? body.publicToken.trim() : "";
@@ -28,11 +33,18 @@ export async function POST(req: Request) {
   }
   if (!interview) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  const orgId = interview.orgId ?? "unknown";
+  const recordedAt = interview.recordingStartedAt ?? new Date();
+  const uploadFileName = `org_${sanitizePart(orgId)}_interview_${sanitizePart(
+    interview.interviewId
+  )}_${formatTimestamp(recordedAt)}.webm`;
+
   const result = await createStreamDirectUpload({
     metadata: {
       interviewId: interview.interviewId,
       roomName: interview.roomName,
-      orgId: interview.orgId ?? "unknown"
+      orgId,
+      uploadFileName
     },
     maxDurationSeconds: Math.max(interview.durationSec, 600) + 600
   });
@@ -46,5 +58,5 @@ export async function POST(req: Request) {
     }
   });
 
-  return NextResponse.json({ uploadUrl: result.uploadURL, uid: result.uid });
+  return NextResponse.json({ uploadUrl: result.uploadURL, uid: result.uid, uploadFileName });
 }
