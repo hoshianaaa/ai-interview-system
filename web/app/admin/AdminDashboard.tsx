@@ -2056,13 +2056,6 @@ export default function AdminDashboard({
                                       ? "動画を準備中..."
                                       : "動画をダウンロード"}
                                   </button>
-                                  {downloadStatus === "inprogress" && (
-                                    <span className="meta">
-                                      {downloadPercent !== null
-                                        ? `準備中 ${Math.round(downloadPercent)}%`
-                                        : "準備中"}
-                                    </span>
-                                  )}
                                 </div>
                                 {downloadError && <p className="error">{downloadError}</p>}
                               </>
