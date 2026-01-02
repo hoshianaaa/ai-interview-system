@@ -2047,14 +2047,18 @@ export default function AdminDashboard({
                               <>
                                 <div className="detail-actions align-right">
                                   <button
-                                    className="ghost"
+                                    className={`ghost ${
+                                      downloadStatus === "inprogress" ? "loading" : ""
+                                    }`}
                                     type="button"
                                     onClick={() => void startDownload(selectedRow.interviewId)}
                                     disabled={downloadStatus === "inprogress"}
+                                    aria-busy={downloadStatus === "inprogress"}
                                   >
-                                    {downloadStatus === "inprogress"
-                                      ? "動画を準備中..."
-                                      : "動画をダウンロード"}
+                                    {downloadStatus === "inprogress" && (
+                                      <span className="spinner" aria-hidden="true" />
+                                    )}
+                                    <span>動画をダウンロード</span>
                                   </button>
                                 </div>
                                 {downloadError && <p className="error">{downloadError}</p>}
@@ -3094,6 +3098,24 @@ export default function AdminDashboard({
           font-weight: 600;
           text-decoration: none;
           cursor: pointer;
+        }
+        .ghost.loading {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .spinner {
+          width: 14px;
+          height: 14px;
+          border-radius: 999px;
+          border: 2px solid rgba(31, 79, 178, 0.25);
+          border-top-color: #1f4fb2;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
         }
         .detail-actions {
           margin-top: 10px;
