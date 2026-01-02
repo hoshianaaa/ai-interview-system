@@ -83,3 +83,16 @@ export function buildStreamPlaybackUrl(uid: string, expiresInSeconds = 3600) {
   const token = signPlaybackToken(uid, expiresInSeconds);
   return token ? `${base}?token=${token}` : base;
 }
+
+export function buildStreamThumbnailUrl(
+  uid: string,
+  options: { timeSec?: number; expiresInSeconds?: number; width?: number; height?: number } = {}
+) {
+  const timeSec = options.timeSec ?? 1;
+  const params = new URLSearchParams({ time: String(timeSec) });
+  if (options.width) params.set("width", String(options.width));
+  if (options.height) params.set("height", String(options.height));
+  const token = signPlaybackToken(uid, options.expiresInSeconds ?? 3600);
+  if (token) params.set("token", token);
+  return `${streamEnv.playbackBaseUrl}/${uid}/thumbnails/thumbnail.jpg?${params.toString()}`;
+}

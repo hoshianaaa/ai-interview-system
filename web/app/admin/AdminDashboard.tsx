@@ -144,12 +144,19 @@ export default function AdminDashboard({
   const [createResult, setCreateResult] = useState<CreateResponse | null>(null);
   const [loadingVideoId, setLoadingVideoId] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [selectedThumbnailUrl, setSelectedThumbnailUrl] = useState<string | null>(null);
+  const [loadingPlayback, setLoadingPlayback] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const loadVideoIdRef = useRef<string | null>(null);
+  const playbackRequestIdRef = useRef<string | null>(null);
+  const autoPlayRef = useRef(false);
   const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
   const [editApplicationEmail, setEditApplicationEmail] = useState("");
   const [editApplicationNotes, setEditApplicationNotes] = useState("");
@@ -586,31 +593,73 @@ export default function AdminDashboard({
 
   async function loadVideo(row: InterviewRow) {
     const interviewId = row.interviewId;
+    loadVideoIdRef.current = interviewId;
     setLoadingVideoId(interviewId);
     setSelectedId(interviewId);
     setSelectedApplicationId(row.applicationId);
     setSelectedVideoUrl(null);
+    setSelectedThumbnailUrl(null);
     setSelectedChat([]);
     setCurrentTimeSec(0);
+    setThumbnailError(null);
+    setPlaybackError(null);
+    setLoadingPlayback(false);
+    playbackRequestIdRef.current = null;
+    autoPlayRef.current = false;
     try {
       const chatPromise = fetch(`/api/admin/interview/chat?interviewId=${interviewId}`);
-      const videoPromise = row.hasRecording
-        ? fetch(`/api/admin/interview/video?interviewId=${interviewId}`)
+      const thumbnailPromise = row.hasRecording
+        ? fetch(`/api/admin/interview/thumbnail?interviewId=${interviewId}`)
         : Promise.resolve(null);
 
-      const [chatRes, videoRes] = await Promise.all([chatPromise, videoPromise]);
+      const [chatRes, thumbnailRes] = await Promise.all([chatPromise, thumbnailPromise]);
 
-      const chatData = (await chatRes.json()) as { messages?: ChatItem[] };
-      if (Array.isArray(chatData.messages)) {
+      if (loadVideoIdRef.current !== interviewId) return;
+
+      const chatData = (await chatRes.json().catch(() => null)) as
+        | { messages?: ChatItem[] }
+        | null;
+      if (Array.isArray(chatData?.messages)) {
         setSelectedChat(chatData.messages);
       }
 
-      if (videoRes) {
-        const videoData = (await videoRes.json()) as { url?: string; error?: string };
-        if (videoData.url) setSelectedVideoUrl(videoData.url);
+      if (thumbnailRes) {
+        const thumbnailData = (await thumbnailRes.json().catch(() => null)) as
+          | { thumbnailUrl?: string; error?: string }
+          | null;
+        if (thumbnailRes.ok && thumbnailData?.thumbnailUrl) {
+          setSelectedThumbnailUrl(thumbnailData.thumbnailUrl);
+        } else {
+          setThumbnailError(thumbnailData?.error ?? "サムネの取得に失敗しました");
+        }
       }
     } finally {
-      setLoadingVideoId(null);
+      if (loadVideoIdRef.current === interviewId) {
+        setLoadingVideoId(null);
+      }
+    }
+  }
+
+  async function requestPlayback(interviewId: string) {
+    if (loadingPlayback || selectedVideoUrl) return;
+    setLoadingPlayback(true);
+    setPlaybackError(null);
+    playbackRequestIdRef.current = interviewId;
+    autoPlayRef.current = true;
+    try {
+      const res = await fetch(`/api/admin/interview/video?interviewId=${interviewId}`);
+      const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null;
+      if (playbackRequestIdRef.current !== interviewId) return;
+      if (!res.ok || !data?.url) {
+        setPlaybackError(data?.error ?? "動画の取得に失敗しました");
+        autoPlayRef.current = false;
+        return;
+      }
+      setSelectedVideoUrl(data.url);
+    } finally {
+      if (playbackRequestIdRef.current === interviewId) {
+        setLoadingPlayback(false);
+      }
     }
   }
 
@@ -633,19 +682,35 @@ export default function AdminDashboard({
       hlsRef.current = null;
     }
 
+    const shouldAutoPlay = autoPlayRef.current;
+    autoPlayRef.current = false;
     const isHls = selectedVideoUrl.includes(".m3u8");
     if (isHls && !video.canPlayType("application/vnd.apple.mpegurl") && Hls.isSupported()) {
       const hls = new Hls({ maxBufferLength: 30 });
       hls.loadSource(selectedVideoUrl);
       hls.attachMedia(video);
       hlsRef.current = hls;
+      const playOnReady = () => {
+        if (shouldAutoPlay) {
+          video.play().catch(() => {});
+        }
+      };
+      if (shouldAutoPlay) {
+        hls.on(Hls.Events.MANIFEST_PARSED, playOnReady);
+      }
       return () => {
+        if (shouldAutoPlay) {
+          hls.off(Hls.Events.MANIFEST_PARSED, playOnReady);
+        }
         hls.destroy();
         hlsRef.current = null;
       };
     }
 
     video.src = selectedVideoUrl;
+    if (shouldAutoPlay) {
+      video.play().catch(() => {});
+    }
   }, [selectedVideoUrl]);
 
   useEffect(() => {
@@ -1904,23 +1969,44 @@ export default function AdminDashboard({
                               </div>
                             )}
                             <div className="media">
-                              <div className={`video ${selectedVideoUrl ? "" : "empty"}`}>
-                                {selectedVideoUrl ? (
-                                  <video
-                                    ref={videoRef}
-                                    controls
-                                    onTimeUpdate={(e) =>
-                                      setCurrentTimeSec(e.currentTarget.currentTime)
-                                    }
-                                  />
-                                ) : (
-                                  <div className="video-empty">
-                                    {loadingVideoId === selectedRow.interviewId
-                                      ? "動画を読み込み中..."
-                                      : selectedRow.hasRecording
-                                        ? "動画の取得に失敗しました"
-                                        : "録画がありません"}
+                              <div
+                                className={`video ${selectedRow.hasRecording ? "" : "empty"}`}
+                              >
+                                {selectedRow.hasRecording ? (
+                                  <div className="video-frame">
+                                    <video
+                                      ref={videoRef}
+                                      poster={selectedThumbnailUrl ?? undefined}
+                                      preload="none"
+                                      playsInline
+                                      controls={Boolean(selectedVideoUrl)}
+                                      onTimeUpdate={(e) =>
+                                        setCurrentTimeSec(e.currentTarget.currentTime)
+                                      }
+                                    />
+                                    {!selectedVideoUrl && (
+                                      <div className="video-overlay">
+                                        {!loadingVideoId &&
+                                          (playbackError || thumbnailError) && (
+                                            <div className="video-status">
+                                              {playbackError ?? thumbnailError}
+                                            </div>
+                                          )}
+                                        <button
+                                          className="video-play"
+                                          type="button"
+                                          onClick={() =>
+                                            void requestPlayback(selectedRow.interviewId)
+                                          }
+                                          disabled={loadingPlayback}
+                                        >
+                                          {loadingPlayback ? "動画を準備中..." : "再生"}
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
+                                ) : (
+                                  <div className="video-empty">録画がありません</div>
                                 )}
                               </div>
                               <div className="chat-panel">
@@ -2967,6 +3053,47 @@ export default function AdminDashboard({
           border: 1px solid #c9d3e3;
           background: #0b1220;
           object-fit: contain;
+        }
+        .video-frame {
+          position: relative;
+          width: 100%;
+          min-height: 360px;
+        }
+        .video-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          border-radius: 12px;
+          background: rgba(11, 18, 32, 0.35);
+        }
+        .video-play {
+          padding: 10px 18px;
+          border-radius: 999px;
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          background: #1f4fb2;
+          color: #fff;
+          font-weight: 600;
+          letter-spacing: 0.01em;
+          cursor: pointer;
+          box-shadow: 0 12px 26px rgba(8, 15, 28, 0.3);
+        }
+        .video-play:disabled {
+          background: #8a97ab;
+          border-color: rgba(255, 255, 255, 0.25);
+          cursor: default;
+          box-shadow: none;
+        }
+        .video-status {
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: rgba(11, 18, 32, 0.65);
+          color: #e6edf7;
+          font-size: 12px;
+          font-weight: 500;
         }
         .video.empty {
           border-radius: 12px;
