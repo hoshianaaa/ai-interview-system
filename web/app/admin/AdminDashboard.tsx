@@ -148,6 +148,9 @@ export default function AdminDashboard({
   const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState<"idle" | "inprogress">("idle");
+  const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
@@ -157,6 +160,7 @@ export default function AdminDashboard({
   const loadVideoIdRef = useRef<string | null>(null);
   const playbackRequestIdRef = useRef<string | null>(null);
   const autoPlayRef = useRef(false);
+  const downloadRequestIdRef = useRef<string | null>(null);
   const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
   const [editApplicationEmail, setEditApplicationEmail] = useState("");
   const [editApplicationNotes, setEditApplicationNotes] = useState("");
@@ -663,6 +667,69 @@ export default function AdminDashboard({
     }
   }
 
+  async function pollDownload(interviewId: string, attempt: number) {
+    const requestId = downloadRequestIdRef.current;
+    try {
+      const res = await fetch(`/api/admin/interview/download?interviewId=${interviewId}`, {
+        headers: { accept: "application/json" }
+      });
+      const data = (await res.json().catch(() => null)) as
+        | {
+            status?: "ready" | "inprogress" | "error";
+            url?: string;
+            percentComplete?: number | null;
+            retryAfterMs?: number;
+            message?: string;
+          }
+        | null;
+
+      if (downloadRequestIdRef.current !== requestId) return;
+
+      if (!res.ok || !data) {
+        setDownloadError(data?.message ?? "ダウンロードの準備に失敗しました");
+        setDownloadStatus("idle");
+        return;
+      }
+
+      if (data.status === "ready" && data.url) {
+        setDownloadStatus("idle");
+        setDownloadPercent(null);
+        window.location.assign(data.url);
+        return;
+      }
+
+      if (attempt >= 40) {
+        setDownloadStatus("idle");
+        setDownloadPercent(null);
+        setDownloadError("ダウンロード準備に時間がかかっています。少し待って再度お試しください。");
+        return;
+      }
+
+      setDownloadPercent(
+        typeof data.percentComplete === "number" ? data.percentComplete : null
+      );
+
+      const waitMs = typeof data.retryAfterMs === "number" ? data.retryAfterMs : 1500;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      if (downloadRequestIdRef.current === requestId) {
+        void pollDownload(interviewId, attempt + 1);
+      }
+    } catch (err) {
+      if (downloadRequestIdRef.current !== requestId) return;
+      setDownloadStatus("idle");
+      setDownloadError("ダウンロードの準備に失敗しました");
+    }
+  }
+
+  async function startDownload(interviewId: string) {
+    if (downloadStatus === "inprogress") return;
+    setDownloadError(null);
+    setDownloadPercent(null);
+    setDownloadStatus("inprogress");
+    downloadRequestIdRef.current = interviewId;
+    void pollDownload(interviewId, 0);
+  }
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -1135,6 +1202,10 @@ export default function AdminDashboard({
       setReissueWeeks(String(DEFAULT_EXPIRES_WEEKS));
       setReissueDays("0");
       setReissueHours("0");
+      setDownloadStatus("idle");
+      setDownloadPercent(null);
+      setDownloadError(null);
+      downloadRequestIdRef.current = null;
       return;
     }
     setEditDecision(selectedRow.decision ?? "undecided");
@@ -1145,6 +1216,10 @@ export default function AdminDashboard({
     setReissueWeeks(expiry.weeks);
     setReissueDays(expiry.days);
     setReissueHours(expiry.hours);
+    setDownloadStatus("idle");
+    setDownloadPercent(null);
+    setDownloadError(null);
+    downloadRequestIdRef.current = null;
   }, [selectedRow?.interviewId]);
 
   useEffect(() => {
@@ -1967,6 +2042,30 @@ export default function AdminDashboard({
                                   </div>
                                 )}
                               </div>
+                            )}
+                            {selectedRow.hasRecording && (
+                              <>
+                                <div className="detail-actions align-right">
+                                  <button
+                                    className="ghost"
+                                    type="button"
+                                    onClick={() => void startDownload(selectedRow.interviewId)}
+                                    disabled={downloadStatus === "inprogress"}
+                                  >
+                                    {downloadStatus === "inprogress"
+                                      ? "動画を準備中..."
+                                      : "動画をダウンロード"}
+                                  </button>
+                                  {downloadStatus === "inprogress" && (
+                                    <span className="meta">
+                                      {downloadPercent !== null
+                                        ? `準備中 ${Math.round(downloadPercent)}%`
+                                        : "準備中"}
+                                    </span>
+                                  )}
+                                </div>
+                                {downloadError && <p className="error">{downloadError}</p>}
+                              </>
                             )}
                             <div className="media">
                               <div
@@ -3000,6 +3099,7 @@ export default function AdminDashboard({
           background: #fff;
           color: #1f4fb2;
           font-weight: 600;
+          text-decoration: none;
           cursor: pointer;
         }
         .detail-actions {

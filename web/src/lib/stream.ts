@@ -11,6 +11,8 @@ const streamEnv = {
   apiToken: mustEnv("CLOUDFLARE_STREAM_API_TOKEN"),
   playbackBaseUrl: (process.env.CLOUDFLARE_STREAM_PLAYBACK_BASE_URL ?? "https://videodelivery.net")
     .replace(/\/$/, ""),
+  downloadBaseUrl: (process.env.CLOUDFLARE_STREAM_DOWNLOAD_BASE_URL ?? "https://videodelivery.net")
+    .replace(/\/$/, ""),
   signingKeyId: process.env.CLOUDFLARE_STREAM_SIGNING_KEY_ID ?? "",
   signingKey: process.env.CLOUDFLARE_STREAM_SIGNING_KEY ?? ""
 };
@@ -58,12 +60,17 @@ function base64Url(input: string | Buffer) {
     .replace(/=+$/g, "");
 }
 
-function signPlaybackToken(uid: string, expiresInSeconds: number) {
+function signPlaybackToken(
+  uid: string,
+  expiresInSeconds: number,
+  payloadOverrides: Record<string, unknown> = {}
+) {
   if (!streamEnv.signingKey || !streamEnv.signingKeyId) return null;
   const header = { alg: "HS256", typ: "JWT", kid: streamEnv.signingKeyId };
   const payload = {
     sub: uid,
-    exp: Math.floor(Date.now() / 1000) + expiresInSeconds
+    exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
+    ...payloadOverrides
   };
   const headerPart = base64Url(JSON.stringify(header));
   const payloadPart = base64Url(JSON.stringify(payload));
@@ -82,6 +89,121 @@ export function buildStreamPlaybackUrl(uid: string, expiresInSeconds = 3600) {
   const base = `${streamEnv.playbackBaseUrl}/${uid}/manifest/video.m3u8`;
   const token = signPlaybackToken(uid, expiresInSeconds);
   return token ? `${base}?token=${token}` : base;
+}
+
+export function buildStreamDownloadToken(uid: string, expiresInSeconds = 3600) {
+  return signPlaybackToken(uid, expiresInSeconds, { downloadable: true });
+}
+
+export function buildStreamDownloadUrl(
+  uid: string,
+  options: { expiresInSeconds?: number; signed?: boolean } = {}
+) {
+  const base = `${streamEnv.downloadBaseUrl}/${uid}/downloads/default.mp4`;
+  const signed = options.signed ?? true;
+  if (!signed) return base;
+  const token = buildStreamDownloadToken(uid, options.expiresInSeconds ?? 3600);
+  return token ? `${base}?token=${token}` : base;
+}
+
+export async function setStreamDownloadable(uid: string, downloadable = true) {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${streamEnv.accountId}/stream/${uid}`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${streamEnv.apiToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ downloadable })
+    }
+  );
+  const data = (await res.json().catch(() => null)) as
+    | { success: boolean; errors?: { message?: string }[] }
+    | null;
+  if (!res.ok || !data?.success) {
+    const message =
+      data?.errors?.map((err) => err?.message).filter(Boolean).join(", ") ||
+      `Cloudflare Stream update failed (${res.status})`;
+    throw new Error(message);
+  }
+}
+
+type StreamDownloadInfo = {
+  status?: string;
+  url?: string;
+  percentComplete?: number;
+};
+
+type StreamDownloadResult = {
+  default?: StreamDownloadInfo;
+  audio?: StreamDownloadInfo;
+};
+
+async function streamApiRequest<T>(
+  path: string,
+  options: { method?: "GET" | "POST" } = {}
+) {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${streamEnv.accountId}/stream/${path}`,
+    {
+      method: options.method ?? "GET",
+      headers: {
+        authorization: `Bearer ${streamEnv.apiToken}`,
+        "content-type": "application/json"
+      }
+    }
+  );
+  const data = (await res.json().catch(() => null)) as
+    | { success: boolean; result?: T; errors?: { message?: string }[] }
+    | null;
+  if (!res.ok || !data?.success) {
+    const message =
+      data?.errors?.map((err) => err?.message).filter(Boolean).join(", ") ||
+      `Cloudflare Stream request failed (${res.status})`;
+    throw new Error(message);
+  }
+  return (data?.result ?? {}) as T;
+}
+
+export async function requestStreamDownload(uid: string, type: "default" | "audio" = "default") {
+  const suffix = type === "default" ? "downloads" : `downloads/${type}`;
+  return streamApiRequest<StreamDownloadResult>(`${uid}/${suffix}`, { method: "POST" });
+}
+
+export async function getStreamDownloads(uid: string) {
+  return streamApiRequest<StreamDownloadResult>(`${uid}/downloads`);
+}
+
+export async function getStreamInfo(uid: string) {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${streamEnv.accountId}/stream/${uid}`,
+    {
+      headers: { authorization: `Bearer ${streamEnv.apiToken}` }
+    }
+  );
+  const data = (await res.json().catch(() => null)) as
+    | {
+        success: boolean;
+        result?: {
+          downloadable?: boolean;
+          requireSignedURLs?: boolean;
+          status?: { state?: string };
+        };
+        errors?: { message?: string }[];
+      }
+    | null;
+  if (!res.ok || !data?.success || !data.result) {
+    const message =
+      data?.errors?.map((err) => err?.message).filter(Boolean).join(", ") ||
+      `Cloudflare Stream lookup failed (${res.status})`;
+    throw new Error(message);
+  }
+  return data.result;
+}
+
+export function canSignStreamUrl() {
+  return Boolean(streamEnv.signingKey && streamEnv.signingKeyId);
 }
 
 export function buildStreamThumbnailUrl(
