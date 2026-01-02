@@ -1783,6 +1783,15 @@ export default function AdminDashboard({
                   {selectedApplication && (
                     <div className="detail-title-fields">
                       <div className="inline-pair">
+                        {canCreateAdditionalInterview && (
+                          <button
+                            className="ghost issue-url"
+                            type="button"
+                            onClick={() => void createNextInterview()}
+                          >
+                            {createInterviewLabel}
+                          </button>
+                        )}
                         <label>候補者名：</label>
                         <input
                           className="candidate-name-input"
@@ -1836,17 +1845,6 @@ export default function AdminDashboard({
                             <div className="empty">面接がありません</div>
                           )}
                         </div>
-                        {canCreateAdditionalInterview && (
-                          <div className="section-title-row">
-                            <button
-                              className="ghost"
-                              type="button"
-                              onClick={() => void createNextInterview()}
-                            >
-                              {createInterviewLabel}
-                            </button>
-                          </div>
-                        )}
                         {selectedRow ? (
                           <div className="interview-detail">
                             <div className="interview-header">
@@ -3098,6 +3096,9 @@ export default function AdminDashboard({
           font-weight: 600;
           text-decoration: none;
           cursor: pointer;
+        }
+        .issue-url {
+          white-space: nowrap;
         }
         .ghost.loading {
           display: inline-flex;
