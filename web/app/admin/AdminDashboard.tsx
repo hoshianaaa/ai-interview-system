@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Hls from "hls.js";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 
@@ -148,6 +149,7 @@ export default function AdminDashboard({
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
   const [editApplicationEmail, setEditApplicationEmail] = useState("");
   const [editApplicationNotes, setEditApplicationNotes] = useState("");
@@ -611,6 +613,49 @@ export default function AdminDashboard({
       setLoadingVideoId(null);
     }
   }
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (!selectedVideoUrl) {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      video.removeAttribute("src");
+      video.load();
+      return;
+    }
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    const isHls = selectedVideoUrl.includes(".m3u8");
+    if (isHls && !video.canPlayType("application/vnd.apple.mpegurl") && Hls.isSupported()) {
+      const hls = new Hls({ maxBufferLength: 30 });
+      hls.loadSource(selectedVideoUrl);
+      hls.attachMedia(video);
+      hlsRef.current = hls;
+      return () => {
+        hls.destroy();
+        hlsRef.current = null;
+      };
+    }
+
+    video.src = selectedVideoUrl;
+  }, [selectedVideoUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, []);
 
   const activeMessageId = useMemo(() => {
     if (!selectedChat.length) return null;
@@ -1864,7 +1909,6 @@ export default function AdminDashboard({
                                   <video
                                     ref={videoRef}
                                     controls
-                                    src={selectedVideoUrl}
                                     onTimeUpdate={(e) =>
                                       setCurrentTimeSec(e.currentTarget.currentTime)
                                     }

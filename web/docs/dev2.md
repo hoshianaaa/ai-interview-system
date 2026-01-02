@@ -1,6 +1,8 @@
 以下が **開発手順2**としての「`web/` の全ファイル一式」です。
 （`create-next-app` の初期生成をベースに、**Prisma v7 / LiveKit dispatch / Egress→R2 / Webhook**まで動く最小構成にしています）
 
+> 注：現行実装では R2/egress を廃止し、面接画面から Cloudflare Stream へ直接アップロードします。本書の R2/egress 記述は参考情報として扱ってください。
+
 > 注：`node_modules/` や `.next/` のような生成物は除外しています。
 > そのままコピペでファイルを作ればOKです。
 

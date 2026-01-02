@@ -61,7 +61,7 @@ export default async function HomePage() {
     durationSec: row.durationSec,
     expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
-    hasRecording: Boolean(row.r2ObjectKey)
+    hasRecording: Boolean(row.streamUid)
   }));
   const applicationData = applications.map((row) => ({
     applicationId: row.applicationId,

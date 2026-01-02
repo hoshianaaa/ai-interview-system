@@ -3,11 +3,8 @@ import { prisma } from "@/lib/prisma";
 import {
   clients,
   env,
-  makeCandidateToken,
-  buildRoomCompositeOutput,
-  defaultCompositeOpts
+  makeCandidateToken
 } from "@/lib/livekit";
-import { makeR2ObjectKey } from "@/lib/recordings";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 import { isInterviewExpired } from "@/lib/interview-status";
 
@@ -27,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "token is too long" }, { status: 400 });
   }
 
-  const { dispatch, room, egress } = clients();
+  const { dispatch, room } = clients();
 
   const updated = await prisma
     .$transaction(async (tx) => {
@@ -86,37 +83,6 @@ export async function POST(req: Request) {
   await prisma.interview.update({
     where: { interviewId: updated.interviewId },
     data: { dispatchId: dispatchInfo.id }
-  });
-
-  const objectKey = makeR2ObjectKey({
-    interviewId: updated.interviewId,
-    roomName: updated.roomName,
-    orgId: updated.orgId
-  });
-
-  let egressInfo: { egressId: string };
-  try {
-    egressInfo = await egress.startRoomCompositeEgress(
-      updated.roomName,
-      buildRoomCompositeOutput(objectKey),
-      defaultCompositeOpts
-    );
-  } catch (err) {
-    await prisma.interview.update({
-      where: { interviewId: updated.interviewId },
-      data: { status: "failed", error: `EGRESS_START_FAILED: ${String(err)}` }
-    });
-    return NextResponse.json({ error: "EGRESS_START_FAILED" }, { status: 500 });
-  }
-
-  await prisma.interview.update({
-    where: { interviewId: updated.interviewId },
-    data: {
-      status: "recording",
-      egressId: egressInfo.egressId,
-      r2ObjectKey: objectKey,
-      recordingStartedAt: new Date()
-    }
   });
 
   const token = await makeCandidateToken({

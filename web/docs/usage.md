@@ -5,7 +5,7 @@
 ## 前提
 
 - Webアプリが起動している（例: `npm run dev`）
-- 環境変数が設定済み（LiveKit / DB / R2 など）
+- 環境変数が設定済み（LiveKit / DB / Cloudflare Stream など）
 
 ## 手順
 
@@ -43,8 +43,8 @@ curl -X POST http://localhost:3000/api/interview/end \
 
 4) 録画を確認する
 
-- 録画ファイル（候補者映像 + 候補者音声 + Agent音声）が R2 に保存されます。
-- objectKey は DB の `r2ObjectKey` に格納されます。
+- 録画ファイル（候補者映像 + 候補者音声 + Agent音声）は Cloudflare Stream に保存されます。
+- video uid は DB の `streamUid` に格納されます。
 
 ## 参考
 

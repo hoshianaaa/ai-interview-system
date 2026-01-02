@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { clients } from "@/lib/livekit";
+import { createStreamDirectUpload } from "@/lib/stream";
 
 export const runtime = "nodejs";
 
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "token is too long" }, { status: 400 });
   }
 
-  const { room } = clients();
   let interview = null;
   if (publicToken) {
     interview = await prisma.interview.findUnique({ where: { publicToken } });
@@ -29,20 +28,23 @@ export async function POST(req: Request) {
   }
   if (!interview) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  if (interview.status === "completed") {
-    return NextResponse.json({ ok: true, status: "completed" });
-  }
-
-  await prisma.interview.update({ where: { interviewId: interview.interviewId }, data: { status: "ending" } });
-
-  try {
-    await room.deleteRoom(interview.roomName);
-  } catch {}
+  const result = await createStreamDirectUpload({
+    metadata: {
+      interviewId: interview.interviewId,
+      roomName: interview.roomName,
+      orgId: interview.orgId ?? "unknown"
+    },
+    maxDurationSeconds: Math.max(interview.durationSec, 600) + 600
+  });
 
   await prisma.interview.update({
     where: { interviewId: interview.interviewId },
-    data: { status: "completed", endedAt: new Date() }
+    data: {
+      streamUid: result.uid,
+      status: interview.status === "used" ? "recording" : interview.status,
+      recordingStartedAt: interview.recordingStartedAt ?? new Date()
+    }
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ uploadUrl: result.uploadURL, uid: result.uid });
 }

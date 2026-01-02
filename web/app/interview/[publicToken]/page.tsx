@@ -4,11 +4,9 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
-  useRoomContext,
-  useTracks,
-  VideoTrack
+  useRoomContext
 } from "@livekit/components-react";
-import { RemoteParticipant, RoomEvent, Track } from "livekit-client";
+import { RemoteParticipant, Room, RoomEvent, Track } from "livekit-client";
 import "@livekit/components-styles";
 
 type JoinSuccessResponse = {
@@ -23,6 +21,8 @@ type JoinResponse = JoinSuccessResponse | { error: string };
 const isJoinSuccess = (value: JoinResponse | null): value is JoinSuccessResponse =>
   Boolean(value && "token" in value && "livekitUrl" in value);
 
+type StreamUploadResponse = { uploadUrl: string; uid: string } | { error: string };
+
 type ChatMessage = {
   id: string;
   role: "interviewer" | "candidate";
@@ -31,6 +31,110 @@ type ChatMessage = {
 };
 
 const MAX_MESSAGES = 12;
+const RECORDING_TIMESLICE_MS = 1000;
+
+const pickRecorderMimeType = () => {
+  if (typeof MediaRecorder === "undefined") return "";
+  const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm"
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+};
+
+async function uploadToStream(uploadUrl: string, blob: Blob) {
+  const form = new FormData();
+  form.append("file", blob, "interview.webm");
+  const res = await fetch(uploadUrl, { method: "POST", body: form });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`stream upload failed (${res.status})${detail ? `: ${detail}` : ""}`);
+  }
+}
+
+function createRecordingStream(room: Room, videoTrack: MediaStreamTrack | null) {
+  const audioContext = new AudioContext();
+  const destination = audioContext.createMediaStreamDestination();
+  const sources = new Map<string, MediaStreamAudioSourceNode>();
+
+  const attachAudio = (track: MediaStreamTrack, key: string) => {
+    if (sources.has(key)) return;
+    const source = audioContext.createMediaStreamSource(new MediaStream([track]));
+    source.connect(destination);
+    sources.set(key, source);
+  };
+
+  const detachAudio = (key: string) => {
+    const source = sources.get(key);
+    if (!source) return;
+    source.disconnect();
+    sources.delete(key);
+  };
+
+  const keyFor = (participantId: string, track: MediaStreamTrack) =>
+    `${participantId}:${track.id}`;
+
+  const localId = room.localParticipant.identity ?? "local";
+  room.localParticipant.audioTrackPublications.forEach((pub) => {
+    const media = pub.track?.mediaStreamTrack;
+    if (media) attachAudio(media, keyFor(localId, media));
+  });
+
+  const onLocalTrackPublished = (publication: { track?: { mediaStreamTrack?: MediaStreamTrack } }) => {
+    const media = publication.track?.mediaStreamTrack;
+    if (media && media.kind === "audio") {
+      attachAudio(media, keyFor(localId, media));
+    }
+  };
+  const onLocalTrackUnpublished = (
+    publication: { track?: { mediaStreamTrack?: MediaStreamTrack } }
+  ) => {
+    const media = publication.track?.mediaStreamTrack;
+    if (media && media.kind === "audio") {
+      detachAudio(keyFor(localId, media));
+    }
+  };
+
+  room.remoteParticipants.forEach((participant) => {
+    participant.audioTrackPublications.forEach((pub) => {
+      const media = pub.track?.mediaStreamTrack;
+      if (media) attachAudio(media, keyFor(participant.identity, media));
+    });
+  });
+
+  const onTrackSubscribed = (track: Track, _pub: unknown, participant: RemoteParticipant) => {
+    if (track.kind !== "audio") return;
+    const media = track.mediaStreamTrack;
+    if (media) attachAudio(media, keyFor(participant.identity, media));
+  };
+  const onTrackUnsubscribed = (track: Track, _pub: unknown, participant: RemoteParticipant) => {
+    if (track.kind !== "audio") return;
+    const media = track.mediaStreamTrack;
+    if (media) detachAudio(keyFor(participant.identity, media));
+  };
+
+  room.on(RoomEvent.TrackSubscribed, onTrackSubscribed);
+  room.on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
+  room.on(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
+  room.on(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished);
+
+  const streamTracks = [...destination.stream.getAudioTracks()];
+  if (videoTrack) streamTracks.push(videoTrack);
+  const stream = new MediaStream(streamTracks);
+
+  const cleanup = () => {
+    room.off(RoomEvent.TrackSubscribed, onTrackSubscribed);
+    room.off(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
+    room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
+    room.off(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished);
+    sources.forEach((source) => source.disconnect());
+    sources.clear();
+    audioContext.close().catch(() => {});
+  };
+
+  return { stream, audioContext, cleanup };
+}
 
 export default function InterviewPage({
   params
@@ -499,7 +603,7 @@ export default function InterviewPage({
         serverUrl={join.livekitUrl}
         token={join.token}
         connect={true}
-        video={true}
+        video={false}
         audio={true}
         style={{ height: "100%" }}
         onConnected={() => setConnected(true)}
@@ -650,11 +754,143 @@ export default function InterviewPage({
 
 function InterviewCanvas({ publicToken }: { publicToken: string }) {
   const room = useRoomContext();
-  const tracks = useTracks([Track.Source.Camera], { onlySubscribed: false });
-  const localTrack =
-    tracks.find((t) => t.participant.isLocal) ?? tracks.find((t) => t.publication?.isLocal) ?? null;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const chatListRef = useRef<HTMLDivElement | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recordingCleanupRef = useRef<(() => void) | null>(null);
+  const uploadingRef = useRef(false);
+  const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<"pending" | "ready" | "failed">("pending");
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraStatus("failed");
+      return;
+    }
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        setLocalVideoStream(stream);
+        setCameraStatus("ready");
+      } catch {
+        if (active) setCameraStatus("failed");
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!localVideoStream) return;
+    return () => {
+      localVideoStream.getTracks().forEach((track) => track.stop());
+    };
+  }, [localVideoStream]);
+
+  useEffect(() => {
+    const video = pipVideoRef.current;
+    if (!video) return;
+    if (!localVideoStream) {
+      video.srcObject = null;
+      return;
+    }
+    video.srcObject = localVideoStream;
+    video.play().catch(() => {});
+  }, [localVideoStream]);
+
+  useEffect(() => {
+    if (!room) return;
+    if (typeof MediaRecorder === "undefined") return;
+    if (cameraStatus === "pending") return;
+    if (recorderRef.current) return;
+
+    const startRecording = async () => {
+      await fetch("/api/interview/stream/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ publicToken })
+      }).catch(() => {});
+
+      const videoTrack = localVideoStream?.getVideoTracks()?.[0] ?? null;
+      const { stream, audioContext, cleanup } = createRecordingStream(room, videoTrack);
+      recordingCleanupRef.current = cleanup;
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume().catch(() => {});
+      }
+
+      if (!stream.getTracks().length) return;
+
+      const options: MediaRecorderOptions = {};
+      const mimeType = pickRecorderMimeType();
+      if (mimeType) options.mimeType = mimeType;
+      options.videoBitsPerSecond = 1_000_000;
+      options.audioBitsPerSecond = 96_000;
+
+      const recorder = new MediaRecorder(stream, options);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        recordingCleanupRef.current?.();
+        recordingCleanupRef.current = null;
+        recorderRef.current = null;
+        if (!chunksRef.current.length || uploadingRef.current) return;
+        const mime = recorder.mimeType || mimeType || "video/webm";
+        const blob = new Blob(chunksRef.current, { type: mime });
+        chunksRef.current = [];
+        uploadingRef.current = true;
+
+        void (async () => {
+          try {
+            const res = await fetch("/api/interview/stream/upload", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ publicToken })
+            });
+            const data = (await res.json()) as StreamUploadResponse;
+            if (!res.ok || "error" in data || !data.uploadUrl) {
+              throw new Error("UPLOAD_URL_FAILED");
+            }
+            await uploadToStream(data.uploadUrl, blob);
+          } catch (err) {
+            console.error("[stream] upload failed", err);
+          } finally {
+            uploadingRef.current = false;
+          }
+        })();
+      };
+
+      recorder.start(RECORDING_TIMESLICE_MS);
+    };
+
+    void startRecording();
+
+    return () => {
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        recordingCleanupRef.current?.();
+        recordingCleanupRef.current = null;
+        recorderRef.current = null;
+      }
+    };
+  }, [room, publicToken, localVideoStream, cameraStatus]);
 
   useEffect(() => {
     if (!room) return;
@@ -721,10 +957,12 @@ function InterviewCanvas({ publicToken }: { publicToken: string }) {
       </div>
 
       <div className="pip">
-        {localTrack ? (
-          <VideoTrack trackRef={localTrack} className="pip-video" />
+        {localVideoStream ? (
+          <video ref={pipVideoRef} className="pip-video" muted playsInline autoPlay />
         ) : (
-          <div className="pip-placeholder">カメラ準備中...</div>
+          <div className="pip-placeholder">
+            {cameraStatus === "failed" ? "カメラが利用できません" : "カメラ準備中..."}
+          </div>
         )}
       </div>
 

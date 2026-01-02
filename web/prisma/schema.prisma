@@ -57,10 +57,7 @@ model Interview {
   agentName         String
 
   dispatchId        String?
-  egressId          String?
-
-  r2Bucket          String
-  r2ObjectKey       String?
+  streamUid         String?
   recordingStartedAt DateTime?
   interviewPrompt   String?         @db.Text
   expiresAt         DateTime?

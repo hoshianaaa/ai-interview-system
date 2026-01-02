@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { signR2ObjectUrl } from "@/lib/r2";
+import { buildStreamPlaybackUrl } from "@/lib/stream";
 
 export const runtime = "nodejs";
 
@@ -19,10 +19,10 @@ export async function GET(req: Request) {
   }
 
   const interview = await prisma.interview.findFirst({ where: { interviewId, orgId } });
-  if (!interview || !interview.r2ObjectKey) {
+  if (!interview || !interview.streamUid) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const url = await signR2ObjectUrl(interview.r2ObjectKey);
+  const url = buildStreamPlaybackUrl(interview.streamUid);
   return NextResponse.json({ url });
 }

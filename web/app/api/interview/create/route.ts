@@ -131,7 +131,6 @@ export async function POST(req: Request) {
       candidateIdentity: makeCandidateIdentity(interviewId),
       interviewPrompt: prompt,
       agentName: body.agentName ?? env.agentName,
-      r2Bucket: env.r2Bucket,
       expiresAt
     }
   });

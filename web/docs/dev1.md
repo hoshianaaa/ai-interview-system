@@ -1,6 +1,8 @@
 以下は **あなたの前提（ローカルで Next.js / Python を動かす + DB/R2/LiveKit はクラウド + 後で Vercel/Fly へ移行）**、そして **Prisma v7（prisma.config.ts + datasource.url）**に完全対応した **システム構築手順の全文**です。
 （日本語本文、キーワードは English のまま）
 
+> 注：現行実装では R2/egress を廃止し、面接画面から Cloudflare Stream へ直接アップロードします。本書の R2/egress 記述は参考情報として扱ってください。
+
 ---
 
 # LiveKit × AI面接システム

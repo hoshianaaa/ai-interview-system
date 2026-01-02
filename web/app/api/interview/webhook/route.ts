@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { clients, buildRoomCompositeOutput, defaultCompositeOpts } from "@/lib/livekit";
-import { makeR2ObjectKey } from "@/lib/recordings";
+import { clients } from "@/lib/livekit";
 
 export const runtime = "nodejs";
 
@@ -9,7 +8,7 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const authHeader = req.headers.get("authorization") ?? "";
 
-  const { webhook, egress } = clients();
+  const { webhook } = clients();
 
   let event: any;
   try {
@@ -35,39 +34,8 @@ export async function POST(req: Request) {
         data: { candidateJoinedAt: interview.candidateJoinedAt ?? new Date() }
       });
 
-      // Idempotency: if already started, do nothing
-      const latest = await prisma.interview.findUnique({ where: { interviewId: interview.interviewId } });
-      if (!latest || latest.egressId) return NextResponse.json({ ok: true });
-
-      const objectKey = makeR2ObjectKey({
-        interviewId: interview.interviewId,
-        roomName: interview.roomName,
-        orgId: interview.orgId
-      });
-
-      const info = await egress.startRoomCompositeEgress(
-        interview.roomName,
-        buildRoomCompositeOutput(objectKey),
-        defaultCompositeOpts
-      );
-
-      await prisma.interview.update({
-        where: { interviewId: interview.interviewId },
-        data: {
-          status: "recording",
-          egressId: info.egressId,
-          r2ObjectKey: objectKey,
-          recordingStartedAt: new Date()
-        }
-      });
+      return NextResponse.json({ ok: true });
     }
-  }
-
-  if (ev === "egress_ended") {
-    await prisma.interview.update({
-      where: { interviewId: interview.interviewId },
-      data: { status: "completed", endedAt: new Date() }
-    });
   }
 
   return NextResponse.json({ ok: true });
