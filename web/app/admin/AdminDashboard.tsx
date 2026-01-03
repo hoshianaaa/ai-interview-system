@@ -73,6 +73,11 @@ type OrgSettings = {
   defaultExpiresHours: number;
 };
 
+type OrgQuotaInfo = {
+  availableSec: number;
+  updatedAt: string;
+} | null;
+
 type CreateSuccessResponse = {
   interviewId: string;
   applicationId: string;
@@ -95,6 +100,13 @@ const isCreateSuccess = (
   value: CreateResponse | null
 ): value is CreateSuccessResponse => Boolean(value && "url" in value);
 
+const formatCreateErrorMessage = (error: string, fallbackPrefix: string) => {
+  if (error === "ORG_TIME_LIMIT_EXCEEDED") {
+    return "利用可能時間が不足しています。";
+  }
+  return `${fallbackPrefix}: ${error}`;
+};
+
 const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
 const MAX_EXPIRES_HOURS = 23;
@@ -105,12 +117,14 @@ export default function AdminDashboard({
   interviews,
   applications: initialApplications,
   promptTemplates,
-  settings
+  settings,
+  orgQuota
 }: {
   interviews: InterviewRow[];
   applications: ApplicationData[];
   promptTemplates: PromptTemplate[];
   settings: OrgSettings;
+  orgQuota: OrgQuotaInfo;
 }) {
   const [rows, setRows] = useState(interviews);
   const [applications, setApplications] = useState(initialApplications);
@@ -807,6 +821,15 @@ export default function AdminDashboard({
     return `${mm}:${String(ss).padStart(2, "0")}`;
   };
 
+  const formatQuota = (valueSec: number) => {
+    const safe = Math.max(0, Math.floor(valueSec));
+    const totalMinutes = Math.floor(safe / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) return `${hours}時間${minutes}分`;
+    return `${totalMinutes}分`;
+  };
+
   const decisionLabel = (value: Decision) => {
     if (value === "pass") return "通過";
     if (value === "fail") return "不合格";
@@ -1289,6 +1312,7 @@ export default function AdminDashboard({
     };
   }, [menuCollapsed]);
   const resolvedSidebarWidth = menuCollapsed ? 56 : sidebarWidth;
+  const quotaText = formatQuota(orgQuota?.availableSec ?? 0);
 
   return (
     <main className="page">
@@ -1606,6 +1630,11 @@ export default function AdminDashboard({
           )}
         </aside>
         <div className="account-floating">
+          <div className="quota">
+            <span className={`quota-line ${orgQuota ? "" : "quota-muted"}`}>
+              残り利用可能時間：{quotaText}
+            </span>
+          </div>
           <div className="user">
             <OrganizationSwitcher />
             <UserButton />
@@ -1746,7 +1775,9 @@ export default function AdminDashboard({
                   応募を追加
                 </button>
                 {createResult && "error" in createResult && (
-                  <p className="error">作成に失敗しました: {createResult.error}</p>
+                  <p className="error">
+                    {formatCreateErrorMessage(createResult.error, "作成に失敗しました")}
+                  </p>
                 )}
                 {hasResult && (
                   <div className="result">
@@ -1835,7 +1866,10 @@ export default function AdminDashboard({
                   <div className="application-detail">
                     {applicationInterviewResult && "error" in applicationInterviewResult && (
                       <p className="error">
-                        作成に失敗しました: {applicationInterviewResult.error}
+                        {formatCreateErrorMessage(
+                          applicationInterviewResult.error,
+                          "作成に失敗しました"
+                        )}
                       </p>
                     )}
                     <div className="application-split">
@@ -2016,7 +2050,10 @@ export default function AdminDashboard({
                                 </div>
                                 {reissueResult && "error" in reissueResult && (
                                   <p className="error">
-                                    再発行に失敗しました: {reissueResult.error}
+                                    {formatCreateErrorMessage(
+                                      reissueResult.error,
+                                      "再発行に失敗しました"
+                                    )}
                                   </p>
                                 )}
                                 {hasReissueResult && (
@@ -2386,6 +2423,8 @@ export default function AdminDashboard({
           bottom: 16px;
           z-index: 5;
           pointer-events: auto;
+          display: grid;
+          gap: 6px;
           padding: 8px 10px;
           border-radius: 14px;
           background:
@@ -2393,6 +2432,20 @@ export default function AdminDashboard({
           border: 1px solid rgba(151, 175, 214, 0.45);
           box-shadow: 0 10px 24px rgba(18, 38, 73, 0.18);
           backdrop-filter: blur(10px);
+        }
+        .quota {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .quota-line {
+          font-size: 14px;
+          font-weight: 600;
+          color: #1f4fb2;
+        }
+        .quota-muted {
+          color: #7b8aa2;
+          font-weight: 500;
         }
         .sidebar.collapsed .sidebar-header {
           padding-right: 0;

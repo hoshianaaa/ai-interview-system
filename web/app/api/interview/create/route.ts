@@ -70,85 +70,151 @@ export async function POST(req: Request) {
   const publicToken = crypto.randomUUID();
   const roomName = makeRoomName(interviewId);
 
-  let applicationId = applicationIdRaw;
-  let applicationCandidateName = candidateName;
-  let applicationCandidateEmail = candidateEmail;
-  let applicationRecord: {
-    candidateName: string | null;
-    candidateEmail: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-  } | null = null;
-  let round = 1;
+  let result: {
+    interview: {
+      interviewId: string;
+      publicToken: string | null;
+      round: number;
+      createdAt: Date;
+      durationSec: number;
+      expiresAt: Date | null;
+      interviewPrompt: string | null;
+    };
+    applicationId: string;
+    applicationCandidateName: string | null;
+    applicationCandidateEmail: string | null;
+    applicationRecord: {
+      candidateName: string | null;
+      candidateEmail: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    } | null;
+  };
 
-  if (applicationId) {
-    const application = await prisma.application.findFirst({
-      where: { applicationId, orgId }
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const updatedQuota = await tx.orgQuota.updateMany({
+        where: { orgId, availableSec: { gte: durationSec } },
+        data: { availableSec: { decrement: durationSec } }
+      });
+      if (updatedQuota.count === 0) {
+        const existingQuota = await tx.orgQuota.findUnique({ where: { orgId } });
+        if (!existingQuota) {
+          throw new Error("ORG_QUOTA_NOT_CONFIGURED");
+        }
+        throw new Error("ORG_TIME_LIMIT_EXCEEDED");
+      }
+
+      let applicationId = applicationIdRaw;
+      let applicationCandidateName = candidateName;
+      let applicationCandidateEmail = candidateEmail;
+      let applicationRecord: {
+        candidateName: string | null;
+        candidateEmail: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      } | null = null;
+      let round = 1;
+
+      if (applicationId) {
+        const application = await tx.application.findFirst({
+          where: { applicationId, orgId }
+        });
+        if (!application) {
+          throw new Error("APPLICATION_NOT_FOUND");
+        }
+        applicationCandidateName = application.candidateName ?? null;
+        applicationCandidateEmail = application.candidateEmail ?? null;
+        applicationRecord = {
+          candidateName: application.candidateName ?? null,
+          candidateEmail: application.candidateEmail ?? null,
+          createdAt: application.createdAt,
+          updatedAt: application.updatedAt
+        };
+        const maxRound = await tx.interview.aggregate({
+          where: { applicationId },
+          _max: { round: true }
+        });
+        round = roundOverride ?? (maxRound._max.round ?? 0) + 1;
+      } else {
+        applicationId = crypto.randomUUID();
+        const created = await tx.application.create({
+          data: {
+            applicationId,
+            orgId,
+            candidateName: applicationCandidateName,
+            candidateEmail: applicationCandidateEmail
+          }
+        });
+        applicationRecord = {
+          candidateName: created.candidateName ?? null,
+          candidateEmail: created.candidateEmail ?? null,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt
+        };
+      }
+
+      const interview = await tx.interview.create({
+        data: {
+          interviewId,
+          publicToken,
+          orgId,
+          applicationId,
+          roomName,
+          durationSec,
+          quotaReservedSec: durationSec,
+          round,
+          candidateIdentity: makeCandidateIdentity(interviewId),
+          interviewPrompt: prompt,
+          agentName: body.agentName ?? env.agentName,
+          expiresAt
+        }
+      });
+
+      return {
+        interview: {
+          interviewId: interview.interviewId,
+          publicToken: interview.publicToken ?? null,
+          round: interview.round,
+          createdAt: interview.createdAt,
+          durationSec: interview.durationSec,
+          expiresAt: interview.expiresAt ?? null,
+          interviewPrompt: interview.interviewPrompt ?? null
+        },
+        applicationId,
+        applicationCandidateName,
+        applicationCandidateEmail,
+        applicationRecord
+      };
     });
-    if (!application) {
+  } catch (error) {
+    const message = String((error as Error)?.message ?? error);
+    if (message === "APPLICATION_NOT_FOUND") {
       return NextResponse.json({ error: "APPLICATION_NOT_FOUND" }, { status: 404 });
     }
-    applicationCandidateName = application.candidateName ?? null;
-    applicationCandidateEmail = application.candidateEmail ?? null;
-    applicationRecord = {
-      candidateName: application.candidateName ?? null,
-      candidateEmail: application.candidateEmail ?? null,
-      createdAt: application.createdAt,
-      updatedAt: application.updatedAt
-    };
-    const maxRound = await prisma.interview.aggregate({
-      where: { applicationId },
-      _max: { round: true }
-    });
-    round = roundOverride ?? (maxRound._max.round ?? 0) + 1;
-  } else {
-    applicationId = crypto.randomUUID();
-    const created = await prisma.application.create({
-      data: {
-        applicationId,
-        orgId,
-        candidateName: applicationCandidateName,
-        candidateEmail: applicationCandidateEmail
-      }
-    });
-    applicationRecord = {
-      candidateName: created.candidateName ?? null,
-      candidateEmail: created.candidateEmail ?? null,
-      createdAt: created.createdAt,
-      updatedAt: created.updatedAt
-    };
+    if (message === "ORG_QUOTA_NOT_CONFIGURED") {
+      return NextResponse.json({ error: "ORG_QUOTA_NOT_CONFIGURED" }, { status: 409 });
+    }
+    if (message === "ORG_TIME_LIMIT_EXCEEDED") {
+      return NextResponse.json({ error: "ORG_TIME_LIMIT_EXCEEDED" }, { status: 409 });
+    }
+    throw error;
   }
 
-  const interview = await prisma.interview.create({
-    data: {
-      interviewId,
-      publicToken,
-      orgId,
-      applicationId,
-      roomName,
-      durationSec,
-      round,
-      candidateIdentity: makeCandidateIdentity(interviewId),
-      interviewPrompt: prompt,
-      agentName: body.agentName ?? env.agentName,
-      expiresAt
-    }
-  });
-
-  const url = `${env.baseUrl}/interview/${interview.publicToken ?? interview.interviewId}`;
+  const url = `${env.baseUrl}/interview/${result.interview.publicToken ?? result.interview.interviewId}`;
   return NextResponse.json({
-    interviewId: interview.interviewId,
-    applicationId,
-    round: interview.round,
+    interviewId: result.interview.interviewId,
+    applicationId: result.applicationId,
+    round: result.interview.round,
     roomName,
     url,
-    candidateName: applicationCandidateName ?? null,
-    candidateEmail: applicationCandidateEmail ?? null,
-    expiresAt: interview.expiresAt?.toISOString() ?? null,
-    interviewCreatedAt: interview.createdAt.toISOString(),
-    applicationCreatedAt: applicationRecord?.createdAt.toISOString() ?? null,
-    applicationUpdatedAt: applicationRecord?.updatedAt.toISOString() ?? null,
-    durationSec: interview.durationSec,
-    prompt: interview.interviewPrompt ?? null
+    candidateName: result.applicationCandidateName ?? null,
+    candidateEmail: result.applicationCandidateEmail ?? null,
+    expiresAt: result.interview.expiresAt?.toISOString() ?? null,
+    interviewCreatedAt: result.interview.createdAt.toISOString(),
+    applicationCreatedAt: result.applicationRecord?.createdAt.toISOString() ?? null,
+    applicationUpdatedAt: result.applicationRecord?.updatedAt.toISOString() ?? null,
+    durationSec: result.interview.durationSec,
+    prompt: result.interview.interviewPrompt ?? null
   });
 }

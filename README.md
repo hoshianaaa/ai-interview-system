@@ -62,3 +62,26 @@
 - 2nd：二次面接
 - （将来）final：最終面接
 
+# 5. 組織別の面接時間枠
+
+## 目的
+
+- 組織ごとの「残り使用可能時間」を管理し、面接URL発行時に予約、終了時に差分を精算する。
+
+## 定義
+
+- `OrgQuota.availableSec`：組織ごとの残り使用可能時間（秒）。
+- `Interview.quotaReservedSec`：URL発行時に予約した秒数（通常は`durationSec`）。
+- `Interview.actualDurationSec`：実際に使用された秒数（`candidateJoinedAt` → `endedAt`、未参加時は0）。
+- `Interview.quotaSettledAt`：時間枠の精算が完了した時刻。
+
+## 挙動
+
+- URL発行時に`durationSec`分を予約し、`availableSec`から減算。
+- 面接終了時に実使用時間を計算し、未使用分を`availableSec`へ返却。
+- URL発行前に`availableSec`が不足している場合は発行不可。
+
+## 管理者画面・API
+
+- スーパー管理者のみが`/super-admin`から全組織の時間枠を追加・削除できる。
+- APIは`/api/super-admin/org-quotas`を使用（`SUPER_ADMIN_ORG_ID`で制御）。

@@ -6,6 +6,16 @@ export const runtime = "nodejs";
 
 const MAX_TOKEN_LENGTH = 128;
 
+const resolveActualDurationSec = (
+  interview: { candidateJoinedAt: Date | null; usedAt: Date | null },
+  endedAt: Date
+) => {
+  const startedAt = interview.candidateJoinedAt ?? interview.usedAt;
+  if (!startedAt) return 0;
+  const diffMs = endedAt.getTime() - startedAt.getTime();
+  return Math.max(0, Math.round(diffMs / 1000));
+};
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const publicToken = typeof body.publicToken === "string" ? body.publicToken.trim() : "";
@@ -39,9 +49,36 @@ export async function POST(req: Request) {
     await room.deleteRoom(interview.roomName);
   } catch {}
 
-  await prisma.interview.update({
-    where: { interviewId: interview.interviewId },
-    data: { status: "completed", endedAt: new Date() }
+  const endedAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.interview.findUnique({
+      where: { interviewId: interview.interviewId }
+    });
+    if (!current || current.status === "completed") return;
+
+    const actualDurationSec =
+      current.actualDurationSec ?? resolveActualDurationSec(current, endedAt);
+    const reservedSec = current.quotaReservedSec ?? 0;
+    const billedSec = reservedSec > 0 ? Math.min(reservedSec, actualDurationSec) : actualDurationSec;
+    const shouldSettle = reservedSec > 0 && !current.quotaSettledAt;
+    const refundSec = shouldSettle ? Math.max(0, reservedSec - billedSec) : 0;
+
+    if (refundSec > 0 && current.orgId) {
+      await tx.orgQuota.updateMany({
+        where: { orgId: current.orgId },
+        data: { availableSec: { increment: refundSec } }
+      });
+    }
+
+    await tx.interview.update({
+      where: { interviewId: current.interviewId },
+      data: {
+        status: "completed",
+        endedAt,
+        ...(current.actualDurationSec ? {} : { actualDurationSec }),
+        ...(shouldSettle ? { quotaSettledAt: endedAt } : {})
+      }
+    });
   });
 
   return NextResponse.json({ ok: true });

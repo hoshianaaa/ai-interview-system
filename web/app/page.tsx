@@ -37,6 +37,9 @@ export default async function HomePage() {
   const settings = await prisma.orgSetting.findUnique({
     where: { orgId }
   });
+  const orgQuota = await prisma.orgQuota.findUnique({
+    where: { orgId }
+  });
   const now = new Date();
   const data = interviews.map((row) => ({
     interviewId: row.interviewId,
@@ -84,6 +87,12 @@ export default async function HomePage() {
     defaultExpiresDays: settings?.defaultExpiresDays ?? 0,
     defaultExpiresHours: settings?.defaultExpiresHours ?? 0
   };
+  const quotaData = orgQuota
+    ? {
+        availableSec: orgQuota.availableSec,
+        updatedAt: orgQuota.updatedAt.toISOString()
+      }
+    : null;
 
   return (
     <AdminDashboard
@@ -91,6 +100,7 @@ export default async function HomePage() {
       applications={applicationData}
       promptTemplates={templateData}
       settings={settingsData}
+      orgQuota={quotaData}
     />
   );
 }

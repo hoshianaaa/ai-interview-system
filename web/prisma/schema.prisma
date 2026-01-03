@@ -52,6 +52,8 @@ model Interview {
   decision          InterviewDecision @default(undecided)
   round             Int             @default(1)
   durationSec       Int
+  quotaReservedSec  Int?
+  actualDurationSec Int?
 
   candidateIdentity String
   agentName         String
@@ -61,6 +63,7 @@ model Interview {
   recordingStartedAt DateTime?
   interviewPrompt   String?         @db.Text
   expiresAt         DateTime?
+  quotaSettledAt    DateTime?
 
   createdAt         DateTime        @default(now())
   usedAt            DateTime?
@@ -112,4 +115,11 @@ model OrgSetting {
   defaultExpiresHours Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+model OrgQuota {
+  orgId        String   @id
+  availableSec Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
