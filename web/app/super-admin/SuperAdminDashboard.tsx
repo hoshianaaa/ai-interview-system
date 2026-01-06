@@ -43,9 +43,9 @@ type OrgSubscriptionResponse =
   | { orgSubscription: null }
   | { error: string };
 
-const formatDateTime = (value: string | null) => {
+const formatDate = (value: string | null) => {
   if (!value) return "未加入";
-  return new Date(value).toLocaleString("ja-JP");
+  return new Date(value).toLocaleDateString("ja-JP");
 };
 
 const formatMinutes = (sec: number, mode: "floor" | "ceil" = "floor") =>
@@ -294,7 +294,7 @@ export default function SuperAdminDashboard({
               <div>プラン</div>
               <div>次回更新</div>
               <div>残り/超過</div>
-              <div>承認</div>
+              <div>超過承認</div>
               <div>継続</div>
               <div>詳細</div>
             </div>
@@ -332,16 +332,13 @@ export default function SuperAdminDashboard({
                       <div>{planLabel(row.planId)}</div>
                       {!row.hasSubscription && <span className="badge">未加入</span>}
                     </div>
-                    <div>{formatDateTime(row.cycleEndsAt)}</div>
+                    <div>{formatDate(row.cycleEndsAt)}</div>
                     <div className="usage">
                       <div>
                         {plan
                           ? `${formatMinutes(remainingIncludedSec)} / ${plan.includedMinutes}分`
                           : "-"}
                       </div>
-                      {plan && (
-                        <div className="subtle">超過残り: {overageRemainingSec === null ? "無制限" : formatMinutes(overageRemainingSec)}</div>
-                      )}
                       {overageLocked && <span className="badge warn">承認待ち</span>}
                     </div>
                     <div>
@@ -438,15 +435,15 @@ export default function SuperAdminDashboard({
                       <div className="detail-meta">
                         <div>
                           <p className="label">加入日</p>
-                          <p className="value">{formatDateTime(row.billingAnchorAt)}</p>
+                          <p className="value">{formatDate(row.billingAnchorAt)}</p>
                         </div>
                         <div>
                           <p className="label">サイクル開始</p>
-                          <p className="value">{formatDateTime(row.cycleStartedAt)}</p>
+                          <p className="value">{formatDate(row.cycleStartedAt)}</p>
                         </div>
                         <div>
                           <p className="label">サイクル終了</p>
-                          <p className="value">{formatDateTime(row.cycleEndsAt)}</p>
+                          <p className="value">{formatDate(row.cycleEndsAt)}</p>
                         </div>
                       </div>
                       <div className="detail-meta">

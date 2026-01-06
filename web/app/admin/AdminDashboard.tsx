@@ -1338,7 +1338,7 @@ export default function AdminDashboard({
   const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
   const nextBillingText = billingInfo
-    ? new Date(billingInfo.cycleEndsAt).toLocaleString("ja-JP")
+    ? new Date(billingInfo.cycleEndsAt).toLocaleDateString("ja-JP")
     : "未加入";
   const remainingIncludedText = billingInfo
     ? `${toRoundedMinutes(billingInfo.remainingIncludedSec)}/${billingInfo.includedMinutes}分`
@@ -1347,11 +1347,6 @@ export default function AdminDashboard({
     ? formatMinutes(billingInfo.overageUsedSec, "ceil")
     : "-";
   const overageChargeText = billingInfo ? formatYen(billingInfo.overageChargeYen) : "-";
-  const overageRemainingText = billingInfo
-    ? billingInfo.overageRemainingSec === null
-      ? "無制限"
-      : formatMinutes(billingInfo.overageRemainingSec)
-    : "-";
 
   return (
     <main className="page">
@@ -1669,33 +1664,6 @@ export default function AdminDashboard({
         )}
       </aside>
         <div className="account-floating">
-          <div className="billing">
-            <div className="billing-line">
-              プラン：{planLabel}
-              {billingInfo ? `（月額${formatYen(billingInfo.monthlyPriceYen)}）` : ""}
-            </div>
-            {billingInfo ? (
-              <>
-                <div className="billing-line">次回更新日：{nextBillingText}</div>
-                <div className="billing-line">残り面接時間：{remainingIncludedText}</div>
-                <div className="billing-line">
-                  超過利用：{overageUsedText}（{overageChargeText}）
-                </div>
-                <div className="billing-line">
-                  超過上限までの残り：{overageRemainingText}
-                </div>
-                {billingInfo.overageLocked && (
-                  <div className="billing-alert">管理者承認待ち</div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="billing-muted">
-                  プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
-                </div>
-              </>
-            )}
-          </div>
           <div className="user">
             <OrganizationSwitcher />
             <UserButton />
@@ -2270,6 +2238,44 @@ export default function AdminDashboard({
                 <h2>設定</h2>
                 <div className="settings">
                   <div className="settings-section">
+                    <h3>利用状況</h3>
+                    <div className="billing">
+                      <div className="billing-grid">
+                        <div className="billing-item">
+                          <span className="billing-label">プラン</span>
+                          <span className="billing-value">{planLabel}</span>
+                        </div>
+                        {billingInfo ? (
+                          <>
+                            <div className="billing-item">
+                              <span className="billing-label">次回更新</span>
+                              <span className="billing-value">{nextBillingText}</span>
+                            </div>
+                            <div className="billing-item">
+                              <span className="billing-label">残り面接</span>
+                              <span className="billing-value">
+                                {remainingIncludedText}
+                              </span>
+                            </div>
+                            <div className="billing-item">
+                              <span className="billing-label">超過利用</span>
+                              <span className="billing-value">
+                                {overageUsedText}（{overageChargeText}）
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="billing-muted">
+                            プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                          </div>
+                        )}
+                      </div>
+                      {billingInfo?.overageLocked && (
+                        <div className="billing-alert">管理者承認待ち</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="settings-section">
                     <h3>デフォルト面接設定</h3>
                     <div className="form-row">
                       <label>面接時間（分）</label>
@@ -2510,17 +2516,40 @@ export default function AdminDashboard({
         }
         .billing {
           display: grid;
-          gap: 6px;
+          gap: 8px;
           font-size: 13px;
           color: #1f4fb2;
         }
-        .billing-line {
+        .billing-title {
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #7b8aa2;
+          font-weight: 600;
+        }
+        .billing-grid {
+          display: grid;
+          gap: 6px;
+        }
+        .billing-item {
+          display: grid;
+          grid-template-columns: 74px 1fr;
+          align-items: center;
+          gap: 8px;
+        }
+        .billing-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: #6a7a96;
+        }
+        .billing-value {
           font-weight: 600;
         }
         .billing-muted {
           color: #7b8aa2;
           font-weight: 500;
           font-size: 12px;
+          grid-column: 1 / -1;
         }
         .billing-alert {
           width: fit-content;
