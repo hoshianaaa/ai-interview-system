@@ -3,7 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { env, makeCandidateIdentity, makeRoomName } from "@/lib/livekit";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
-import { getCycleRange, getPlanConfig } from "@/lib/billing";
+import { getPlanConfig } from "@/lib/billing";
+import { refreshOrgSubscription } from "@/lib/subscription";
 
 export const runtime = "nodejs";
 
@@ -100,20 +101,9 @@ export async function POST(req: Request) {
       }
 
       const now = new Date();
-      const cycle = getCycleRange(subscription.billingAnchorAt, now);
-      if (
-        subscription.cycleStartedAt.getTime() !== cycle.start.getTime() ||
-        subscription.cycleEndsAt.getTime() !== cycle.end.getTime()
-      ) {
-        subscription = await tx.orgSubscription.update({
-          where: { orgId },
-          data: {
-            cycleStartedAt: cycle.start,
-            cycleEndsAt: cycle.end,
-            usedSec: 0,
-            reservedSec: 0
-          }
-        });
+      subscription = await refreshOrgSubscription(tx, subscription, now);
+      if (!subscription) {
+        throw new Error("ORG_SUBSCRIPTION_REQUIRED");
       }
 
       const plan = getPlanConfig(subscription.plan);

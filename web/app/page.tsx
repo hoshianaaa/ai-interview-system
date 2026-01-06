@@ -3,7 +3,8 @@ import OrganizationGate from "./admin/OrganizationGate";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getProgressStatusLabel } from "@/lib/interview-status";
-import { buildBillingSummary, getCycleRange } from "@/lib/billing";
+import { buildBillingSummary } from "@/lib/billing";
+import { refreshOrgSubscription } from "@/lib/subscription";
 
 export default async function HomePage() {
   const { orgId } = await auth();
@@ -90,40 +91,27 @@ export default async function HomePage() {
   };
   let billingData = null;
   if (subscription) {
-    const cycle = getCycleRange(subscription.billingAnchorAt, now);
-    let current = subscription;
-    if (
-      subscription.cycleStartedAt.getTime() !== cycle.start.getTime() ||
-      subscription.cycleEndsAt.getTime() !== cycle.end.getTime()
-    ) {
-      current = await prisma.orgSubscription.update({
-        where: { orgId },
-        data: {
-          cycleStartedAt: cycle.start,
-          cycleEndsAt: cycle.end,
-          usedSec: 0,
-          reservedSec: 0
-        }
-      });
+    const current = await refreshOrgSubscription(prisma, subscription, now);
+    if (current) {
+      const summary = buildBillingSummary(current);
+      billingData = {
+        planId: summary.planId,
+        monthlyPriceYen: summary.monthlyPriceYen,
+        includedMinutes: summary.includedMinutes,
+        overageRateYenPerMin: summary.overageRateYenPerMin,
+        overageLimitMinutes: summary.overageLimitMinutes,
+        cycleStartedAt: summary.cycleStartedAt.toISOString(),
+        cycleEndsAt: summary.cycleEndsAt.toISOString(),
+        usedSec: summary.usedSec,
+        reservedSec: summary.reservedSec,
+        remainingIncludedSec: summary.remainingIncludedSec,
+        overageUsedSec: summary.overageUsedSec,
+        overageChargeYen: summary.overageChargeYen,
+        overageRemainingSec: summary.overageRemainingSec,
+        overageApproved: summary.overageApproved,
+        overageLocked: summary.overageLocked
+      };
     }
-    const summary = buildBillingSummary(current);
-    billingData = {
-      planId: summary.planId,
-      monthlyPriceYen: summary.monthlyPriceYen,
-      includedMinutes: summary.includedMinutes,
-      overageRateYenPerMin: summary.overageRateYenPerMin,
-      overageLimitMinutes: summary.overageLimitMinutes,
-      cycleStartedAt: summary.cycleStartedAt.toISOString(),
-      cycleEndsAt: summary.cycleEndsAt.toISOString(),
-      usedSec: summary.usedSec,
-      reservedSec: summary.reservedSec,
-      remainingIncludedSec: summary.remainingIncludedSec,
-      overageUsedSec: summary.overageUsedSec,
-      overageChargeYen: summary.overageChargeYen,
-      overageRemainingSec: summary.overageRemainingSec,
-      overageApproved: summary.overageApproved,
-      overageLocked: summary.overageLocked
-    };
   }
 
   return (

@@ -59,6 +59,7 @@ export async function GET() {
       usedSec: row.usedSec,
       reservedSec: row.reservedSec,
       overageApproved: row.overageApproved,
+      renewOnCycleEnd: row.renewOnCycleEnd,
       updatedAt: row.updatedAt.toISOString()
     }))
   });
@@ -81,7 +82,8 @@ export async function PATCH(req: Request) {
 
   const hasOverage = hasOwn(body, "overageApproved");
   const hasPlan = hasOwn(body, "planId");
-  if (!hasOverage && !hasPlan) {
+  const hasRenew = hasOwn(body, "renewOnCycleEnd");
+  if (!hasOverage && !hasPlan && !hasRenew) {
     return NextResponse.json({ error: "INVALID_SUBSCRIPTION_INPUT" }, { status: 400 });
   }
 
@@ -90,6 +92,14 @@ export async function PATCH(req: Request) {
     nextOverageApproved = parseBoolean(body.overageApproved);
     if (nextOverageApproved === null) {
       return NextResponse.json({ error: "INVALID_OVERAGE_INPUT" }, { status: 400 });
+    }
+  }
+
+  let nextRenewOnCycleEnd: boolean | null = null;
+  if (hasRenew) {
+    nextRenewOnCycleEnd = parseBoolean(body.renewOnCycleEnd);
+    if (nextRenewOnCycleEnd === null) {
+      return NextResponse.json({ error: "INVALID_RENEW_INPUT" }, { status: 400 });
     }
   }
 
@@ -124,7 +134,8 @@ export async function PATCH(req: Request) {
         cycleEndsAt: cycle.end,
         usedSec: 0,
         reservedSec: 0,
-        overageApproved: nextOverageApproved ?? false
+        overageApproved: nextOverageApproved ?? false,
+        renewOnCycleEnd: nextRenewOnCycleEnd ?? false
       }
     });
   } else {
@@ -140,6 +151,7 @@ export async function PATCH(req: Request) {
       usedSec?: number;
       reservedSec?: number;
       overageApproved?: boolean;
+      renewOnCycleEnd?: boolean;
     } = {};
     if (nextPlanId) {
       const cycle = getCycleRange(now, now);
@@ -152,6 +164,9 @@ export async function PATCH(req: Request) {
     }
     if (nextOverageApproved !== null) {
       data.overageApproved = nextOverageApproved;
+    }
+    if (nextRenewOnCycleEnd !== null) {
+      data.renewOnCycleEnd = nextRenewOnCycleEnd;
     }
     updated = await prisma.orgSubscription.update({
       where: { orgId: targetOrgId },
@@ -169,6 +184,7 @@ export async function PATCH(req: Request) {
       usedSec: updated.usedSec,
       reservedSec: updated.reservedSec,
       overageApproved: updated.overageApproved,
+      renewOnCycleEnd: updated.renewOnCycleEnd,
       updatedAt: updated.updatedAt.toISOString()
     }
   });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { clients } from "@/lib/livekit";
-import { getCycleRange } from "@/lib/billing";
+import { refreshOrgSubscription } from "@/lib/subscription";
 
 export const runtime = "nodejs";
 
@@ -67,30 +67,17 @@ export async function POST(req: Request) {
         where: { orgId: current.orgId }
       });
       if (subscription) {
-        const cycle = getCycleRange(subscription.billingAnchorAt, endedAt);
-        if (
-          subscription.cycleStartedAt.getTime() !== cycle.start.getTime() ||
-          subscription.cycleEndsAt.getTime() !== cycle.end.getTime()
-        ) {
-          subscription = await tx.orgSubscription.update({
+        subscription = await refreshOrgSubscription(tx, subscription, endedAt);
+        if (subscription) {
+          const nextReservedSec = Math.max(0, subscription.reservedSec - reservedSec);
+          await tx.orgSubscription.update({
             where: { orgId: subscription.orgId },
             data: {
-              cycleStartedAt: cycle.start,
-              cycleEndsAt: cycle.end,
-              usedSec: 0,
-              reservedSec: 0
+              usedSec: { increment: billedSec },
+              reservedSec: nextReservedSec
             }
           });
         }
-
-        const nextReservedSec = Math.max(0, subscription.reservedSec - reservedSec);
-        await tx.orgSubscription.update({
-          where: { orgId: subscription.orgId },
-          data: {
-            usedSec: { increment: billedSec },
-            reservedSec: nextReservedSec
-          }
-        });
       }
     }
 

@@ -1,7 +1,9 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
+import type { OrgSubscription } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
 import type { OrgPlan } from "@/lib/billing";
+import { refreshOrgSubscription } from "@/lib/subscription";
 import OrganizationGate from "../admin/OrganizationGate";
 import SuperAdminDashboard from "./SuperAdminDashboard";
 import SuperAdminGate from "./SuperAdminGate";
@@ -16,6 +18,7 @@ type OrgSubscriptionRow = {
   usedSec: number;
   reservedSec: number;
   overageApproved: boolean;
+  renewOnCycleEnd: boolean;
   updatedAt: string | null;
   hasSubscription: boolean;
 };
@@ -67,8 +70,16 @@ export default async function SuperAdminPage() {
   const subscriptions = await prisma.orgSubscription.findMany({
     orderBy: { orgId: "asc" }
   });
+  const now = new Date();
+  const refreshedSubscriptions = (
+    await Promise.all(
+      subscriptions.map((subscription) =>
+        refreshOrgSubscription(prisma, subscription, now)
+      )
+    )
+  ).filter((subscription): subscription is OrgSubscription => subscription !== null);
   const subscriptionsByOrg = new Map(
-    subscriptions.map((row) => [row.orgId, row])
+    refreshedSubscriptions.map((row) => [row.orgId, row])
   );
 
   let orgs: { id: string; name: string }[] = [];
@@ -91,13 +102,14 @@ export default async function SuperAdminPage() {
       usedSec: subscription?.usedSec ?? 0,
       reservedSec: subscription?.reservedSec ?? 0,
       overageApproved: subscription?.overageApproved ?? false,
+      renewOnCycleEnd: subscription?.renewOnCycleEnd ?? false,
       updatedAt: subscription?.updatedAt.toISOString() ?? null,
       hasSubscription: Boolean(subscription)
     };
   });
 
   const orgIdSet = new Set(orgs.map((org) => org.id));
-  for (const subscription of subscriptions) {
+  for (const subscription of refreshedSubscriptions) {
     if (orgIdSet.has(subscription.orgId)) continue;
     rows.push({
       orgId: subscription.orgId,
@@ -109,6 +121,7 @@ export default async function SuperAdminPage() {
       usedSec: subscription.usedSec,
       reservedSec: subscription.reservedSec,
       overageApproved: subscription.overageApproved,
+      renewOnCycleEnd: subscription.renewOnCycleEnd,
       updatedAt: subscription.updatedAt.toISOString(),
       hasSubscription: true
     });

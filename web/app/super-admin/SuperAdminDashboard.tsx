@@ -20,6 +20,7 @@ type OrgSubscriptionRow = {
   usedSec: number;
   reservedSec: number;
   overageApproved: boolean;
+  renewOnCycleEnd: boolean;
   updatedAt: string | null;
   hasSubscription: boolean;
 };
@@ -35,6 +36,7 @@ type OrgSubscriptionResponse =
         usedSec: number;
         reservedSec: number;
         overageApproved: boolean;
+        renewOnCycleEnd: boolean;
         updatedAt: string;
       };
     }
@@ -75,7 +77,15 @@ export default function SuperAdminDashboard({
   });
   const [query, setQuery] = useState("");
   const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
-  const [savingOrgId, setSavingOrgId] = useState<string | null>(null);
+  const [savingOverageByOrg, setSavingOverageByOrg] = useState<
+    Record<string, boolean>
+  >({});
+  const [savingRenewalByOrg, setSavingRenewalByOrg] = useState<
+    Record<string, boolean>
+  >({});
+  const [savingPlanByOrg, setSavingPlanByOrg] = useState<Record<string, boolean>>(
+    {}
+  );
   const [rowError, setRowError] = useState<{ orgId: string; message: string } | null>(
     null
   );
@@ -115,6 +125,7 @@ export default function SuperAdminDashboard({
               usedSec: updated.usedSec,
               reservedSec: updated.reservedSec,
               overageApproved: updated.overageApproved,
+              renewOnCycleEnd: updated.renewOnCycleEnd,
               updatedAt: updated.updatedAt,
               hasSubscription: true
             }
@@ -137,6 +148,7 @@ export default function SuperAdminDashboard({
               usedSec: 0,
               reservedSec: 0,
               overageApproved: false,
+              renewOnCycleEnd: false,
               updatedAt: null,
               hasSubscription: false
             }
@@ -146,9 +158,38 @@ export default function SuperAdminDashboard({
     setPlanByOrg((prev) => ({ ...prev, [orgId]: NONE_PLAN_VALUE }));
   };
 
+  const toggleRenewal = async (orgId: string, nextValue: boolean) => {
+    setRowError(null);
+    setSavingRenewalByOrg((prev) => ({ ...prev, [orgId]: true }));
+    try {
+      const res = await fetch("/api/super-admin/org-quotas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId, renewOnCycleEnd: nextValue })
+      });
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data)) {
+        setRowError({
+          orgId,
+          message: "error" in data ? data.error : "REQUEST_FAILED"
+        });
+        return;
+      }
+      if (!data.orgSubscription) {
+        setRowError({ orgId, message: "SUBSCRIPTION_NOT_FOUND" });
+        return;
+      }
+      applySubscriptionUpdate(data);
+    } catch {
+      setRowError({ orgId, message: "REQUEST_FAILED" });
+    } finally {
+      setSavingRenewalByOrg((prev) => ({ ...prev, [orgId]: false }));
+    }
+  };
+
   const toggleOverageApproval = async (orgId: string, nextValue: boolean) => {
     setRowError(null);
-    setSavingOrgId(orgId);
+    setSavingOverageByOrg((prev) => ({ ...prev, [orgId]: true }));
     try {
       const res = await fetch("/api/super-admin/org-quotas", {
         method: "PATCH",
@@ -171,7 +212,7 @@ export default function SuperAdminDashboard({
     } catch {
       setRowError({ orgId, message: "REQUEST_FAILED" });
     } finally {
-      setSavingOrgId(null);
+      setSavingOverageByOrg((prev) => ({ ...prev, [orgId]: false }));
     }
   };
 
@@ -179,7 +220,7 @@ export default function SuperAdminDashboard({
     const selectedPlanId = planByOrg[orgId] ?? NONE_PLAN_VALUE;
     const planId = selectedPlanId === NONE_PLAN_VALUE ? null : selectedPlanId;
     setRowError(null);
-    setSavingOrgId(orgId);
+    setSavingPlanByOrg((prev) => ({ ...prev, [orgId]: true }));
     try {
       const res = await fetch("/api/super-admin/org-quotas", {
         method: "PATCH",
@@ -202,7 +243,7 @@ export default function SuperAdminDashboard({
     } catch {
       setRowError({ orgId, message: "REQUEST_FAILED" });
     } finally {
-      setSavingOrgId(null);
+      setSavingPlanByOrg((prev) => ({ ...prev, [orgId]: false }));
     }
   };
 
@@ -254,6 +295,7 @@ export default function SuperAdminDashboard({
               <div>次回更新</div>
               <div>残り/超過</div>
               <div>承認</div>
+              <div>継続</div>
               <div>詳細</div>
             </div>
             {filteredRows.map((row) => {
@@ -275,6 +317,9 @@ export default function SuperAdminDashboard({
                 plan && !row.overageApproved && overageRemainingSec === 0;
               const isExpanded = expandedOrgId === row.orgId;
               const error = rowError?.orgId === row.orgId ? rowError.message : null;
+              const isOverageSaving = savingOverageByOrg[row.orgId] ?? false;
+              const isRenewalSaving = savingRenewalByOrg[row.orgId] ?? false;
+              const isPlanSaving = savingPlanByOrg[row.orgId] ?? false;
 
               return (
                 <div className="row-group" key={row.orgId}>
@@ -303,7 +348,7 @@ export default function SuperAdminDashboard({
                       <button
                         type="button"
                         className={row.overageApproved ? "ghost" : "primary"}
-                        disabled={!row.hasSubscription || savingOrgId === row.orgId}
+                        disabled={!row.hasSubscription || isOverageSaving}
                         onClick={() =>
                           void toggleOverageApproval(
                             row.orgId,
@@ -311,13 +356,32 @@ export default function SuperAdminDashboard({
                           )
                         }
                       >
-                        {savingOrgId === row.orgId
+                        {isOverageSaving
                           ? "更新中..."
                           : row.overageApproved
                             ? "承認解除"
                             : "承認"}
                       </button>
                       {error && <p className="error">{error}</p>}
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        className={`switch ${row.renewOnCycleEnd ? "on" : "off"}`}
+                        role="switch"
+                        aria-checked={row.renewOnCycleEnd}
+                        disabled={!row.hasSubscription || isRenewalSaving}
+                        onClick={() =>
+                          void toggleRenewal(row.orgId, !row.renewOnCycleEnd)
+                        }
+                      >
+                        <span className="switch-track">
+                          <span className="switch-thumb" />
+                        </span>
+                        <span className="switch-label">
+                          {row.renewOnCycleEnd ? "ON" : "OFF"}
+                        </span>
+                      </button>
                     </div>
                     <div>
                       <button
@@ -360,10 +424,10 @@ export default function SuperAdminDashboard({
                             </select>
                             <button
                               type="button"
-                              disabled={savingOrgId === row.orgId || !planDirty}
+                              disabled={isPlanSaving || !planDirty}
                               onClick={() => void updatePlan(row.orgId)}
                             >
-                              {savingOrgId === row.orgId ? "更新中..." : "プラン更新"}
+                              {isPlanSaving ? "更新中..." : "プラン更新"}
                             </button>
                           </div>
                           <p className="subtle">
@@ -524,6 +588,45 @@ export default function SuperAdminDashboard({
           color: #2a5b99;
           border: 1px solid #c9d6eb;
         }
+        .switch {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0;
+          background: transparent;
+          border: none;
+          color: #2a5b99;
+          font-weight: 600;
+        }
+        .switch-track {
+          position: relative;
+          width: 42px;
+          height: 22px;
+          border-radius: 999px;
+          background: #d5dde9;
+          transition: background 0.2s ease;
+        }
+        .switch-thumb {
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          background: #ffffff;
+          box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+          transition: transform 0.2s ease;
+        }
+        .switch.on .switch-track {
+          background: #2a5b99;
+        }
+        .switch.on .switch-thumb {
+          transform: translateX(20px);
+        }
+        .switch-label {
+          font-size: 12px;
+          color: #5e6d84;
+        }
         .primary {
           background: #2a5b99;
         }
@@ -540,7 +643,8 @@ export default function SuperAdminDashboard({
           grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 0.7fr) minmax(
               160px,
               0.8fr
-            ) minmax(200px, 1fr) minmax(140px, 0.6fr) minmax(90px, 0.4fr);
+            ) minmax(200px, 1fr) minmax(140px, 0.6fr) minmax(120px, 0.5fr)
+            minmax(90px, 0.4fr);
           align-items: center;
           gap: 16px;
           padding: 12px 10px;
