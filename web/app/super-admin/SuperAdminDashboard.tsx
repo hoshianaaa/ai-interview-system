@@ -1,63 +1,84 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import {
+  calcOverageYen,
+  getPlanConfig,
+  PLAN_CONFIG,
+  toRoundedMinutes,
+  type OrgPlan
+} from "@/lib/billing";
 
-type OrgQuotaRow = {
+type OrgSubscriptionRow = {
   orgId: string;
   orgName: string;
-  availableSec: number;
+  planId: OrgPlan | null;
+  billingAnchorAt: string | null;
+  cycleStartedAt: string | null;
+  cycleEndsAt: string | null;
+  usedSec: number;
+  reservedSec: number;
+  overageApproved: boolean;
   updatedAt: string | null;
-  hasQuota: boolean;
+  hasSubscription: boolean;
 };
 
-type ActionScope = "add" | "set" | "reduce";
-
-type OrgQuotaResponse =
-  | { orgQuota: { orgId: string; availableSec: number; updatedAt: string } }
+type OrgSubscriptionResponse =
+  | {
+      orgSubscription: {
+        orgId: string;
+        plan: OrgPlan;
+        billingAnchorAt: string;
+        cycleStartedAt: string;
+        cycleEndsAt: string;
+        usedSec: number;
+        reservedSec: number;
+        overageApproved: boolean;
+        updatedAt: string;
+      };
+    }
+  | { orgSubscription: null }
   | { error: string };
 
-const formatSeconds = (valueSec: number) => {
-  const safe = Math.max(0, Math.floor(valueSec));
-  const minutes = Math.floor(safe / 60);
-  const seconds = safe % 60;
-  if (seconds === 0) return `${minutes} min`;
-  return `${minutes} min ${seconds} sec`;
-};
-
-const formatUpdatedAt = (value: string | null) => {
-  if (!value) return "未設定";
+const formatDateTime = (value: string | null) => {
+  if (!value) return "未加入";
   return new Date(value).toLocaleString("ja-JP");
 };
 
-const normalizeMinutesInput = (value: string) => {
-  if (!value) return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  return Math.round(parsed);
+const formatMinutes = (sec: number, mode: "floor" | "ceil" = "floor") =>
+  `${toRoundedMinutes(sec, mode)}分`;
+
+const planLabel = (planId: OrgPlan | null) => {
+  if (!planId) return "未加入";
+  if (planId === "starter") return "スターター";
+  return planId;
 };
 
-const makeKey = (scope: ActionScope, orgId: string) => `${scope}:${orgId}`;
+const NONE_PLAN_VALUE = "none" as const;
+type PlanSelectValue = OrgPlan | typeof NONE_PLAN_VALUE;
 
 export default function SuperAdminDashboard({
   initialRows,
   orgsLoadError
 }: {
-  initialRows: OrgQuotaRow[];
+  initialRows: OrgSubscriptionRow[];
   orgsLoadError?: string | null;
 }) {
-  const [rows, setRows] = useState<OrgQuotaRow[]>(initialRows);
+  const [rows, setRows] = useState<OrgSubscriptionRow[]>(initialRows);
+  const [planByOrg, setPlanByOrg] = useState<Record<string, PlanSelectValue>>(() => {
+    const next: Record<string, PlanSelectValue> = {};
+    for (const row of initialRows) {
+      next[row.orgId] = row.planId ?? NONE_PLAN_VALUE;
+    }
+    return next;
+  });
   const [query, setQuery] = useState("");
-  const [addByOrg, setAddByOrg] = useState<Record<string, string>>({});
-  const [setByOrg, setSetByOrg] = useState<Record<string, string>>({});
-  const [reduceByOrg, setReduceByOrg] = useState<Record<string, string>>({});
   const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<{
-    orgId: string;
-    scope: ActionScope;
-    message: string;
-  } | null>(null);
+  const [savingOrgId, setSavingOrgId] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ orgId: string; message: string } | null>(
+    null
+  );
 
   const sortedRows = useMemo(
     () =>
@@ -79,148 +100,118 @@ export default function SuperAdminDashboard({
     );
   }, [sortedRows, query]);
 
-  const applyQuotaUpdate = (
-    orgId: string,
-    next: { availableSec: number; updatedAt: string }
-  ) => {
-    setRows((prev) => {
-      const idx = prev.findIndex((row) => row.orgId === orgId);
-      if (idx === -1) {
-        return [
-          ...prev,
-          {
-            orgId,
-            orgName: orgId,
-            availableSec: next.availableSec,
-            updatedAt: next.updatedAt,
-            hasQuota: true
-          }
-        ];
-      }
-      const updated = [...prev];
-      updated[idx] = {
-        ...prev[idx],
-        availableSec: next.availableSec,
-        updatedAt: next.updatedAt,
-        hasQuota: true
-      };
-      return updated;
-    });
+  const applySubscriptionUpdate = (next: OrgSubscriptionResponse) => {
+    if (!("orgSubscription" in next) || !next.orgSubscription) return;
+    const updated = next.orgSubscription;
+    setRows((prev) =>
+      prev.map((row) =>
+        row.orgId === updated.orgId
+          ? {
+              ...row,
+              planId: updated.plan,
+              billingAnchorAt: updated.billingAnchorAt,
+              cycleStartedAt: updated.cycleStartedAt,
+              cycleEndsAt: updated.cycleEndsAt,
+              usedSec: updated.usedSec,
+              reservedSec: updated.reservedSec,
+              overageApproved: updated.overageApproved,
+              updatedAt: updated.updatedAt,
+              hasSubscription: true
+            }
+          : row
+      )
+    );
+    setPlanByOrg((prev) => ({ ...prev, [updated.orgId]: updated.plan }));
   };
 
-  const requestUpdate = async (
-    orgId: string,
-    payload: Record<string, unknown>,
-    scope: ActionScope
-  ) => {
+  const applySubscriptionRemoval = (orgId: string) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.orgId === orgId
+          ? {
+              ...row,
+              planId: null,
+              billingAnchorAt: null,
+              cycleStartedAt: null,
+              cycleEndsAt: null,
+              usedSec: 0,
+              reservedSec: 0,
+              overageApproved: false,
+              updatedAt: null,
+              hasSubscription: false
+            }
+          : row
+      )
+    );
+    setPlanByOrg((prev) => ({ ...prev, [orgId]: NONE_PLAN_VALUE }));
+  };
+
+  const toggleOverageApproval = async (orgId: string, nextValue: boolean) => {
     setRowError(null);
-    const key = makeKey(scope, orgId);
-    setSavingKey(key);
+    setSavingOrgId(orgId);
     try {
       const res = await fetch("/api/super-admin/org-quotas", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId, ...payload })
+        body: JSON.stringify({ orgId, overageApproved: nextValue })
       });
-      const data = (await res.json()) as OrgQuotaResponse;
-      if (!res.ok || !("orgQuota" in data)) {
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data)) {
         setRowError({
           orgId,
-          scope,
           message: "error" in data ? data.error : "REQUEST_FAILED"
         });
-        return false;
+        return;
       }
-      applyQuotaUpdate(orgId, {
-        availableSec: data.orgQuota.availableSec,
-        updatedAt: data.orgQuota.updatedAt
-      });
-      return true;
+      if (!data.orgSubscription) {
+        setRowError({ orgId, message: "SUBSCRIPTION_NOT_FOUND" });
+        return;
+      }
+      applySubscriptionUpdate(data);
     } catch {
-      setRowError({ orgId, scope, message: "REQUEST_FAILED" });
-      return false;
+      setRowError({ orgId, message: "REQUEST_FAILED" });
     } finally {
-      setSavingKey(null);
+      setSavingOrgId(null);
     }
   };
 
-  async function handleAddMinutes(orgId: string, e: FormEvent) {
-    e.preventDefault();
-    const input = addByOrg[orgId] ?? "";
-    const minutes = normalizeMinutesInput(input);
-    if (minutes === null || minutes <= 0) {
-      setRowError({
-        orgId,
-        scope: "add",
-        message: "追加する分数を入力してください。"
+  const updatePlan = async (orgId: string) => {
+    const selectedPlanId = planByOrg[orgId] ?? NONE_PLAN_VALUE;
+    const planId = selectedPlanId === NONE_PLAN_VALUE ? null : selectedPlanId;
+    setRowError(null);
+    setSavingOrgId(orgId);
+    try {
+      const res = await fetch("/api/super-admin/org-quotas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId, planId })
       });
-      return;
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data)) {
+        setRowError({
+          orgId,
+          message: "error" in data ? data.error : "REQUEST_FAILED"
+        });
+        return;
+      }
+      if (data.orgSubscription) {
+        applySubscriptionUpdate(data);
+      } else {
+        applySubscriptionRemoval(orgId);
+      }
+    } catch {
+      setRowError({ orgId, message: "REQUEST_FAILED" });
+    } finally {
+      setSavingOrgId(null);
     }
-    const ok = await requestUpdate(
-      orgId,
-      { deltaMinutes: minutes },
-      "add"
-    );
-    if (ok) {
-      setAddByOrg((prev) => ({ ...prev, [orgId]: "" }));
-    }
-  }
-
-  async function handleSetMinutes(orgId: string, e: FormEvent) {
-    e.preventDefault();
-    const input = setByOrg[orgId] ?? "";
-    const minutes = normalizeMinutesInput(input);
-    if (minutes === null || minutes < 0) {
-      setRowError({
-        orgId,
-        scope: "set",
-        message: "0以上の分数を入力してください。"
-      });
-      return;
-    }
-    const ok = await requestUpdate(
-      orgId,
-      { availableMinutes: minutes },
-      "set"
-    );
-    if (ok) {
-      setSetByOrg((prev) => ({ ...prev, [orgId]: "" }));
-    }
-  }
-
-  async function handleReduceMinutes(orgId: string, e: FormEvent) {
-    e.preventDefault();
-    const input = reduceByOrg[orgId] ?? "";
-    const minutes = normalizeMinutesInput(input);
-    if (minutes === null || minutes <= 0) {
-      setRowError({
-        orgId,
-        scope: "reduce",
-        message: "削減する分数を入力してください。"
-      });
-      return;
-    }
-    const ok = await requestUpdate(
-      orgId,
-      { deltaMinutes: -minutes },
-      "reduce"
-    );
-    if (ok) {
-      setReduceByOrg((prev) => ({ ...prev, [orgId]: "" }));
-    }
-  }
-
-  const getRowError = (orgId: string, scope: ActionScope) =>
-    rowError?.orgId === orgId && rowError.scope === scope
-      ? rowError.message
-      : null;
+  };
 
   return (
     <main className="page">
       <header className="topbar">
         <div>
           <p className="eyebrow">Super Admin</p>
-          <h1>Org time quotas</h1>
+          <h1>Org subscriptions</h1>
         </div>
         <div className="topbar-actions">
           <OrganizationSwitcher />
@@ -231,10 +222,8 @@ export default function SuperAdminDashboard({
       <section className="card">
         <div className="card-header">
           <div>
-            <h2>全組織の利用可能時間</h2>
-            <p className="subtle">
-              組織を検索して追加。詳細から編集と削減ができます。
-            </p>
+            <h2>組織ごとのプランと超過承認</h2>
+            <p className="subtle">超過上限の承認状況と利用状況を確認できます。</p>
           </div>
           <div className="search">
             <input
@@ -251,7 +240,7 @@ export default function SuperAdminDashboard({
 
         {orgsLoadError && (
           <p className="warning">
-            組織一覧を取得できませんでした。クォータ登録済みの組織のみ表示しています。
+            組織一覧を取得できませんでした。登録済みの組織のみ表示しています。
           </p>
         )}
 
@@ -261,16 +250,32 @@ export default function SuperAdminDashboard({
           <div className="table">
             <div className="row header">
               <div>組織</div>
-              <div>利用可能</div>
-              <div>最終更新</div>
-              <div>追加（分）</div>
+              <div>プラン</div>
+              <div>次回更新</div>
+              <div>残り/超過</div>
+              <div>承認</div>
               <div>詳細</div>
             </div>
             {filteredRows.map((row) => {
-              const addError = getRowError(row.orgId, "add");
-              const setError = getRowError(row.orgId, "set");
-              const reduceError = getRowError(row.orgId, "reduce");
+              const plan = row.planId ? getPlanConfig(row.planId) : null;
+              const selectedPlanId =
+                planByOrg[row.orgId] ?? row.planId ?? NONE_PLAN_VALUE;
+              const currentPlanId = row.planId ?? NONE_PLAN_VALUE;
+              const planDirty = currentPlanId !== selectedPlanId;
+              const includedSec = plan ? plan.includedMinutes * 60 : 0;
+              const committedSec = row.usedSec + row.reservedSec;
+              const remainingIncludedSec = Math.max(0, includedSec - committedSec);
+              const overageCommittedSec = Math.max(0, committedSec - includedSec);
+              const overageRemainingSec = plan
+                ? row.overageApproved
+                  ? null
+                  : Math.max(0, plan.overageLimitMinutes * 60 - overageCommittedSec)
+                : null;
+              const overageLocked =
+                plan && !row.overageApproved && overageRemainingSec === 0;
               const isExpanded = expandedOrgId === row.orgId;
+              const error = rowError?.orgId === row.orgId ? rowError.message : null;
+
               return (
                 <div className="row-group" key={row.orgId}>
                   <div className="row">
@@ -278,37 +283,41 @@ export default function SuperAdminDashboard({
                       <div className="org-name">{row.orgName}</div>
                       <div className="mono">{row.orgId}</div>
                     </div>
-                    <div className="available">
-                      <div>{formatSeconds(row.availableSec)}</div>
-                      {!row.hasQuota && <span className="badge">未設定</span>}
+                    <div className="plan">
+                      <div>{planLabel(row.planId)}</div>
+                      {!row.hasSubscription && <span className="badge">未加入</span>}
                     </div>
-                    <div>{formatUpdatedAt(row.updatedAt)}</div>
-                    <div className="adjust">
-                      <form
-                        className="inline-form"
-                        onSubmit={(e) => void handleAddMinutes(row.orgId, e)}
+                    <div>{formatDateTime(row.cycleEndsAt)}</div>
+                    <div className="usage">
+                      <div>
+                        {plan
+                          ? `${formatMinutes(remainingIncludedSec)} / ${plan.includedMinutes}分`
+                          : "-"}
+                      </div>
+                      {plan && (
+                        <div className="subtle">超過残り: {overageRemainingSec === null ? "無制限" : formatMinutes(overageRemainingSec)}</div>
+                      )}
+                      {overageLocked && <span className="badge warn">承認待ち</span>}
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        className={row.overageApproved ? "ghost" : "primary"}
+                        disabled={!row.hasSubscription || savingOrgId === row.orgId}
+                        onClick={() =>
+                          void toggleOverageApproval(
+                            row.orgId,
+                            !row.overageApproved
+                          )
+                        }
                       >
-                        <input
-                          value={addByOrg[row.orgId] ?? ""}
-                          onChange={(e) =>
-                            setAddByOrg((prev) => ({
-                              ...prev,
-                              [row.orgId]: e.target.value
-                            }))
-                          }
-                          placeholder="30"
-                          inputMode="numeric"
-                        />
-                        <button
-                          type="submit"
-                          disabled={savingKey === makeKey("add", row.orgId)}
-                        >
-                          {savingKey === makeKey("add", row.orgId)
-                            ? "追加中..."
-                            : "追加"}
-                        </button>
-                      </form>
-                      {addError && <p className="error">{addError}</p>}
+                        {savingOrgId === row.orgId
+                          ? "更新中..."
+                          : row.overageApproved
+                            ? "承認解除"
+                            : "承認"}
+                      </button>
+                      {error && <p className="error">{error}</p>}
                     </div>
                     <div>
                       <button
@@ -327,76 +336,75 @@ export default function SuperAdminDashboard({
 
                   {isExpanded && (
                     <div className="detail">
-                      <div className="detail-meta">
+                      <div className="detail-actions">
                         <div>
-                          <p className="label">現在の利用可能時間</p>
-                          <p className="value">{formatSeconds(row.availableSec)}</p>
-                        </div>
-                        <div>
-                          <p className="label">最終更新</p>
-                          <p className="value">{formatUpdatedAt(row.updatedAt)}</p>
+                          <p className="label">プラン設定</p>
+                          <div className="plan-editor">
+                            <select
+                              value={selectedPlanId}
+                              onChange={(e) =>
+                                setPlanByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: e.target.value as PlanSelectValue
+                                }))
+                              }
+                            >
+                              <option value={NONE_PLAN_VALUE}>未加入</option>
+                              {Object.values(PLAN_CONFIG).map((planOption) => (
+                                <option key={planOption.id} value={planOption.id}>
+                                  {planLabel(planOption.id)}（月額
+                                  {planOption.monthlyPriceYen.toLocaleString("ja-JP")}円 /{" "}
+                                  {planOption.includedMinutes}分）
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={savingOrgId === row.orgId || !planDirty}
+                              onClick={() => void updatePlan(row.orgId)}
+                            >
+                              {savingOrgId === row.orgId ? "更新中..." : "プラン更新"}
+                            </button>
+                          </div>
+                          <p className="subtle">
+                            プラン変更で加入日とサイクルが更新されます。
+                          </p>
                         </div>
                       </div>
-                      <div className="detail-actions">
-                        <form
-                          className="detail-form"
-                          onSubmit={(e) => void handleSetMinutes(row.orgId, e)}
-                        >
-                          <label>
-                            利用可能時間を設定（分）
-                            <input
-                              value={setByOrg[row.orgId] ?? ""}
-                              onChange={(e) =>
-                                setSetByOrg((prev) => ({
-                                  ...prev,
-                                  [row.orgId]: e.target.value
-                                }))
-                              }
-                              placeholder="120"
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <button
-                            type="submit"
-                            disabled={savingKey === makeKey("set", row.orgId)}
-                          >
-                            {savingKey === makeKey("set", row.orgId)
-                              ? "保存中..."
-                              : "保存"}
-                          </button>
-                          {setError && <p className="error">{setError}</p>}
-                        </form>
-                        <form
-                          className="detail-form"
-                          onSubmit={(e) => void handleReduceMinutes(row.orgId, e)}
-                        >
-                          <label>
-                            利用可能時間を削減（分）
-                            <input
-                              value={reduceByOrg[row.orgId] ?? ""}
-                              onChange={(e) =>
-                                setReduceByOrg((prev) => ({
-                                  ...prev,
-                                  [row.orgId]: e.target.value
-                                }))
-                              }
-                              placeholder="30"
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <button
-                            type="submit"
-                            className="danger"
-                            disabled={
-                              savingKey === makeKey("reduce", row.orgId)
-                            }
-                          >
-                            {savingKey === makeKey("reduce", row.orgId)
-                              ? "削減中..."
-                              : "削減"}
-                          </button>
-                          {reduceError && <p className="error">{reduceError}</p>}
-                        </form>
+                      <div className="detail-meta">
+                        <div>
+                          <p className="label">加入日</p>
+                          <p className="value">{formatDateTime(row.billingAnchorAt)}</p>
+                        </div>
+                        <div>
+                          <p className="label">サイクル開始</p>
+                          <p className="value">{formatDateTime(row.cycleStartedAt)}</p>
+                        </div>
+                        <div>
+                          <p className="label">サイクル終了</p>
+                          <p className="value">{formatDateTime(row.cycleEndsAt)}</p>
+                        </div>
+                      </div>
+                      <div className="detail-meta">
+                        <div>
+                          <p className="label">使用済み</p>
+                          <p className="value">{formatMinutes(row.usedSec)}</p>
+                        </div>
+                        <div>
+                          <p className="label">予約中</p>
+                          <p className="value">{formatMinutes(row.reservedSec)}</p>
+                        </div>
+                        <div>
+                          <p className="label">超過料金(見込み)</p>
+                          <p className="value">
+                            {plan
+                              ? `${calcOverageYen(
+                                  Math.max(0, row.usedSec - includedSec),
+                                  plan.overageRateYenPerMin
+                                ).toLocaleString("ja-JP")}円`
+                              : "-"}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -448,6 +456,7 @@ export default function SuperAdminDashboard({
         .subtle {
           margin: 0;
           color: #556175;
+          font-size: 13px;
         }
         .card {
           background: #ffffff;
@@ -477,13 +486,16 @@ export default function SuperAdminDashboard({
           font-size: 12px;
           color: #5e6d84;
         }
-        label {
-          display: grid;
-          gap: 6px;
-          font-size: 13px;
-          color: #30405b;
-        }
         input {
+          border-radius: 10px;
+          border: 1px solid #c9d2e2;
+          padding: 10px 12px;
+          font-size: 14px;
+          font-family: inherit;
+          color: #0d1b2a;
+          background: #f9fbff;
+        }
+        select {
           border-radius: 10px;
           border: 1px solid #c9d2e2;
           padding: 10px 12px;
@@ -512,8 +524,8 @@ export default function SuperAdminDashboard({
           color: #2a5b99;
           border: 1px solid #c9d6eb;
         }
-        .danger {
-          background: #b42318;
+        .primary {
+          background: #2a5b99;
         }
         .table {
           display: grid;
@@ -525,10 +537,10 @@ export default function SuperAdminDashboard({
         }
         .row {
           display: grid;
-          grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 0.6fr) minmax(
+          grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 0.7fr) minmax(
               160px,
               0.8fr
-            ) minmax(220px, 1fr) minmax(90px, 0.4fr);
+            ) minmax(200px, 1fr) minmax(140px, 0.6fr) minmax(90px, 0.4fr);
           align-items: center;
           gap: 16px;
           padding: 12px 10px;
@@ -551,7 +563,8 @@ export default function SuperAdminDashboard({
           font-family: "IBM Plex Mono", "Menlo", "Consolas", monospace;
           font-size: 12px;
         }
-        .available {
+        .plan,
+        .usage {
           display: grid;
           gap: 4px;
         }
@@ -566,17 +579,9 @@ export default function SuperAdminDashboard({
           color: #5f6d84;
           width: fit-content;
         }
-        .adjust {
-          display: grid;
-          gap: 6px;
-        }
-        .inline-form {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-        .inline-form input {
-          flex: 1;
+        .badge.warn {
+          background: #fff2e5;
+          color: #b54708;
         }
         .detail {
           background: #ffffff;
@@ -585,6 +590,16 @@ export default function SuperAdminDashboard({
           padding: 16px;
           display: grid;
           gap: 16px;
+        }
+        .detail-actions {
+          display: grid;
+          gap: 8px;
+        }
+        .plan-editor {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
         }
         .detail-meta {
           display: grid;
@@ -602,20 +617,10 @@ export default function SuperAdminDashboard({
           font-weight: 600;
           color: #14213d;
         }
-        .detail-actions {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 16px;
-          align-items: start;
-        }
-        .detail-form {
-          display: grid;
-          gap: 10px;
-        }
         .error {
-          margin: 0;
+          margin: 6px 0 0;
           color: #b42318;
-          font-size: 13px;
+          font-size: 12px;
         }
         .warning {
           margin: 0;
@@ -626,14 +631,10 @@ export default function SuperAdminDashboard({
           margin: 0;
           color: #607089;
         }
-        @media (max-width: 900px) {
+        @media (max-width: 1000px) {
           .row {
             grid-template-columns: 1fr;
             gap: 8px;
-          }
-          .inline-form {
-            flex-direction: column;
-            align-items: stretch;
           }
           .topbar {
             flex-direction: column;

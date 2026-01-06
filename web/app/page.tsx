@@ -3,6 +3,7 @@ import OrganizationGate from "./admin/OrganizationGate";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { getProgressStatusLabel } from "@/lib/interview-status";
+import { buildBillingSummary, getCycleRange } from "@/lib/billing";
 
 export default async function HomePage() {
   const { orgId } = await auth();
@@ -37,7 +38,7 @@ export default async function HomePage() {
   const settings = await prisma.orgSetting.findUnique({
     where: { orgId }
   });
-  const orgQuota = await prisma.orgQuota.findUnique({
+  const subscription = await prisma.orgSubscription.findUnique({
     where: { orgId }
   });
   const now = new Date();
@@ -87,12 +88,43 @@ export default async function HomePage() {
     defaultExpiresDays: settings?.defaultExpiresDays ?? 0,
     defaultExpiresHours: settings?.defaultExpiresHours ?? 0
   };
-  const quotaData = orgQuota
-    ? {
-        availableSec: orgQuota.availableSec,
-        updatedAt: orgQuota.updatedAt.toISOString()
-      }
-    : null;
+  let billingData = null;
+  if (subscription) {
+    const cycle = getCycleRange(subscription.billingAnchorAt, now);
+    let current = subscription;
+    if (
+      subscription.cycleStartedAt.getTime() !== cycle.start.getTime() ||
+      subscription.cycleEndsAt.getTime() !== cycle.end.getTime()
+    ) {
+      current = await prisma.orgSubscription.update({
+        where: { orgId },
+        data: {
+          cycleStartedAt: cycle.start,
+          cycleEndsAt: cycle.end,
+          usedSec: 0,
+          reservedSec: 0
+        }
+      });
+    }
+    const summary = buildBillingSummary(current);
+    billingData = {
+      planId: summary.planId,
+      monthlyPriceYen: summary.monthlyPriceYen,
+      includedMinutes: summary.includedMinutes,
+      overageRateYenPerMin: summary.overageRateYenPerMin,
+      overageLimitMinutes: summary.overageLimitMinutes,
+      cycleStartedAt: summary.cycleStartedAt.toISOString(),
+      cycleEndsAt: summary.cycleEndsAt.toISOString(),
+      usedSec: summary.usedSec,
+      reservedSec: summary.reservedSec,
+      remainingIncludedSec: summary.remainingIncludedSec,
+      overageUsedSec: summary.overageUsedSec,
+      overageChargeYen: summary.overageChargeYen,
+      overageRemainingSec: summary.overageRemainingSec,
+      overageApproved: summary.overageApproved,
+      overageLocked: summary.overageLocked
+    };
+  }
 
   return (
     <AdminDashboard
@@ -100,7 +132,7 @@ export default async function HomePage() {
       applications={applicationData}
       promptTemplates={templateData}
       settings={settingsData}
-      orgQuota={quotaData}
+      billing={billingData}
     />
   );
 }

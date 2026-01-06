@@ -1,16 +1,23 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
+import type { OrgPlan } from "@/lib/billing";
 import OrganizationGate from "../admin/OrganizationGate";
 import SuperAdminDashboard from "./SuperAdminDashboard";
 import SuperAdminGate from "./SuperAdminGate";
 
-type OrgQuotaRow = {
+type OrgSubscriptionRow = {
   orgId: string;
   orgName: string;
-  availableSec: number;
+  planId: OrgPlan | null;
+  billingAnchorAt: string | null;
+  cycleStartedAt: string | null;
+  cycleEndsAt: string | null;
+  usedSec: number;
+  reservedSec: number;
+  overageApproved: boolean;
   updatedAt: string | null;
-  hasQuota: boolean;
+  hasSubscription: boolean;
 };
 
 const listAllOrganizations = async () => {
@@ -57,8 +64,12 @@ export default async function SuperAdminPage() {
     );
   }
 
-  const quotas = await prisma.orgQuota.findMany({ orderBy: { orgId: "asc" } });
-  const quotasByOrg = new Map(quotas.map((row) => [row.orgId, row]));
+  const subscriptions = await prisma.orgSubscription.findMany({
+    orderBy: { orgId: "asc" }
+  });
+  const subscriptionsByOrg = new Map(
+    subscriptions.map((row) => [row.orgId, row])
+  );
 
   let orgs: { id: string; name: string }[] = [];
   let orgsLoadError: string | null = null;
@@ -68,26 +79,38 @@ export default async function SuperAdminPage() {
     orgsLoadError = "ORG_LIST_FAILED";
   }
 
-  const rows: OrgQuotaRow[] = orgs.map((org) => {
-    const quota = quotasByOrg.get(org.id);
+  const rows: OrgSubscriptionRow[] = orgs.map((org) => {
+    const subscription = subscriptionsByOrg.get(org.id);
     return {
       orgId: org.id,
       orgName: org.name,
-      availableSec: quota?.availableSec ?? 0,
-      updatedAt: quota?.updatedAt.toISOString() ?? null,
-      hasQuota: Boolean(quota)
+      planId: subscription?.plan ?? null,
+      billingAnchorAt: subscription?.billingAnchorAt.toISOString() ?? null,
+      cycleStartedAt: subscription?.cycleStartedAt.toISOString() ?? null,
+      cycleEndsAt: subscription?.cycleEndsAt.toISOString() ?? null,
+      usedSec: subscription?.usedSec ?? 0,
+      reservedSec: subscription?.reservedSec ?? 0,
+      overageApproved: subscription?.overageApproved ?? false,
+      updatedAt: subscription?.updatedAt.toISOString() ?? null,
+      hasSubscription: Boolean(subscription)
     };
   });
 
   const orgIdSet = new Set(orgs.map((org) => org.id));
-  for (const quota of quotas) {
-    if (orgIdSet.has(quota.orgId)) continue;
+  for (const subscription of subscriptions) {
+    if (orgIdSet.has(subscription.orgId)) continue;
     rows.push({
-      orgId: quota.orgId,
+      orgId: subscription.orgId,
       orgName: "不明な組織",
-      availableSec: quota.availableSec,
-      updatedAt: quota.updatedAt.toISOString(),
-      hasQuota: true
+      planId: subscription.plan,
+      billingAnchorAt: subscription.billingAnchorAt.toISOString(),
+      cycleStartedAt: subscription.cycleStartedAt.toISOString(),
+      cycleEndsAt: subscription.cycleEndsAt.toISOString(),
+      usedSec: subscription.usedSec,
+      reservedSec: subscription.reservedSec,
+      overageApproved: subscription.overageApproved,
+      updatedAt: subscription.updatedAt.toISOString(),
+      hasSubscription: true
     });
   }
 

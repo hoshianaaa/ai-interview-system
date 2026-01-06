@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
+import { toRoundedMinutes, type OrgPlan } from "@/lib/billing";
 
 type Decision = "undecided" | "pass" | "fail" | "hold";
 
@@ -73,9 +74,22 @@ type OrgSettings = {
   defaultExpiresHours: number;
 };
 
-type OrgQuotaInfo = {
-  availableSec: number;
-  updatedAt: string;
+type OrgBillingInfo = {
+  planId: OrgPlan;
+  monthlyPriceYen: number;
+  includedMinutes: number;
+  overageRateYenPerMin: number;
+  overageLimitMinutes: number;
+  cycleStartedAt: string;
+  cycleEndsAt: string;
+  usedSec: number;
+  reservedSec: number;
+  remainingIncludedSec: number;
+  overageUsedSec: number;
+  overageChargeYen: number;
+  overageRemainingSec: number | null;
+  overageApproved: boolean;
+  overageLocked: boolean;
 } | null;
 
 type CreateSuccessResponse = {
@@ -101,6 +115,12 @@ const isCreateSuccess = (
 ): value is CreateSuccessResponse => Boolean(value && "url" in value);
 
 const formatCreateErrorMessage = (error: string, fallbackPrefix: string) => {
+  if (error === "ORG_SUBSCRIPTION_REQUIRED") {
+    return "プラン未加入のため面接を作成できません。システム管理者に連絡してください。";
+  }
+  if (error === "ORG_OVERAGE_LOCKED") {
+    return "超過上限に到達しています。管理者承認待ちです。";
+  }
   if (error === "ORG_TIME_LIMIT_EXCEEDED") {
     return "利用可能時間が不足しています。";
   }
@@ -118,13 +138,13 @@ export default function AdminDashboard({
   applications: initialApplications,
   promptTemplates,
   settings,
-  orgQuota
+  billing
 }: {
   interviews: InterviewRow[];
   applications: ApplicationData[];
   promptTemplates: PromptTemplate[];
   settings: OrgSettings;
-  orgQuota: OrgQuotaInfo;
+  billing: OrgBillingInfo;
 }) {
   const [rows, setRows] = useState(interviews);
   const [applications, setApplications] = useState(initialApplications);
@@ -231,6 +251,7 @@ export default function AdminDashboard({
   const hasResult = isCreateSuccess(createResult);
   const hasReissueResult = isCreateSuccess(reissueResult);
   const hasApplicationInterviewResult = isCreateSuccess(applicationInterviewResult);
+  const billingInfo = billing;
 
   const normalizeDurationMin = (value: string, fallback: number) => {
     const parsed = Number(value);
@@ -821,14 +842,13 @@ export default function AdminDashboard({
     return `${mm}:${String(ss).padStart(2, "0")}`;
   };
 
-  const formatQuota = (valueSec: number) => {
-    const safe = Math.max(0, Math.floor(valueSec));
-    const totalMinutes = Math.floor(safe / 60);
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours > 0) return `${hours}時間${minutes}分`;
-    return `${totalMinutes}分`;
-  };
+  const formatMinutes = (valueSec: number, mode: "floor" | "ceil" = "floor") =>
+    `${toRoundedMinutes(valueSec, mode)}分`;
+
+  const formatYen = (value: number) => `${value.toLocaleString("ja-JP")}円`;
+
+  const formatPlanLabel = (planId: OrgPlan) =>
+    planId === "starter" ? "スターター" : planId;
 
   const decisionLabel = (value: Decision) => {
     if (value === "pass") return "通過";
@@ -1193,8 +1213,11 @@ export default function AdminDashboard({
       normalizedApplicationEmail !== (selectedApplication?.candidateEmail ?? "") ||
       normalizedApplicationNotes !== (selectedApplication?.notes ?? ""));
   const canCreateAdditionalInterview = Boolean(
-    selectedApplication &&
-      (selectedApplication.interviewCount === 0 || selectedApplication.latestDecision === "pass")
+    billingInfo &&
+      !billingInfo.overageLocked &&
+      selectedApplication &&
+      (selectedApplication.interviewCount === 0 ||
+        selectedApplication.latestDecision === "pass")
   );
   const createInterviewLabel =
     selectedApplication?.interviewCount === 0 ? "面接を追加" : "次の面接URLを発行";
@@ -1312,7 +1335,23 @@ export default function AdminDashboard({
     };
   }, [menuCollapsed]);
   const resolvedSidebarWidth = menuCollapsed ? 56 : sidebarWidth;
-  const quotaText = formatQuota(orgQuota?.availableSec ?? 0);
+  const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
+  const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
+  const nextBillingText = billingInfo
+    ? new Date(billingInfo.cycleEndsAt).toLocaleString("ja-JP")
+    : "未加入";
+  const remainingIncludedText = billingInfo
+    ? `${toRoundedMinutes(billingInfo.remainingIncludedSec)}/${billingInfo.includedMinutes}分`
+    : "-";
+  const overageUsedText = billingInfo
+    ? formatMinutes(billingInfo.overageUsedSec, "ceil")
+    : "-";
+  const overageChargeText = billingInfo ? formatYen(billingInfo.overageChargeYen) : "-";
+  const overageRemainingText = billingInfo
+    ? billingInfo.overageRemainingSec === null
+      ? "無制限"
+      : formatMinutes(billingInfo.overageRemainingSec)
+    : "-";
 
   return (
     <main className="page">
@@ -1627,13 +1666,35 @@ export default function AdminDashboard({
                 document.body.style.userSelect = "none";
               }}
             />
-          )}
-        </aside>
+        )}
+      </aside>
         <div className="account-floating">
-          <div className="quota">
-            <span className={`quota-line ${orgQuota ? "" : "quota-muted"}`}>
-              残り利用可能時間：{quotaText}
-            </span>
+          <div className="billing">
+            <div className="billing-line">
+              プラン：{planLabel}
+              {billingInfo ? `（月額${formatYen(billingInfo.monthlyPriceYen)}）` : ""}
+            </div>
+            {billingInfo ? (
+              <>
+                <div className="billing-line">次回更新日：{nextBillingText}</div>
+                <div className="billing-line">残り面接時間：{remainingIncludedText}</div>
+                <div className="billing-line">
+                  超過利用：{overageUsedText}（{overageChargeText}）
+                </div>
+                <div className="billing-line">
+                  超過上限までの残り：{overageRemainingText}
+                </div>
+                {billingInfo.overageLocked && (
+                  <div className="billing-alert">管理者承認待ち</div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="billing-muted">
+                  プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                </div>
+              </>
+            )}
           </div>
           <div className="user">
             <OrganizationSwitcher />
@@ -1670,6 +1731,16 @@ export default function AdminDashboard({
             <section className="panel">
               <div className="card">
                 <h2>新規応募の追加</h2>
+                {!billingInfo && (
+                  <p className="warning">
+                    プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                  </p>
+                )}
+                {billingInfo?.overageLocked && (
+                  <p className="warning">
+                    超過上限に到達しています。管理者承認待ちのため面接URLを発行できません。
+                  </p>
+                )}
                 <div className="form-row">
                   <label>候補者名</label>
                   <input
@@ -1771,7 +1842,11 @@ export default function AdminDashboard({
                     placeholder="面接AIの指示文を入力してください"
                   />
                 </div>
-                <button className="primary" onClick={() => void createInterview()}>
+                <button
+                  className="primary"
+                  onClick={() => void createInterview()}
+                  disabled={!canCreateInterview}
+                >
                   応募を追加
                 </button>
                 {createResult && "error" in createResult && (
@@ -2433,19 +2508,28 @@ export default function AdminDashboard({
           box-shadow: 0 10px 24px rgba(18, 38, 73, 0.18);
           backdrop-filter: blur(10px);
         }
-        .quota {
-          display: flex;
-          align-items: center;
+        .billing {
+          display: grid;
           gap: 6px;
-        }
-        .quota-line {
-          font-size: 14px;
-          font-weight: 600;
+          font-size: 13px;
           color: #1f4fb2;
         }
-        .quota-muted {
+        .billing-line {
+          font-weight: 600;
+        }
+        .billing-muted {
           color: #7b8aa2;
           font-weight: 500;
+          font-size: 12px;
+        }
+        .billing-alert {
+          width: fit-content;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: #fff2e5;
+          color: #b54708;
+          font-size: 11px;
+          font-weight: 600;
         }
         .sidebar.collapsed .sidebar-header {
           padding-right: 0;
@@ -2556,6 +2640,10 @@ export default function AdminDashboard({
           color: #1c2a3a;
           cursor: pointer;
           text-align: left;
+        }
+        .nav-item:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
         }
         .nav-item span {
           white-space: nowrap;
@@ -3059,6 +3147,11 @@ export default function AdminDashboard({
         }
         .error {
           color: #b42318;
+          margin-top: 10px;
+          font-size: 13px;
+        }
+        .warning {
+          color: #b54708;
           margin-top: 10px;
           font-size: 13px;
         }

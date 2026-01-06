@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { env, makeCandidateIdentity, makeRoomName } from "@/lib/livekit";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
+import { getCycleRange, getPlanConfig } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
@@ -93,16 +94,53 @@ export async function POST(req: Request) {
 
   try {
     result = await prisma.$transaction(async (tx) => {
-      const updatedQuota = await tx.orgQuota.updateMany({
-        where: { orgId, availableSec: { gte: durationSec } },
-        data: { availableSec: { decrement: durationSec } }
-      });
-      if (updatedQuota.count === 0) {
-        const existingQuota = await tx.orgQuota.findUnique({ where: { orgId } });
-        if (!existingQuota) {
-          throw new Error("ORG_QUOTA_NOT_CONFIGURED");
+      let subscription = await tx.orgSubscription.findUnique({ where: { orgId } });
+      if (!subscription) {
+        throw new Error("ORG_SUBSCRIPTION_REQUIRED");
+      }
+
+      const now = new Date();
+      const cycle = getCycleRange(subscription.billingAnchorAt, now);
+      if (
+        subscription.cycleStartedAt.getTime() !== cycle.start.getTime() ||
+        subscription.cycleEndsAt.getTime() !== cycle.end.getTime()
+      ) {
+        subscription = await tx.orgSubscription.update({
+          where: { orgId },
+          data: {
+            cycleStartedAt: cycle.start,
+            cycleEndsAt: cycle.end,
+            usedSec: 0,
+            reservedSec: 0
+          }
+        });
+      }
+
+      const plan = getPlanConfig(subscription.plan);
+      const includedSec = plan.includedMinutes * 60;
+      const overageLimitSec = plan.overageLimitMinutes * 60;
+      const committedSec = subscription.usedSec + subscription.reservedSec;
+      const cappedMaxSec = includedSec + overageLimitSec;
+
+      if (!subscription.overageApproved) {
+        const updatedCount = await tx.$executeRaw`
+          UPDATE "OrgSubscription"
+          SET "reservedSec" = "reservedSec" + ${durationSec},
+              "updatedAt" = NOW()
+          WHERE "orgId" = ${orgId}
+            AND ("usedSec" + "reservedSec" + ${durationSec}) <= ${cappedMaxSec};
+        `;
+        if (updatedCount === 0) {
+          if (committedSec >= cappedMaxSec) {
+            throw new Error("ORG_OVERAGE_LOCKED");
+          }
+          throw new Error("ORG_TIME_LIMIT_EXCEEDED");
         }
-        throw new Error("ORG_TIME_LIMIT_EXCEEDED");
+      } else {
+        await tx.orgSubscription.update({
+          where: { orgId },
+          data: { reservedSec: { increment: durationSec } }
+        });
       }
 
       let applicationId = applicationIdRaw;
@@ -192,11 +230,14 @@ export async function POST(req: Request) {
     if (message === "APPLICATION_NOT_FOUND") {
       return NextResponse.json({ error: "APPLICATION_NOT_FOUND" }, { status: 404 });
     }
-    if (message === "ORG_QUOTA_NOT_CONFIGURED") {
-      return NextResponse.json({ error: "ORG_QUOTA_NOT_CONFIGURED" }, { status: 409 });
+    if (message === "ORG_SUBSCRIPTION_REQUIRED") {
+      return NextResponse.json({ error: "ORG_SUBSCRIPTION_REQUIRED" }, { status: 409 });
     }
     if (message === "ORG_TIME_LIMIT_EXCEEDED") {
       return NextResponse.json({ error: "ORG_TIME_LIMIT_EXCEEDED" }, { status: 409 });
+    }
+    if (message === "ORG_OVERAGE_LOCKED") {
+      return NextResponse.json({ error: "ORG_OVERAGE_LOCKED" }, { status: 409 });
     }
     throw error;
   }

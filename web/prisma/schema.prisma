@@ -28,6 +28,10 @@ enum ChatRole {
   candidate
 }
 
+enum OrgPlan {
+  starter
+}
+
 model Application {
   applicationId String   @id
   orgId         String?
@@ -117,9 +121,15 @@ model OrgSetting {
   updatedAt           DateTime @updatedAt
 }
 
-model OrgQuota {
-  orgId        String   @id
-  availableSec Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+model OrgSubscription {
+  orgId           String   @id
+  plan            OrgPlan
+  billingAnchorAt DateTime
+  cycleStartedAt  DateTime
+  cycleEndsAt     DateTime
+  usedSec         Int      @default(0)
+  reservedSec     Int      @default(0)
+  overageApproved Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
