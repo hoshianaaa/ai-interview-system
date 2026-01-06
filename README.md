@@ -62,26 +62,37 @@
 - 2nd：二次面接
 - （将来）final：最終面接
 
-# 5. 組織別の面接時間枠
+# 5. 組織別の料金・面接時間枠（サブスク）
 
 ## 目的
 
-- 組織ごとの「残り使用可能時間」を管理し、面接URL発行時に予約、終了時に差分を精算する。
+- 組織ごとにプランと月次サイクルを持ち、面接時間を「月額枠 + 超過課金」で管理する。
 
 ## 定義
 
-- `OrgQuota.availableSec`：組織ごとの残り使用可能時間（秒）。
+- `OrgSubscription.plan`：加入プラン（例：starter）。
+- `OrgSubscription.billingAnchorAt`：加入日（決済日）の基準日時。
+- `OrgSubscription.cycleStartedAt` / `cycleEndsAt`：現在の課金サイクル。
+- `OrgSubscription.usedSec`：サイクル内で確定した使用秒数。
+- `OrgSubscription.reservedSec`：発行済みURLで予約中の秒数。
+- `OrgSubscription.overageApproved`：超過上限ロック解除フラグ。
 - `Interview.quotaReservedSec`：URL発行時に予約した秒数（通常は`durationSec`）。
 - `Interview.actualDurationSec`：実際に使用された秒数（`candidateJoinedAt` → `endedAt`、未参加時は0）。
 - `Interview.quotaSettledAt`：時間枠の精算が完了した時刻。
 
 ## 挙動
 
-- URL発行時に`durationSec`分を予約し、`availableSec`から減算。
-- 面接終了時に実使用時間を計算し、未使用分を`availableSec`へ返却。
-- URL発行前に`availableSec`が不足している場合は発行不可。
+- URL発行時に`durationSec`分を予約し、`usedSec + reservedSec`が「月次枠 + 超過上限」を超える場合は発行不可。
+- 面接終了時に実使用時間を算出し、`usedSec`へ加算、`reservedSec`から差分を精算。
+- サイクル更新時に`usedSec`/`reservedSec`をリセット（未使用分の繰り越しなし）。
+
+## プラン
+
+- スターター：月額3,000円 / 100分
+- 超過：30円/分、初期上限は3,000円（100分）。上限到達時は管理者承認が必要。
 
 ## 管理者画面・API
 
-- スーパー管理者のみが`/super-admin`から全組織の時間枠を追加・削除できる。
-- APIは`/api/super-admin/org-quotas`を使用（`SUPER_ADMIN_ORG_ID`で制御）。
+- システム管理者が`/super-admin`で組織のプラン設定と超過承認を管理。
+- 組織管理者はプラン情報と利用状況を閲覧のみ。
+- APIは`/api/super-admin/org-quotas`でプラン設定/超過承認を行う。
