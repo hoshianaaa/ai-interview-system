@@ -1410,6 +1410,32 @@ export default function AdminDashboard({
           <div className="sidebar-body">
             <nav className="nav">
               <button
+                className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
+                type="button"
+                onClick={() => {
+                  if (menuCollapsed) {
+                    setMenuCollapsed(false);
+                  }
+                  setActivePanel("applications");
+                  setApplicationsView("list");
+                }}
+                aria-label="応募一覧"
+              >
+                <svg
+                  className="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                {!menuCollapsed && <span>応募一覧</span>}
+              </button>
+              <button
                 className={`nav-item ${activePanel === "create" ? "active" : ""}`}
                 type="button"
                 onClick={() => setActivePanel("create")}
@@ -1452,33 +1478,57 @@ export default function AdminDashboard({
                 </svg>
                 {!menuCollapsed && <span>設定</span>}
               </button>
-              <button
-                className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
-                type="button"
-                onClick={() => {
-                  if (menuCollapsed) {
-                    setMenuCollapsed(false);
-                  }
-                  setActivePanel("applications");
-                  setApplicationsView("list");
-                }}
-                aria-label="応募一覧"
-              >
-                <svg
-                  className="nav-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                {!menuCollapsed && <span>応募一覧</span>}
-              </button>
             </nav>
+          </div>
+          <div className="sidebar-footer">
+            {!menuCollapsed && (
+              <div className="sidebar-panel">
+                <div className="sidebar-section-title">利用状況</div>
+                <div className="billing">
+                  <div className="billing-grid">
+                    <div className="billing-item">
+                      <span className="billing-label">プラン</span>
+                      <span className="billing-value">{planLabel}</span>
+                    </div>
+                    {billingInfo ? (
+                      <>
+                        <div className="billing-item">
+                          <span className="billing-label">次回更新</span>
+                          <span className="billing-value">{nextBillingText}</span>
+                        </div>
+                        <div className="billing-item">
+                          <span className="billing-label">残り面接</span>
+                          <span className="billing-value">{remainingIncludedText}</span>
+                        </div>
+                        <div className="billing-item">
+                          <span className="billing-label">同時面接数</span>
+                          <span className="billing-value">{maxConcurrentText}</span>
+                        </div>
+                        <div className="billing-item">
+                          <span className="billing-label">超過利用</span>
+                          <span className="billing-value">
+                            {overageUsedText}（{overageChargeText}）
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="billing-muted">
+                        プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                      </div>
+                    )}
+                  </div>
+                  {billingInfo?.overageLocked && (
+                    <div className="billing-alert">管理者承認待ち</div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className={`sidebar-panel sidebar-user ${menuCollapsed ? "collapsed" : ""}`}>
+              <div className="user">
+                {!menuCollapsed && <OrganizationSwitcher />}
+                <UserButton />
+              </div>
+            </div>
           </div>
           {!menuCollapsed && (
             <div
@@ -1495,12 +1545,6 @@ export default function AdminDashboard({
             />
         )}
       </aside>
-        <div className="account-floating">
-          <div className="user">
-            <OrganizationSwitcher />
-            <UserButton />
-          </div>
-        </div>
         <div className="content">
           {activePanel === "applications" && applicationsView === "detail" && (
             <div
@@ -2240,48 +2284,6 @@ export default function AdminDashboard({
                 <h2>設定</h2>
                 <div className="settings">
                   <div className="settings-section">
-                    <h3>利用状況</h3>
-                    <div className="billing">
-                      <div className="billing-grid">
-                        <div className="billing-item">
-                          <span className="billing-label">プラン</span>
-                          <span className="billing-value">{planLabel}</span>
-                        </div>
-                        {billingInfo ? (
-                          <>
-                            <div className="billing-item">
-                              <span className="billing-label">次回更新</span>
-                              <span className="billing-value">{nextBillingText}</span>
-                            </div>
-                            <div className="billing-item">
-                              <span className="billing-label">残り面接</span>
-                              <span className="billing-value">
-                                {remainingIncludedText}
-                              </span>
-                            </div>
-                            <div className="billing-item">
-                              <span className="billing-label">同時面接数</span>
-                              <span className="billing-value">{maxConcurrentText}</span>
-                            </div>
-                            <div className="billing-item">
-                              <span className="billing-label">超過利用</span>
-                              <span className="billing-value">
-                                {overageUsedText}（{overageChargeText}）
-                              </span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="billing-muted">
-                            プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
-                          </div>
-                        )}
-                      </div>
-                      {billingInfo?.overageLocked && (
-                        <div className="billing-alert">管理者承認待ち</div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="settings-section">
                     <h3>デフォルト面接設定</h3>
                     <div className="form-row">
                       <label>面接時間（分）</label>
@@ -2504,21 +2506,38 @@ export default function AdminDashboard({
           flex: 1;
           min-height: 0;
         }
-        .account-floating {
-          position: fixed;
-          right: 16px;
-          bottom: 16px;
-          z-index: 5;
-          pointer-events: auto;
+        .sidebar-footer {
+          margin-top: auto;
           display: grid;
-          gap: 6px;
-          padding: 8px 10px;
+          gap: 12px;
+        }
+        .sidebar-panel {
+          display: grid;
+          gap: 8px;
+          padding: 12px;
           border-radius: 14px;
-          background:
-            linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(236, 244, 255, 0.92));
-          border: 1px solid rgba(151, 175, 214, 0.45);
-          box-shadow: 0 10px 24px rgba(18, 38, 73, 0.18);
-          backdrop-filter: blur(10px);
+          border: 1px solid rgba(31, 79, 178, 0.12);
+          background: #f8fafc;
+        }
+        .sidebar-section-title {
+          font-size: 12px;
+          font-weight: 600;
+          color: #6a7a96;
+          letter-spacing: 0.04em;
+        }
+        .sidebar-user .user {
+          width: 100%;
+          justify-content: space-between;
+        }
+        .sidebar-user.collapsed .user {
+          justify-content: center;
+        }
+        .sidebar.collapsed .sidebar-panel {
+          padding: 8px;
+          border-radius: 12px;
+        }
+        .sidebar.collapsed .sidebar-footer {
+          gap: 8px;
         }
         .billing {
           display: grid;
