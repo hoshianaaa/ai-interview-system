@@ -217,7 +217,7 @@ export default function AdminDashboard({
   const [activePanel, setActivePanel] = useState<"create" | "applications" | "settings">(
     "applications"
   );
-  const [applicationsOpen, setApplicationsOpen] = useState(true);
+  const [applicationsView, setApplicationsView] = useState<"list" | "detail">("list");
   const [applicationQuery, setApplicationQuery] = useState("");
   const [applicationDecision, setApplicationDecision] = useState<Decision | "all">("all");
   const [applicationInterviewCount, setApplicationInterviewCount] = useState<
@@ -626,8 +626,8 @@ export default function AdminDashboard({
 
   function selectApplicationFromList(applicationId: string) {
     setSelectedApplicationId(applicationId);
-    setApplicationsOpen(true);
     setActivePanel("applications");
+    setApplicationsView("detail");
   }
 
   async function loadVideo(row: InterviewRow) {
@@ -1171,11 +1171,11 @@ export default function AdminDashboard({
     applicationDateTo
   ]);
   useEffect(() => {
-    if (activePanel !== "applications") return;
+    if (activePanel !== "applications" || applicationsView !== "detail") return;
     if (selectedApplicationId) return;
     const first = filteredApplicationRows[0];
     if (first) setSelectedApplicationId(first.applicationId);
-  }, [activePanel, filteredApplicationRows, selectedApplicationId]);
+  }, [activePanel, applicationsView, filteredApplicationRows, selectedApplicationId]);
   const selectedApplication = useMemo(
     () =>
       selectedApplicationId
@@ -1283,6 +1283,7 @@ export default function AdminDashboard({
   }, [selectedApplication?.applicationId]);
 
   useEffect(() => {
+    if (applicationsView !== "detail") return;
     if (!selectedApplication) {
       setSelectedId(null);
       return;
@@ -1302,7 +1303,7 @@ export default function AdminDashboard({
     if (next) {
       void loadVideo(next);
     }
-  }, [selectedApplication, selectedId]);
+  }, [applicationsView, selectedApplication, selectedId]);
 
   useEffect(() => {
     if (selectedTemplateId || prompt.trim() !== DEFAULT_INTERVIEW_PROMPT.trim()) return;
@@ -1451,207 +1452,32 @@ export default function AdminDashboard({
                 </svg>
                 {!menuCollapsed && <span>設定</span>}
               </button>
-              <div className="nav-group">
-                <button
-                  className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
-                  type="button"
-                  onClick={() => {
-                    if (menuCollapsed) {
-                      setMenuCollapsed(false);
-                      setActivePanel("applications");
-                      setApplicationsOpen(true);
-                      return;
-                    }
-                    setApplicationsOpen((prev) => {
-                      const next = !prev;
-                      if (next) setActivePanel("applications");
-                      return next;
-                    });
-                  }}
-                  aria-label="応募一覧"
-                  aria-expanded={applicationsOpen}
-                  aria-controls="nav-applications-panel"
+              <button
+                className={`nav-item ${activePanel === "applications" ? "active" : ""}`}
+                type="button"
+                onClick={() => {
+                  if (menuCollapsed) {
+                    setMenuCollapsed(false);
+                  }
+                  setActivePanel("applications");
+                  setApplicationsView("list");
+                }}
+                aria-label="応募一覧"
+              >
+                <svg
+                  className="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
                 >
-                  <svg
-                    className="nav-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                  {!menuCollapsed && <span>応募一覧</span>}
-                </button>
-                {!menuCollapsed && (
-                  <div
-                    className={`nav-panel ${applicationsOpen ? "open" : ""}`}
-                    id="nav-applications-panel"
-                  >
-                    <section className="grid">
-                      <div className="stack">
-                        <div className="card list-card">
-                          <div className="list-filters">
-                            <button
-                              className="ghost"
-                              type="button"
-                              onClick={() => setApplicationFiltersOpen((prev) => !prev)}
-                              aria-expanded={applicationFiltersOpen}
-                              aria-controls="application-filter-panel"
-                            >
-                              {applicationFiltersOpen ? "検索条件を閉じる" : "検索条件を開く"}
-                            </button>
-                            {applicationFiltersOpen && (
-                              <div id="application-filter-panel" className="filter-body">
-                                <input
-                                  type="text"
-                                  value={applicationQuery}
-                                  onChange={(e) => setApplicationQuery(e.target.value)}
-                                  placeholder="候補者名・メモで検索"
-                                />
-                                <div className="filter-grid">
-                                  <select
-                                    value={applicationDecision}
-                                    onChange={(e) =>
-                                      setApplicationDecision(e.target.value as Decision | "all")
-                                    }
-                                  >
-                                    <option value="all">判定: すべて</option>
-                                    <option value="undecided">判定: 未判定</option>
-                                    <option value="pass">判定: 合格</option>
-                                    <option value="fail">判定: 不合格</option>
-                                    <option value="hold">判定: 保留</option>
-                                  </select>
-                                  <select
-                                    value={applicationInterviewCount}
-                                    onChange={(e) =>
-                                      setApplicationInterviewCount(
-                                        e.target.value as "all" | "none" | "some"
-                                      )
-                                    }
-                                  >
-                                    <option value="all">面接回数: すべて</option>
-                                    <option value="none">面接回数: 0件</option>
-                                    <option value="some">面接回数: 1件以上</option>
-                                  </select>
-                                  <select
-                                    value={applicationLatestRound}
-                                    onChange={(e) => setApplicationLatestRound(e.target.value)}
-                                  >
-                                    <option value="all">最新ラウンド: すべて</option>
-                                    {availableRounds.map((round) => (
-                                      <option key={round} value={round}>
-                                        最新ラウンド: 第{round}次
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={applicationStatus}
-                                    onChange={(e) =>
-                                      setApplicationStatus(
-                                        e.target.value as
-                                          | "all"
-                                          | (typeof INTERVIEW_STATUS_OPTIONS)[number]
-                                      )
-                                    }
-                                  >
-                                    <option value="all">最新面接: すべて</option>
-                                    {INTERVIEW_STATUS_OPTIONS.map((status) => (
-                                      <option key={status} value={status}>
-                                        最新面接: {status}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="filter-grid">
-                                  <div className="date-range">
-                                    <label className="date-range-label">
-                                      <span>検索期間</span>
-                                      <div className="date-range-inputs">
-                                        <input
-                                          type="date"
-                                          value={applicationDateFrom}
-                                          onChange={(e) => setApplicationDateFrom(e.target.value)}
-                                          aria-label="作成日（開始）"
-                                        />
-                                        <span className="date-range-separator">〜</span>
-                                        <input
-                                          type="date"
-                                          value={applicationDateTo}
-                                          onChange={(e) => setApplicationDateTo(e.target.value)}
-                                          aria-label="作成日（終了）"
-                                        />
-                                      </div>
-                                    </label>
-                                  </div>
-                                  <button
-                                    className="ghost"
-                                    type="button"
-                                    onClick={() => {
-                                      setApplicationQuery("");
-                                      setApplicationDecision("all");
-                                      setApplicationInterviewCount("all");
-                                      setApplicationLatestRound("all");
-                                      setApplicationStatus("all");
-                                      setApplicationDateFrom("");
-                                      setApplicationDateTo("");
-                                    }}
-                                  >
-                                    条件をリセット
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          {applicationRows.length === 0 ? (
-                            <div className="empty">応募データがありません</div>
-                          ) : filteredApplicationRows.length === 0 ? (
-                            <div className="empty">条件に一致する応募がありません</div>
-                          ) : (
-                            <div className="list">
-                              {filteredApplicationRows.map((app) => (
-                                <div
-                                  key={app.applicationId}
-                                  className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => selectApplicationFromList(app.applicationId)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                      e.preventDefault();
-                                      selectApplicationFromList(app.applicationId);
-                                    }
-                                  }}
-                                >
-                                  <div>
-                                    <div className="title-row">
-                                      <div className="title">
-                                        {app.candidateName ? app.candidateName : "候補者名なし"}
-                                      </div>
-                                      <span className="round-tag">面接{app.interviewCount}件</span>
-                                      <span className={`decision-tag ${app.latestDecision}`}>
-                                        {decisionLabel(app.latestDecision)}
-                                      </span>
-                                    </div>
-                                    <div className="meta">
-                                      {app.interviewCount === 0
-                                        ? "面接未実施"
-                                        : `最新面接: 第${app.latestRound}次 / 作成: ${new Date(app.latestCreatedAt).toLocaleString("ja-JP")}`}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-                )}
-              </div>
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                {!menuCollapsed && <span>応募一覧</span>}
+              </button>
             </nav>
           </div>
           {!menuCollapsed && (
@@ -1676,7 +1502,7 @@ export default function AdminDashboard({
           </div>
         </div>
         <div className="content">
-          {activePanel === "applications" && (
+          {activePanel === "applications" && applicationsView === "detail" && (
             <div
               className={`floating-actions ${applicationDirty ? "show" : ""}`}
               role="status"
@@ -1855,10 +1681,180 @@ export default function AdminDashboard({
               </div>
             </section>
           )}
-          {activePanel === "applications" && (
+          {activePanel === "applications" && applicationsView === "list" && (
+            <section className="panel">
+              <div className="card list-card">
+                <div className="list-header">
+                  <h2>応募一覧</h2>
+                </div>
+                <div className="list-filters">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() => setApplicationFiltersOpen((prev) => !prev)}
+                    aria-expanded={applicationFiltersOpen}
+                    aria-controls="application-filter-panel"
+                  >
+                    {applicationFiltersOpen ? "検索条件を閉じる" : "検索条件を開く"}
+                  </button>
+                  {applicationFiltersOpen && (
+                    <div id="application-filter-panel" className="filter-body">
+                      <input
+                        type="text"
+                        value={applicationQuery}
+                        onChange={(e) => setApplicationQuery(e.target.value)}
+                        placeholder="候補者名・メモで検索"
+                      />
+                      <div className="filter-grid">
+                        <select
+                          value={applicationDecision}
+                          onChange={(e) =>
+                            setApplicationDecision(e.target.value as Decision | "all")
+                          }
+                        >
+                          <option value="all">判定: すべて</option>
+                          <option value="undecided">判定: 未判定</option>
+                          <option value="pass">判定: 合格</option>
+                          <option value="fail">判定: 不合格</option>
+                          <option value="hold">判定: 保留</option>
+                        </select>
+                        <select
+                          value={applicationInterviewCount}
+                          onChange={(e) =>
+                            setApplicationInterviewCount(
+                              e.target.value as "all" | "none" | "some"
+                            )
+                          }
+                        >
+                          <option value="all">面接回数: すべて</option>
+                          <option value="none">面接回数: 0件</option>
+                          <option value="some">面接回数: 1件以上</option>
+                        </select>
+                        <select
+                          value={applicationLatestRound}
+                          onChange={(e) => setApplicationLatestRound(e.target.value)}
+                        >
+                          <option value="all">最新ラウンド: すべて</option>
+                          {availableRounds.map((round) => (
+                            <option key={round} value={round}>
+                              最新ラウンド: 第{round}次
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={applicationStatus}
+                          onChange={(e) =>
+                            setApplicationStatus(
+                              e.target.value as
+                                | "all"
+                                | (typeof INTERVIEW_STATUS_OPTIONS)[number]
+                            )
+                          }
+                        >
+                          <option value="all">最新面接: すべて</option>
+                          {INTERVIEW_STATUS_OPTIONS.map((status) => (
+                            <option key={status} value={status}>
+                              最新面接: {status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="filter-grid">
+                        <div className="date-range">
+                          <label className="date-range-label">
+                            <span>検索期間</span>
+                            <div className="date-range-inputs">
+                              <input
+                                type="date"
+                                value={applicationDateFrom}
+                                onChange={(e) => setApplicationDateFrom(e.target.value)}
+                                aria-label="作成日（開始）"
+                              />
+                              <span className="date-range-separator">〜</span>
+                              <input
+                                type="date"
+                                value={applicationDateTo}
+                                onChange={(e) => setApplicationDateTo(e.target.value)}
+                                aria-label="作成日（終了）"
+                              />
+                            </div>
+                          </label>
+                        </div>
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() => {
+                            setApplicationQuery("");
+                            setApplicationDecision("all");
+                            setApplicationInterviewCount("all");
+                            setApplicationLatestRound("all");
+                            setApplicationStatus("all");
+                            setApplicationDateFrom("");
+                            setApplicationDateTo("");
+                          }}
+                        >
+                          条件をリセット
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {applicationRows.length === 0 ? (
+                  <div className="empty">応募データがありません</div>
+                ) : filteredApplicationRows.length === 0 ? (
+                  <div className="empty">条件に一致する応募がありません</div>
+                ) : (
+                  <div className="list">
+                    {filteredApplicationRows.map((app) => (
+                      <div
+                        key={app.applicationId}
+                        className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => selectApplicationFromList(app.applicationId)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            selectApplicationFromList(app.applicationId);
+                          }
+                        }}
+                      >
+                        <div>
+                          <div className="title-row">
+                            <div className="title">
+                              {app.candidateName ? app.candidateName : "候補者名なし"}
+                            </div>
+                            <span className="round-tag">面接{app.interviewCount}件</span>
+                            <span className={`decision-tag ${app.latestDecision}`}>
+                              {decisionLabel(app.latestDecision)}
+                            </span>
+                          </div>
+                          <div className="meta">
+                            {app.interviewCount === 0
+                              ? "面接未実施"
+                              : `最新面接: 第${app.latestRound}次 / 作成: ${new Date(
+                                  app.latestCreatedAt
+                                ).toLocaleString("ja-JP")}`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+          {activePanel === "applications" && applicationsView === "detail" && (
             <section className="panel">
               <div className="card detail-card">
                 <div className="detail-title">
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() => setApplicationsView("list")}
+                  >
+                    一覧に戻る
+                  </button>
                   <h2>応募詳細</h2>
                   {selectedApplication && (
                     <div className="detail-title-fields">
@@ -1910,7 +1906,7 @@ export default function AdminDashboard({
                   )}
                 </div>
                 {!selectedApplication ? (
-                  <div className="empty">左の一覧から応募を選択してください</div>
+                  <div className="empty">応募一覧から応募を選択してください</div>
                 ) : (
                   <div className="application-detail">
                     {applicationInterviewResult && "error" in applicationInterviewResult && (
@@ -2842,6 +2838,9 @@ export default function AdminDashboard({
           justify-content: space-between;
           gap: 12px;
           margin-bottom: 8px;
+        }
+        .list-header h2 {
+          margin: 0;
         }
         .detail-card {
           min-height: 420px;
