@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
-import { toRoundedMinutes, type OrgPlan } from "@/lib/billing";
+import { getPlanConfig, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
 
 type Decision = "undecided" | "pass" | "fail" | "hold";
 
@@ -1337,6 +1337,7 @@ export default function AdminDashboard({
   const resolvedSidebarWidth = menuCollapsed ? 56 : sidebarWidth;
   const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
+  const planConfig = billingInfo ? getPlanConfig(billingInfo.planId) : null;
   const nextBillingText = billingInfo
     ? new Date(billingInfo.cycleEndsAt).toLocaleDateString("ja-JP")
     : "未加入";
@@ -1347,6 +1348,11 @@ export default function AdminDashboard({
     ? formatMinutes(billingInfo.overageUsedSec, "ceil")
     : "-";
   const overageChargeText = billingInfo ? formatYen(billingInfo.overageChargeYen) : "-";
+  const maxConcurrentText = billingInfo
+    ? typeof planConfig?.maxConcurrentInterviews === "number"
+      ? `${planConfig.maxConcurrentInterviews}件`
+      : "制限なし"
+    : "-";
 
   return (
     <main className="page">
@@ -2256,6 +2262,10 @@ export default function AdminDashboard({
                               <span className="billing-value">
                                 {remainingIncludedText}
                               </span>
+                            </div>
+                            <div className="billing-item">
+                              <span className="billing-label">同時面接数</span>
+                              <span className="billing-value">{maxConcurrentText}</span>
                             </div>
                             <div className="billing-item">
                               <span className="billing-label">超過利用</span>

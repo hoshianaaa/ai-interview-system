@@ -32,6 +32,12 @@ type ChatMessage = {
   ts: number;
 };
 
+type BlockedState = {
+  title: string;
+  message: string;
+  action: "close" | "reload";
+};
+
 const MAX_MESSAGES = 12;
 const RECORDING_TIMESLICE_MS = 1000;
 
@@ -149,7 +155,7 @@ export default function InterviewPage({
   const [starting, setStarting] = useState(false);
   const [ending, setEnding] = useState(false);
   const [endedMessage, setEndedMessage] = useState<string | null>(null);
-  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+  const [blockedState, setBlockedState] = useState<BlockedState | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
@@ -167,22 +173,47 @@ export default function InterviewPage({
   useEffect(() => {
     let cancelled = false;
     setStatusLoading(true);
-    setBlockedMessage(null);
+    setBlockedState(null);
     (async () => {
       try {
         const res = await fetch(`/api/interview/status?publicToken=${encodeURIComponent(publicToken)}`);
         if (cancelled) return;
-        if (res.status === 410) {
-          setBlockedMessage("この面接URLは期限切れです。");
+        const data = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          blockedReason?: string;
+          error?: string;
+        };
+        if (res.status === 410 || data.error === "INTERVIEW_EXPIRED") {
+          setBlockedState({
+            title: "このURLは使用できません",
+            message: "この面接URLは期限切れです。",
+            action: "close"
+          });
           return;
         }
         if (!res.ok) {
-          setBlockedMessage("この面接URLは無効です。");
+          setBlockedState({
+            title: "このURLは使用できません",
+            message: "この面接URLは無効です。",
+            action: "close"
+          });
           return;
         }
-        const data = (await res.json()) as { status?: string };
+        if (data.blockedReason === "CONCURRENCY_LIMIT") {
+          setBlockedState({
+            title: "現在、面接が混み合っています",
+            message:
+              "現在システムが混み合っています。時間を置いてから同じURLを開き直してください。",
+            action: "reload"
+          });
+          return;
+        }
         if (data.status && data.status !== "created") {
-          setBlockedMessage("この面接URLはすでに使用されています。");
+          setBlockedState({
+            title: "このURLは使用できません",
+            message: "この面接URLはすでに使用されています。",
+            action: "close"
+          });
         }
       } finally {
         if (!cancelled) setStatusLoading(false);
@@ -197,10 +228,10 @@ export default function InterviewPage({
   async function startInterview() {
     if (starting) return;
     if (hasActiveJoin) return;
-    if (statusLoading || blockedMessage) return;
+    if (statusLoading || blockedState) return;
     setStarting(true);
     setJoin(null);
-    setBlockedMessage(null);
+    setBlockedState(null);
     try {
       const res = await fetch("/api/interview/join", {
         method: "POST",
@@ -211,15 +242,36 @@ export default function InterviewPage({
       const data = (await res.json()) as JoinResponse;
       if ("error" in data) {
         if (data.error === "INTERVIEW_ALREADY_USED") {
-          setBlockedMessage("この面接URLはすでに使用されています。");
+          setBlockedState({
+            title: "このURLは使用できません",
+            message: "この面接URLはすでに使用されています。",
+            action: "close"
+          });
           return;
         }
         if (data.error === "INTERVIEW_EXPIRED") {
-          setBlockedMessage("この面接URLは期限切れです。");
+          setBlockedState({
+            title: "このURLは使用できません",
+            message: "この面接URLは期限切れです。",
+            action: "close"
+          });
           return;
         }
         if (data.error === "not found") {
-          setBlockedMessage("この面接URLは無効です。");
+          setBlockedState({
+            title: "このURLは使用できません",
+            message: "この面接URLは無効です。",
+            action: "close"
+          });
+          return;
+        }
+        if (data.error === "INTERVIEW_CONCURRENCY_LIMIT") {
+          setBlockedState({
+            title: "現在、面接が混み合っています",
+            message:
+              "現在システムが混み合っています。時間を置いてから同じURLを開き直してください。",
+            action: "reload"
+          });
           return;
         }
       }
@@ -360,17 +412,27 @@ export default function InterviewPage({
     );
   }
 
-  if (blockedMessage) {
+  if (blockedState) {
     return (
       <main className="intro">
         <div className="intro-card">
           <div className="eyebrow">AI Interview</div>
-          <h1>このURLは使用できません</h1>
-          <p className="lead">{blockedMessage}</p>
+          <h1>{blockedState.title}</h1>
+          <p className="lead">{blockedState.message}</p>
           <div className="actions">
-            <button className="start" type="button" onClick={() => window.close()}>
-              閉じる
-            </button>
+            {blockedState.action === "reload" ? (
+              <button
+                className="start"
+                type="button"
+                onClick={() => window.location.reload()}
+              >
+                再読み込み
+              </button>
+            ) : (
+              <button className="start" type="button" onClick={() => window.close()}>
+                閉じる
+              </button>
+            )}
           </div>
         </div>
 

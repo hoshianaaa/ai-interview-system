@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
 import type { OrgPlan } from "@/lib/billing";
 import { refreshOrgSubscription } from "@/lib/subscription";
+import { getSystemMaxConcurrentInterviews } from "@/lib/system-settings";
 import OrganizationGate from "../admin/OrganizationGate";
 import SuperAdminDashboard from "./SuperAdminDashboard";
 import SuperAdminGate from "./SuperAdminGate";
@@ -82,6 +83,8 @@ export default async function SuperAdminPage() {
     refreshedSubscriptions.map((row) => [row.orgId, row])
   );
 
+  const maxConcurrentInterviews = await getSystemMaxConcurrentInterviews(prisma);
+
   let orgs: { id: string; name: string }[] = [];
   let orgsLoadError: string | null = null;
   try {
@@ -131,6 +134,7 @@ export default async function SuperAdminPage() {
     <SuperAdminDashboard
       initialRows={rows}
       orgsLoadError={orgsLoadError}
+      systemSettings={{ maxConcurrentInterviews }}
     />
   );
 }

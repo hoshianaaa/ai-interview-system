@@ -7,6 +7,7 @@ import {
 } from "@/lib/livekit";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 import { isInterviewExpired } from "@/lib/interview-status";
+import { getConcurrencyBlockReason } from "@/lib/interview-concurrency";
 
 export const runtime = "nodejs";
 
@@ -50,6 +51,11 @@ export async function POST(req: Request) {
         throw new Error("INTERVIEW_ALREADY_USED");
       }
 
+      const blockedReason = await getConcurrencyBlockReason(tx, current.orgId);
+      if (blockedReason) {
+        throw new Error("INTERVIEW_CONCURRENCY_LIMIT");
+      }
+
       return tx.interview.update({
         where: { interviewId: current.interviewId },
         data: { status: "used", usedAt: new Date() }
@@ -58,6 +64,8 @@ export async function POST(req: Request) {
     .catch((e) => {
       if (String(e?.message) === "INTERVIEW_ALREADY_USED") return "ALREADY_USED" as const;
       if (String(e?.message) === "INTERVIEW_EXPIRED") return "EXPIRED" as const;
+      if (String(e?.message) === "INTERVIEW_CONCURRENCY_LIMIT")
+        return "CONCURRENCY_LIMIT" as const;
       throw e;
     });
 
@@ -66,6 +74,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "INTERVIEW_ALREADY_USED" }, { status: 409 });
   if (updated === "EXPIRED")
     return NextResponse.json({ error: "INTERVIEW_EXPIRED" }, { status: 410 });
+  if (updated === "CONCURRENCY_LIMIT")
+    return NextResponse.json(
+      { error: "INTERVIEW_CONCURRENCY_LIMIT" },
+      { status: 429 }
+    );
 
   try {
     await room.createRoom({ name: updated.roomName });

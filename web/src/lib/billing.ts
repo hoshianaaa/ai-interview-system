@@ -7,6 +7,7 @@ export type PlanConfig = {
   includedMinutes: number;
   overageRateYenPerMin: number;
   overageLimitMinutes: number;
+  maxConcurrentInterviews: number | null;
 };
 
 export const PLAN_CONFIG: Record<OrgPlan, PlanConfig> = {
@@ -16,7 +17,8 @@ export const PLAN_CONFIG: Record<OrgPlan, PlanConfig> = {
     monthlyPriceYen: 3000,
     includedMinutes: 100,
     overageRateYenPerMin: 30,
-    overageLimitMinutes: 100
+    overageLimitMinutes: 100,
+    maxConcurrentInterviews: 1
   }
 };
 

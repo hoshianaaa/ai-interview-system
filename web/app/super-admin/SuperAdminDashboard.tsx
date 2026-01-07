@@ -25,6 +25,10 @@ type OrgSubscriptionRow = {
   hasSubscription: boolean;
 };
 
+type SystemSettings = {
+  maxConcurrentInterviews: number;
+};
+
 type OrgSubscriptionResponse =
   | {
       orgSubscription: {
@@ -62,12 +66,20 @@ type PlanSelectValue = OrgPlan | typeof NONE_PLAN_VALUE;
 
 export default function SuperAdminDashboard({
   initialRows,
-  orgsLoadError
+  orgsLoadError,
+  systemSettings
 }: {
   initialRows: OrgSubscriptionRow[];
   orgsLoadError?: string | null;
+  systemSettings: SystemSettings;
 }) {
   const [rows, setRows] = useState<OrgSubscriptionRow[]>(initialRows);
+  const [currentSystemSettings, setCurrentSystemSettings] = useState(systemSettings);
+  const [systemLimitInput, setSystemLimitInput] = useState(
+    String(systemSettings.maxConcurrentInterviews)
+  );
+  const [systemSaving, setSystemSaving] = useState(false);
+  const [systemError, setSystemError] = useState<string | null>(null);
   const [planByOrg, setPlanByOrg] = useState<Record<string, PlanSelectValue>>(() => {
     const next: Record<string, PlanSelectValue> = {};
     for (const row of initialRows) {
@@ -247,6 +259,46 @@ export default function SuperAdminDashboard({
     }
   };
 
+  const systemDirty =
+    systemLimitInput.trim() !==
+    String(currentSystemSettings.maxConcurrentInterviews);
+
+  const saveSystemSettings = async () => {
+    if (systemSaving) return;
+    setSystemError(null);
+    const trimmed = systemLimitInput.trim();
+    const parsed = Number(trimmed);
+    if (!trimmed || !Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+      setSystemError("同時面接上限は整数で入力してください。");
+      return;
+    }
+    if (parsed < 1 || parsed > 100) {
+      setSystemError("同時面接上限は1〜100で入力してください。");
+      return;
+    }
+    setSystemSaving(true);
+    try {
+      const res = await fetch("/api/super-admin/system-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ maxConcurrentInterviews: parsed })
+      });
+      const data = (await res.json()) as
+        | { maxConcurrentInterviews: number }
+        | { error: string };
+      if (!res.ok || "error" in data) {
+        setSystemError("設定の更新に失敗しました。");
+        return;
+      }
+      setCurrentSystemSettings(data);
+      setSystemLimitInput(String(data.maxConcurrentInterviews));
+    } catch {
+      setSystemError("設定の更新に失敗しました。");
+    } finally {
+      setSystemSaving(false);
+    }
+  };
+
   return (
     <main className="page">
       <header className="topbar">
@@ -259,6 +311,44 @@ export default function SuperAdminDashboard({
           <UserButton />
         </div>
       </header>
+
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <h2>システム設定</h2>
+            <p className="subtle">
+              全組織の同時面接上限を設定します。
+            </p>
+          </div>
+        </div>
+        <div className="system-settings">
+          <div className="system-row">
+            <label htmlFor="system-max-concurrent" className="label">
+              同時面接上限
+            </label>
+            <div className="system-control">
+              <input
+                id="system-max-concurrent"
+                type="number"
+                min={1}
+                max={100}
+                value={systemLimitInput}
+                onChange={(e) => setSystemLimitInput(e.target.value)}
+                inputMode="numeric"
+              />
+              <button
+                type="button"
+                className="primary"
+                disabled={!systemDirty || systemSaving}
+                onClick={() => void saveSystemSettings()}
+              >
+                {systemSaving ? "更新中..." : "保存"}
+              </button>
+            </div>
+          </div>
+          {systemError && <p className="error">{systemError}</p>}
+        </div>
+      </section>
 
       <section className="card">
         <div className="card-header">
@@ -701,6 +791,23 @@ export default function SuperAdminDashboard({
           gap: 10px;
           align-items: center;
           flex-wrap: wrap;
+        }
+        .system-settings {
+          display: grid;
+          gap: 12px;
+        }
+        .system-row {
+          display: grid;
+          gap: 8px;
+        }
+        .system-control {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .system-control input {
+          width: 120px;
         }
         .detail-meta {
           display: grid;

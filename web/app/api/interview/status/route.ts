@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isInterviewExpired } from "@/lib/interview-status";
+import { getConcurrencyBlockReason } from "@/lib/interview-concurrency";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,16 @@ export async function GET(req: Request) {
     isInterviewExpired(interview.expiresAt)
   ) {
     return NextResponse.json({ error: "INTERVIEW_EXPIRED" }, { status: 410 });
+  }
+
+  if (interview.status === "created") {
+    const blockedReason = await getConcurrencyBlockReason(prisma, interview.orgId);
+    if (blockedReason) {
+      return NextResponse.json({
+        status: interview.status,
+        blockedReason: "CONCURRENCY_LIMIT"
+      });
+    }
   }
 
   return NextResponse.json({ status: interview.status });
