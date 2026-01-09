@@ -48,6 +48,19 @@ const listAllOrganizations = async () => {
   return results;
 };
 
+const getSuperAdminOrgName = async () => {
+  if (!SUPER_ADMIN_ORG_ID) return null;
+  try {
+    const client = await clerkClient();
+    const org = await client.organizations.getOrganization({
+      organizationId: SUPER_ADMIN_ORG_ID
+    });
+    return org.name || null;
+  } catch {
+    return null;
+  }
+};
+
 export default async function SuperAdminPage() {
   const { orgId } = await auth();
   if (!orgId) {
@@ -61,9 +74,13 @@ export default async function SuperAdminPage() {
   }
 
   if (!isSuperAdminOrgId(orgId)) {
+    const superAdminOrgName = await getSuperAdminOrgName();
+    const message = superAdminOrgName
+      ? `${superAdminOrgName}\u306e\u7d44\u7e54\u306b\u5207\u308a\u66ff\u3048\u3066\u304f\u3060\u3055\u3044\u3002`
+      : "\u30b9\u30fc\u30d1\u30fc\u7ba1\u7406\u7528\u306e\u7d44\u7e54\u306b\u5207\u308a\u66ff\u3048\u3066\u304f\u3060\u3055\u3044\u3002";
     return (
       <SuperAdminGate
-        message={`Switch to the super admin org: ${SUPER_ADMIN_ORG_ID}.`}
+        message={message}
       />
     );
   }
