@@ -141,6 +141,7 @@ const MAX_EXPIRES_HOURS = 23;
 const DEFAULT_EXPIRES_WEEKS = 1;
 const MAX_DURATION_MIN = 10;
 const INTERVIEW_STATUS_OPTIONS = ["実施待ち", "完了", "未参加", "失敗（エラー）"] as const;
+const APPLICATIONS_PER_PAGE = 10;
 
 export default function AdminDashboard({
   interviews,
@@ -239,6 +240,8 @@ export default function AdminDashboard({
   const [applicationDateFrom, setApplicationDateFrom] = useState("");
   const [applicationDateTo, setApplicationDateTo] = useState("");
   const [applicationFiltersOpen, setApplicationFiltersOpen] = useState(false);
+  const [applicationsPage, setApplicationsPage] = useState(1);
+  const [isMounted, setIsMounted] = useState(false);
   const allDecisionSelected =
     applicationDecisions.length === DECISION_FILTER_VALUES.length;
   const isResizingSidebar = useRef(false);
@@ -264,6 +267,9 @@ export default function AdminDashboard({
   useEffect(() => {
     setBillingInfo(billing);
   }, [billing]);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const hasResult = isCreateSuccess(createResult);
   const hasReissueResult = isCreateSuccess(reissueResult);
@@ -1226,6 +1232,42 @@ export default function AdminDashboard({
     applicationDateTo
   ]);
   useEffect(() => {
+    setApplicationsPage(1);
+  }, [
+    applicationQuery,
+    applicationDecisions,
+    applicationInterviewCount,
+    applicationLatestRound,
+    applicationStatus,
+    applicationDateFrom,
+    applicationDateTo
+  ]);
+  const totalApplicationPages = Math.max(
+    1,
+    Math.ceil(filteredApplicationRows.length / APPLICATIONS_PER_PAGE)
+  );
+  useEffect(() => {
+    setApplicationsPage((prev) => Math.min(prev, totalApplicationPages));
+  }, [totalApplicationPages]);
+  const paginatedApplicationRows = useMemo(() => {
+    const startIndex = (applicationsPage - 1) * APPLICATIONS_PER_PAGE;
+    return filteredApplicationRows.slice(
+      startIndex,
+      startIndex + APPLICATIONS_PER_PAGE
+    );
+  }, [applicationsPage, filteredApplicationRows]);
+  const applicationPageRange = useMemo(() => {
+    if (filteredApplicationRows.length === 0) {
+      return { start: 0, end: 0 };
+    }
+    const start = (applicationsPage - 1) * APPLICATIONS_PER_PAGE + 1;
+    const end = Math.min(
+      applicationsPage * APPLICATIONS_PER_PAGE,
+      filteredApplicationRows.length
+    );
+    return { start, end };
+  }, [applicationsPage, filteredApplicationRows.length]);
+  useEffect(() => {
     if (activePanel !== "applications" || applicationsView !== "detail") return;
     if (selectedApplicationId) return;
     const first = filteredApplicationRows[0];
@@ -1580,8 +1622,8 @@ export default function AdminDashboard({
             )}
             <div className={`sidebar-panel sidebar-user ${menuCollapsed ? "collapsed" : ""}`}>
               <div className="user">
-                {!menuCollapsed && <OrganizationSwitcher />}
-                <UserButton />
+                {!menuCollapsed && isMounted && <OrganizationSwitcher />}
+                {isMounted && <UserButton />}
               </div>
             </div>
           </div>
@@ -1785,6 +1827,41 @@ export default function AdminDashboard({
               <div className="card list-card">
                 <div className="list-header">
                   <h2>応募一覧</h2>
+                  {filteredApplicationRows.length > 0 && (
+                    <div className="list-header-actions">
+                      <div className="pagination" aria-label="応募一覧のページ送り">
+                        <span className="pagination-status">
+                          {applicationPageRange.start}〜{applicationPageRange.end} /{" "}
+                          {filteredApplicationRows.length}件
+                        </span>
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() =>
+                            setApplicationsPage((prev) => Math.max(1, prev - 1))
+                          }
+                          disabled={applicationsPage <= 1}
+                        >
+                          前へ
+                        </button>
+                        <span className="pagination-page">
+                          {applicationsPage} / {totalApplicationPages}ページ
+                        </span>
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() =>
+                            setApplicationsPage((prev) =>
+                              Math.min(totalApplicationPages, prev + 1)
+                            )
+                          }
+                          disabled={applicationsPage >= totalApplicationPages}
+                        >
+                          次へ
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="list-filters">
                   <button
@@ -1933,7 +2010,7 @@ export default function AdminDashboard({
                   <div className="empty">条件に一致する応募がありません</div>
                 ) : (
                   <div className="list">
-                    {filteredApplicationRows.map((app) => (
+                    {paginatedApplicationRows.map((app) => (
                       <div
                         key={app.applicationId}
                         className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
@@ -2968,6 +3045,30 @@ export default function AdminDashboard({
           gap: 12px;
           margin-bottom: 8px;
         }
+        .list-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .pagination {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .pagination-status {
+          font-size: 12px;
+          color: #6b7a90;
+        }
+        .pagination-page {
+          font-size: 12px;
+          color: #4b5c72;
+        }
+        .pagination .ghost {
+          padding: 6px 10px;
+          font-size: 12px;
+        }
         .list-header h2 {
           margin: 0;
         }
@@ -3361,15 +3462,15 @@ export default function AdminDashboard({
         .list {
           display: flex;
           flex-direction: column;
-          gap: 14px;
+          gap: 10px;
         }
         .row {
-          padding: 14px;
+          padding: 10px 12px;
           border-radius: 12px;
           background: #f6f8fc;
           border: 1px solid #d8e1f0;
           display: grid;
-          gap: 10px;
+          gap: 6px;
           cursor: pointer;
         }
         .row.selected {
@@ -3387,7 +3488,7 @@ export default function AdminDashboard({
         }
         .title {
           font-weight: 600;
-          margin-bottom: 4px;
+          margin-bottom: 2px;
         }
         .title-row {
           display: flex;
