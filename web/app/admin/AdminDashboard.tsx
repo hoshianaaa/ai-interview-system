@@ -903,8 +903,6 @@ export default function AdminDashboard({
   const formatMinutes = (valueSec: number, mode: "floor" | "ceil" = "floor") =>
     `${toRoundedMinutes(valueSec, mode)}分`;
 
-  const formatYen = (value: number) => `${value.toLocaleString("ja-JP")}円`;
-
   const formatPlanLabel = (planId: OrgPlan) =>
     planId === "starter" ? "スターター" : planId;
 
@@ -1439,27 +1437,15 @@ export default function AdminDashboard({
   const nextBillingText = billingInfo
     ? new Date(billingInfo.cycleEndsAt).toLocaleDateString("ja-JP")
     : "未加入";
-  const usedText = billingInfo
-    ? `${toRoundedMinutes(billingInfo.usedSec, "ceil")}/${billingInfo.includedMinutes}分`
-    : "-";
-  const reservedText = billingInfo ? formatMinutes(billingInfo.reservedSec, "ceil") : "-";
-  const remainingAfterReserveText = billingInfo
-    ? `${toRoundedMinutes(billingInfo.remainingIncludedSec)}/${billingInfo.includedMinutes}分`
-    : "-";
-  const committedSec = billingInfo ? billingInfo.usedSec + billingInfo.reservedSec : 0;
   const includedSec = billingInfo ? billingInfo.includedMinutes * 60 : 0;
-  const overageCommittedSec = Math.max(0, committedSec - includedSec);
-  const overageUsedText = billingInfo
+  const remainingConfirmedSec = billingInfo
+    ? Math.max(0, includedSec - billingInfo.usedSec)
+    : 0;
+  const remainingConfirmedText = billingInfo ? formatMinutes(remainingConfirmedSec) : "-";
+  const overageConfirmedText = billingInfo
     ? formatMinutes(billingInfo.overageUsedSec, "ceil")
     : "-";
-  const overageChargeText = billingInfo ? formatYen(billingInfo.overageChargeYen) : "-";
-  const overageReservedSec = billingInfo
-    ? Math.max(0, overageCommittedSec - billingInfo.overageUsedSec)
-    : 0;
-  const overageReservedText = billingInfo ? formatMinutes(overageReservedSec, "ceil") : "-";
-  const overageReservedChargeText = billingInfo
-    ? formatYen(toRoundedMinutes(overageReservedSec, "ceil") * billingInfo.overageRateYenPerMin)
-    : "-";
+  const reservedText = billingInfo ? formatMinutes(billingInfo.reservedSec, "ceil") : "-";
   const maxConcurrentText = billingInfo
     ? typeof planConfig?.maxConcurrentInterviews === "number"
       ? `${planConfig.maxConcurrentInterviews}件`
@@ -1600,48 +1586,34 @@ export default function AdminDashboard({
               <div className="sidebar-panel">
                 <div className="sidebar-section-title">利用状況</div>
                 <div className="billing">
-                  <div className="billing-grid">
-                    <div className="billing-item">
-                      <span className="billing-label">プラン</span>
-                      <span className="billing-value">{planLabel}</span>
-                    </div>
-                    {billingInfo ? (
-                      <>
-                        <div className="billing-item">
-                          <span className="billing-label">次回更新</span>
-                          <span className="billing-value">{nextBillingText}</span>
-                        </div>
-                        <div className="billing-item">
-                          <span className="billing-label">利用済み</span>
-                          <span className="billing-value">{usedText}</span>
-                        </div>
-                        <div className="billing-item">
-                          <span className="billing-label">予約中</span>
-                          <span className="billing-value">{reservedText}</span>
-                        </div>
-                        <div className="billing-item">
-                          <span className="billing-label">残り(予約差引)</span>
-                          <span className="billing-value">{remainingAfterReserveText}</span>
-                        </div>
-                        <div className="billing-item">
-                          <span className="billing-label">超過(実績)</span>
-                          <span className="billing-value">
-                            {overageUsedText}（{overageChargeText}）
-                          </span>
-                        </div>
-                        <div className="billing-item">
-                          <span className="billing-label">超過(予約)</span>
-                          <span className="billing-value">
-                            {overageReservedText}（{overageReservedChargeText}）
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="billing-muted">
-                        プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                  {billingInfo ? (
+                    <div className="billing-grid">
+                      <div className="billing-item">
+                        <span className="billing-label">プラン</span>
+                        <span className="billing-value">{planLabel}</span>
                       </div>
-                    )}
-                  </div>
+                      <div className="billing-item">
+                        <span className="billing-label">次回更新</span>
+                        <span className="billing-value">{nextBillingText}</span>
+                      </div>
+                      <div className="billing-item">
+                        <span className="billing-label">予約時間</span>
+                        <span className="billing-value">{reservedText}</span>
+                      </div>
+                      <div className="billing-item">
+                        <span className="billing-label">残り時間（確定）</span>
+                        <span className="billing-value">{remainingConfirmedText}</span>
+                      </div>
+                      <div className="billing-item">
+                        <span className="billing-label">超過時間（確定）</span>
+                        <span className="billing-value">{overageConfirmedText}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="billing-muted">
+                      プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                    </div>
+                  )}
                   {billingInfo?.overageLocked && (
                     <div className="billing-alert">管理者承認待ち</div>
                   )}
