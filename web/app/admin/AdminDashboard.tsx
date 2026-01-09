@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
-import { getPlanConfig, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
+import { buildBillingSummary, getPlanConfig, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
 
 type Decision = "undecided" | "pass" | "fail" | "hold";
 
@@ -258,10 +258,15 @@ export default function AdminDashboard({
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
+  const [billingInfo, setBillingInfo] = useState(billing);
+
+  useEffect(() => {
+    setBillingInfo(billing);
+  }, [billing]);
+
   const hasResult = isCreateSuccess(createResult);
   const hasReissueResult = isCreateSuccess(reissueResult);
   const hasApplicationInterviewResult = isCreateSuccess(applicationInterviewResult);
-  const billingInfo = billing;
 
   const normalizeDurationMin = (value: string, fallback: number) => {
     const parsed = Number(value);
@@ -283,6 +288,39 @@ export default function AdminDashboard({
       orgSettings.defaultDurationMin
     );
     return Math.round(clampedMin * 60);
+  };
+
+  const updateBillingAfterCreate = (durationSec: number) => {
+    const normalized = Number.isFinite(durationSec) ? Math.max(0, Math.round(durationSec)) : 0;
+    if (!normalized) return;
+    setBillingInfo((current) => {
+      if (!current) return current;
+      const summary = buildBillingSummary({
+        plan: current.planId,
+        cycleStartedAt: new Date(current.cycleStartedAt),
+        cycleEndsAt: new Date(current.cycleEndsAt),
+        usedSec: current.usedSec,
+        reservedSec: current.reservedSec + normalized,
+        overageApproved: current.overageApproved
+      });
+      return {
+        planId: summary.planId,
+        monthlyPriceYen: summary.monthlyPriceYen,
+        includedMinutes: summary.includedMinutes,
+        overageRateYenPerMin: summary.overageRateYenPerMin,
+        overageLimitMinutes: summary.overageLimitMinutes,
+        cycleStartedAt: summary.cycleStartedAt.toISOString(),
+        cycleEndsAt: summary.cycleEndsAt.toISOString(),
+        usedSec: summary.usedSec,
+        reservedSec: summary.reservedSec,
+        remainingIncludedSec: summary.remainingIncludedSec,
+        overageUsedSec: summary.overageUsedSec,
+        overageChargeYen: summary.overageChargeYen,
+        overageRemainingSec: summary.overageRemainingSec,
+        overageApproved: summary.overageApproved,
+        overageLocked: summary.overageLocked
+      };
+    });
   };
 
   async function requestInterview(payload: Record<string, unknown>) {
@@ -379,6 +417,7 @@ export default function AdminDashboard({
       upsertApplication(application);
       insertInterview(buildInterviewFromResponse(data, application));
       selectApplication(data.applicationId);
+      updateBillingAfterCreate(data.durationSec ?? durationSec);
     }
   }
 
@@ -394,9 +433,10 @@ export default function AdminDashboard({
     },
     onResult?: (data: CreateResponse) => void
   ) {
+    const durationSec = overrides?.durationSec ?? getDefaultDurationSec();
     const payload: Record<string, unknown> = {
       applicationId,
-      durationSec: overrides?.durationSec ?? getDefaultDurationSec(),
+      durationSec,
       prompt: overrides?.prompt ?? prompt,
       expiresInWeeks: overrides?.expiresWeeks ?? Number(expiresWeeks),
       expiresInDays: overrides?.expiresDays ?? Number(expiresDays),
@@ -411,6 +451,7 @@ export default function AdminDashboard({
       const application = buildApplicationFromResponse(data, existing ?? undefined);
       upsertApplication(application);
       insertInterview(buildInterviewFromResponse(data, application));
+      updateBillingAfterCreate(data.durationSec ?? durationSec);
     }
     if (onResult) onResult(data);
     return data;
