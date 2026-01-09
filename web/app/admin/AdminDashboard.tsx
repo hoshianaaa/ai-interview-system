@@ -1439,18 +1439,36 @@ export default function AdminDashboard({
   const nextBillingText = billingInfo
     ? new Date(billingInfo.cycleEndsAt).toLocaleDateString("ja-JP")
     : "未加入";
-  const remainingIncludedText = billingInfo
+  const usedText = billingInfo
+    ? `${toRoundedMinutes(billingInfo.usedSec, "ceil")}/${billingInfo.includedMinutes}分`
+    : "-";
+  const reservedText = billingInfo ? formatMinutes(billingInfo.reservedSec, "ceil") : "-";
+  const remainingAfterReserveText = billingInfo
     ? `${toRoundedMinutes(billingInfo.remainingIncludedSec)}/${billingInfo.includedMinutes}分`
     : "-";
+  const committedSec = billingInfo ? billingInfo.usedSec + billingInfo.reservedSec : 0;
+  const includedSec = billingInfo ? billingInfo.includedMinutes * 60 : 0;
+  const overageCommittedSec = Math.max(0, committedSec - includedSec);
   const overageUsedText = billingInfo
     ? formatMinutes(billingInfo.overageUsedSec, "ceil")
     : "-";
   const overageChargeText = billingInfo ? formatYen(billingInfo.overageChargeYen) : "-";
+  const overageReservedSec = billingInfo
+    ? Math.max(0, overageCommittedSec - billingInfo.overageUsedSec)
+    : 0;
+  const overageReservedText = billingInfo ? formatMinutes(overageReservedSec, "ceil") : "-";
+  const overageReservedChargeText = billingInfo
+    ? formatYen(toRoundedMinutes(overageReservedSec, "ceil") * billingInfo.overageRateYenPerMin)
+    : "-";
   const maxConcurrentText = billingInfo
     ? typeof planConfig?.maxConcurrentInterviews === "number"
       ? `${planConfig.maxConcurrentInterviews}件`
       : "制限なし"
     : "未加入";
+  const overageLimitText = billingInfo ? `${billingInfo.overageLimitMinutes}分` : "未加入";
+  const overageNoteText = billingInfo
+    ? `超過時間は+${overageLimitText}まで自動超過できます。超える場合はサポートの承認が必要です。`
+    : "プラン未加入のため超過上限は表示されません。";
 
   return (
     <main className="page">
@@ -1594,13 +1612,27 @@ export default function AdminDashboard({
                           <span className="billing-value">{nextBillingText}</span>
                         </div>
                         <div className="billing-item">
-                          <span className="billing-label">残り面接</span>
-                          <span className="billing-value">{remainingIncludedText}</span>
+                          <span className="billing-label">利用済み</span>
+                          <span className="billing-value">{usedText}</span>
                         </div>
                         <div className="billing-item">
-                          <span className="billing-label">超過利用</span>
+                          <span className="billing-label">予約中</span>
+                          <span className="billing-value">{reservedText}</span>
+                        </div>
+                        <div className="billing-item">
+                          <span className="billing-label">残り(予約差引)</span>
+                          <span className="billing-value">{remainingAfterReserveText}</span>
+                        </div>
+                        <div className="billing-item">
+                          <span className="billing-label">超過(実績)</span>
                           <span className="billing-value">
                             {overageUsedText}（{overageChargeText}）
+                          </span>
+                        </div>
+                        <div className="billing-item">
+                          <span className="billing-label">超過(予約)</span>
+                          <span className="billing-value">
+                            {overageReservedText}（{overageReservedChargeText}）
                           </span>
                         </div>
                       </>
@@ -2522,7 +2554,12 @@ export default function AdminDashboard({
                         <span>同時面接制限数</span>
                         <strong>{maxConcurrentText}</strong>
                       </div>
+                      <div className="result-row">
+                        <span>超過上限(自動)</span>
+                        <strong>{overageLimitText}</strong>
+                      </div>
                     </div>
+                    <p className="settings-note">{overageNoteText}</p>
                   </div>
                   <div className="settings-section">
                     <h3>プロンプトテンプレート</h3>
@@ -3397,6 +3434,12 @@ export default function AdminDashboard({
           margin: 0;
           font-size: 15px;
           color: #1f2f44;
+        }
+        .settings-note {
+          margin: 4px 0 0;
+          font-size: 12px;
+          line-height: 1.4;
+          color: #6b7a90;
         }
         .template-editor {
           display: grid;
