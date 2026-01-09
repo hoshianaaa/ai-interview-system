@@ -1,11 +1,11 @@
-import type { Prisma } from "@prisma/client";
+import type { InterviewStatus, Prisma } from "@prisma/client";
 import { getPlanConfig } from "@/lib/billing";
 import {
   DEFAULT_MAX_CONCURRENT_INTERVIEWS,
   SYSTEM_SETTINGS_ID
 } from "@/lib/system-settings";
 
-const ACTIVE_INTERVIEW_STATUSES = ["used", "recording", "ending"] as const;
+const ACTIVE_INTERVIEW_STATUSES: InterviewStatus[] = ["used", "recording", "ending"];
 
 type ConcurrencyClient = Pick<
   Prisma.TransactionClient,
