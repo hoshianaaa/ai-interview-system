@@ -8,6 +8,14 @@ import { getPlanConfig, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
 
 type Decision = "undecided" | "pass" | "fail" | "hold";
 
+const DECISION_FILTER_OPTIONS: { value: Decision; label: string }[] = [
+  { value: "undecided", label: "未判定" },
+  { value: "pass", label: "合格" },
+  { value: "fail", label: "不合格" },
+  { value: "hold", label: "保留" }
+];
+const DECISION_FILTER_VALUES = DECISION_FILTER_OPTIONS.map((option) => option.value);
+
 type InterviewRow = {
   interviewId: string;
   applicationId: string;
@@ -219,7 +227,7 @@ export default function AdminDashboard({
   );
   const [applicationsView, setApplicationsView] = useState<"list" | "detail">("list");
   const [applicationQuery, setApplicationQuery] = useState("");
-  const [applicationDecision, setApplicationDecision] = useState<Decision | "all">("all");
+  const [applicationDecisions, setApplicationDecisions] = useState<Decision[]>([]);
   const [applicationInterviewCount, setApplicationInterviewCount] = useState<
     "all" | "none" | "some"
   >("all");
@@ -230,6 +238,8 @@ export default function AdminDashboard({
   const [applicationDateFrom, setApplicationDateFrom] = useState("");
   const [applicationDateTo, setApplicationDateTo] = useState("");
   const [applicationFiltersOpen, setApplicationFiltersOpen] = useState(false);
+  const allDecisionSelected =
+    applicationDecisions.length === DECISION_FILTER_VALUES.length;
   const isResizingSidebar = useRef(false);
   const sidebarResizeStartX = useRef(0);
   const sidebarResizeStartWidth = useRef(0);
@@ -1146,7 +1156,10 @@ export default function AdminDashboard({
           return false;
         }
       }
-      if (applicationDecision !== "all" && row.latestDecision !== applicationDecision) {
+      if (
+        applicationDecisions.length > 0 &&
+        !applicationDecisions.includes(row.latestDecision)
+      ) {
         return false;
       }
       if (applicationInterviewCount === "none" && row.interviewCount !== 0) return false;
@@ -1163,7 +1176,7 @@ export default function AdminDashboard({
   }, [
     applicationRows,
     applicationQuery,
-    applicationDecision,
+    applicationDecisions,
     applicationInterviewCount,
     applicationLatestRound,
     applicationStatus,
@@ -1750,18 +1763,47 @@ export default function AdminDashboard({
                         placeholder="候補者名・メモで検索"
                       />
                       <div className="filter-grid">
-                        <select
-                          value={applicationDecision}
-                          onChange={(e) =>
-                            setApplicationDecision(e.target.value as Decision | "all")
-                          }
-                        >
-                          <option value="all">判定: すべて</option>
-                          <option value="undecided">判定: 未判定</option>
-                          <option value="pass">判定: 合格</option>
-                          <option value="fail">判定: 不合格</option>
-                          <option value="hold">判定: 保留</option>
-                        </select>
+                        <fieldset className="filter-decision" aria-label="判定">
+                          <legend>判定</legend>
+                          <div className="filter-decision-actions">
+                            <button
+                              className="ghost"
+                              type="button"
+                              aria-pressed={allDecisionSelected}
+                              onClick={() =>
+                                setApplicationDecisions(
+                                  allDecisionSelected ? [] : DECISION_FILTER_VALUES
+                                )
+                              }
+                            >
+                              {allDecisionSelected ? "すべて解除" : "すべて選択"}
+                            </button>
+                          </div>
+                          <div className="decision-options decision-options--filter">
+                            {DECISION_FILTER_OPTIONS.map((option) => {
+                              const checked = applicationDecisions.includes(option.value);
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  aria-pressed={checked}
+                                  className={`decision-option decision-option--filter ${option.value} ${
+                                    checked ? "selected" : ""
+                                  }`}
+                                  onClick={() =>
+                                    setApplicationDecisions((prev) =>
+                                      prev.includes(option.value)
+                                        ? prev.filter((value) => value !== option.value)
+                                        : [...prev, option.value]
+                                    )
+                                  }
+                                >
+                                  <span>{option.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </fieldset>
                         <select
                           value={applicationInterviewCount}
                           onChange={(e) =>
@@ -1829,7 +1871,7 @@ export default function AdminDashboard({
                           type="button"
                           onClick={() => {
                             setApplicationQuery("");
-                            setApplicationDecision("all");
+                            setApplicationDecisions([]);
                             setApplicationInterviewCount("all");
                             setApplicationLatestRound("all");
                             setApplicationStatus("all");
@@ -2819,6 +2861,32 @@ export default function AdminDashboard({
           grid-template-columns: repeat(2, minmax(0, 1fr));
           align-items: center;
         }
+        .filter-decision {
+          display: grid;
+          gap: 6px;
+          grid-column: 1 / -1;
+          border: 0;
+          padding: 0;
+          margin: 0;
+        }
+        .filter-decision legend {
+          font-size: 12px;
+          color: #4b5c72;
+          padding: 0;
+          margin: 0;
+        }
+        .filter-decision-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+        }
+        .filter-decision-actions .ghost {
+          padding: 6px 10px;
+          font-size: 11px;
+        }
+        .decision-options--filter {
+          gap: 6px;
+        }
         .date-range {
           display: grid;
           gap: 8px;
@@ -2942,6 +3010,42 @@ export default function AdminDashboard({
           font-size: 12px;
           color: #1c2a3a;
           cursor: pointer;
+        }
+        .decision-option--filter {
+          opacity: 0.45;
+          transition: opacity 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .decision-option--filter.selected {
+          opacity: 1;
+          box-shadow: 0 0 0 2px rgba(31, 79, 178, 0.2);
+        }
+        .decision-option--filter.undecided,
+        .decision-option--filter.pass,
+        .decision-option--filter.fail,
+        .decision-option--filter.hold {
+          background: #fff;
+          border-color: #c7d3e6;
+          color: #1c2a3a;
+        }
+        .decision-option--filter.undecided.selected {
+          background: #fef3c7;
+          border-color: #f59e0b;
+          color: #92400e;
+        }
+        .decision-option--filter.pass.selected {
+          background: #dcfce7;
+          border-color: #22c55e;
+          color: #166534;
+        }
+        .decision-option--filter.fail.selected {
+          background: #ffe4e6;
+          border-color: #f43f5e;
+          color: #9f1239;
+        }
+        .decision-option--filter.hold.selected {
+          background: #e2e8f0;
+          border-color: #94a3b8;
+          color: #334155;
         }
         .decision-option input {
           margin: 0;
