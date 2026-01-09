@@ -1450,7 +1450,7 @@ export default function AdminDashboard({
     ? typeof planConfig?.maxConcurrentInterviews === "number"
       ? `${planConfig.maxConcurrentInterviews}件`
       : "制限なし"
-    : "-";
+    : "未加入";
 
   return (
     <main className="page">
@@ -1596,10 +1596,6 @@ export default function AdminDashboard({
                         <div className="billing-item">
                           <span className="billing-label">残り面接</span>
                           <span className="billing-value">{remainingIncludedText}</span>
-                        </div>
-                        <div className="billing-item">
-                          <span className="billing-label">同時面接数</span>
-                          <span className="billing-value">{maxConcurrentText}</span>
                         </div>
                         <div className="billing-item">
                           <span className="billing-label">超過利用</span>
@@ -2513,6 +2509,19 @@ export default function AdminDashboard({
                       >
                         {settingsSaving ? "保存中..." : "保存"}
                       </button>
+                    </div>
+                  </div>
+                  <div className="settings-section">
+                    <h3>プラン制限</h3>
+                    <div className="result plan-limit">
+                      <div className="result-row">
+                        <span>現在プラン</span>
+                        <strong>{planLabel}</strong>
+                      </div>
+                      <div className="result-row">
+                        <span>同時面接制限数</span>
+                        <strong>{maxConcurrentText}</strong>
+                      </div>
                     </div>
                   </div>
                   <div className="settings-section">
@@ -3439,6 +3448,9 @@ export default function AdminDashboard({
           border: 1px solid #d4def0;
           display: grid;
           gap: 6px;
+        }
+        .plan-limit {
+          margin-top: 0;
         }
         .result-row {
           display: flex;
