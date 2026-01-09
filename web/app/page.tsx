@@ -83,8 +83,12 @@ export default async function HomePage() {
     isDefault: row.isDefault,
     createdAt: row.createdAt.toISOString()
   }));
+  const defaultDurationMin = Math.min(
+    10,
+    Math.max(1, settings?.defaultDurationMin ?? 10)
+  );
   const settingsData = {
-    defaultDurationMin: settings?.defaultDurationMin ?? 10,
+    defaultDurationMin,
     defaultExpiresWeeks: settings?.defaultExpiresWeeks ?? 1,
     defaultExpiresDays: settings?.defaultExpiresDays ?? 0,
     defaultExpiresHours: settings?.defaultExpiresHours ?? 0

@@ -8,6 +8,7 @@ const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
 const MAX_EXPIRES_HOURS = 23;
 const DEFAULT_EXPIRES_WEEKS = 1;
+const MAX_DURATION_MIN = 10;
 const DEFAULT_DURATION_MIN = 10;
 
 const parseDurationPart = (value: unknown, max: number) => {
@@ -21,7 +22,7 @@ const normalizeDurationMin = (value: unknown) => {
   const num = Number(value);
   if (!Number.isFinite(num)) return DEFAULT_DURATION_MIN;
   const normalized = Math.floor(num);
-  return Math.min(30, Math.max(1, normalized));
+  return Math.min(MAX_DURATION_MIN, Math.max(1, normalized));
 };
 
 export async function GET() {
@@ -32,9 +33,14 @@ export async function GET() {
 
   const settings = await prisma.orgSetting.findUnique({ where: { orgId } });
 
+  const defaultDurationMin = Math.min(
+    MAX_DURATION_MIN,
+    Math.max(1, settings?.defaultDurationMin ?? DEFAULT_DURATION_MIN)
+  );
+
   return NextResponse.json({
     settings: {
-      defaultDurationMin: settings?.defaultDurationMin ?? DEFAULT_DURATION_MIN,
+      defaultDurationMin,
       defaultExpiresWeeks: settings?.defaultExpiresWeeks ?? DEFAULT_EXPIRES_WEEKS,
       defaultExpiresDays: settings?.defaultExpiresDays ?? 0,
       defaultExpiresHours: settings?.defaultExpiresHours ?? 0

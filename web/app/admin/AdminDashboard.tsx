@@ -139,6 +139,7 @@ const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
 const MAX_EXPIRES_HOURS = 23;
 const DEFAULT_EXPIRES_WEEKS = 1;
+const MAX_DURATION_MIN = 10;
 const INTERVIEW_STATUS_OPTIONS = ["実施待ち", "完了", "未参加", "失敗（エラー）"] as const;
 
 export default function AdminDashboard({
@@ -158,7 +159,7 @@ export default function AdminDashboard({
   const [applications, setApplications] = useState(initialApplications);
   const [orgSettings, setOrgSettings] = useState(settings);
   const [durationMinInput, setDurationMinInput] = useState(
-    String(settings.defaultDurationMin)
+    String(Math.min(MAX_DURATION_MIN, Math.max(1, settings.defaultDurationMin)))
   );
   const [expiresWeeks, setExpiresWeeks] = useState(
     String(settings.defaultExpiresWeeks)
@@ -244,7 +245,7 @@ export default function AdminDashboard({
   const sidebarResizeStartX = useRef(0);
   const sidebarResizeStartWidth = useRef(0);
   const [settingsDurationMin, setSettingsDurationMin] = useState(
-    String(settings.defaultDurationMin)
+    String(Math.min(MAX_DURATION_MIN, Math.max(1, settings.defaultDurationMin)))
   );
   const [settingsExpiresWeeks, setSettingsExpiresWeeks] = useState(
     String(settings.defaultExpiresWeeks)
@@ -272,7 +273,7 @@ export default function AdminDashboard({
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
     const normalized = Math.floor(parsed);
-    return Math.min(30, Math.max(1, normalized));
+    return Math.min(MAX_DURATION_MIN, Math.max(1, normalized));
   };
 
   const parseExpiryPart = (value: string, max: number) => {
@@ -1662,7 +1663,7 @@ export default function AdminDashboard({
                     value={durationMinInput}
                     onChange={(e) => setDurationMinInput(e.target.value)}
                   >
-                    {Array.from({ length: 30 }, (_, i) => (
+                    {Array.from({ length: MAX_DURATION_MIN }, (_, i) => (
                       <option key={i + 1} value={i + 1}>
                         {i + 1}分
                       </option>
@@ -2374,7 +2375,7 @@ export default function AdminDashboard({
                         value={settingsDurationMin}
                         onChange={(e) => setSettingsDurationMin(e.target.value)}
                       >
-                        {Array.from({ length: 30 }, (_, i) => (
+                        {Array.from({ length: MAX_DURATION_MIN }, (_, i) => (
                           <option key={i + 1} value={i + 1}>
                             {i + 1}分
                           </option>

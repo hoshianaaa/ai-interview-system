@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const durationRaw = Number(body.durationSec ?? 600);
   const normalizedDuration = Number.isFinite(durationRaw) ? Math.round(durationRaw) : 600;
-  const durationSec = Math.min(1800, Math.max(60, normalizedDuration));
+  const durationSec = Math.min(600, Math.max(60, normalizedDuration));
   const applicationIdRaw =
     typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   const roundRaw = Number(body.round);
