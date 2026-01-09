@@ -1450,8 +1450,8 @@ export default function AdminDashboard({
     ? typeof planConfig?.maxConcurrentInterviews === "number"
       ? `${planConfig.maxConcurrentInterviews}件`
       : "制限なし"
-    : "未加入";
-  const overageLimitText = billingInfo ? `${billingInfo.overageLimitMinutes}分` : "未加入";
+    : "";
+  const overageLimitText = billingInfo ? `${billingInfo.overageLimitMinutes}分` : "";
   const overageNoteText = billingInfo
     ? `超過時間は+${overageLimitText}まで自動超過できます。超える場合はサポートの承認が必要です。`
     : "プラン未加入のため超過上限は表示されません。";
