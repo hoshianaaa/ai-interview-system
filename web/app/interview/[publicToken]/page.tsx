@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -40,6 +40,17 @@ type BlockedState = {
 
 const MAX_MESSAGES = 12;
 const RECORDING_TIMESLICE_MS = 1000;
+const RECORDING_VIDEO_CONSTRAINTS = {
+  width: { ideal: 640 },
+  height: { ideal: 360 },
+  frameRate: { ideal: 15, max: 20 }
+};
+const RECORDING_VIDEO_BPS = 600_000;
+const RECORDING_AUDIO_BPS = 48_000;
+const UPLOAD_RETRY_COUNT = 3;
+const UPLOAD_RETRY_DELAY_MS = 1500;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const pickRecorderMimeType = () => {
   if (typeof MediaRecorder === "undefined") return "";
@@ -51,14 +62,40 @@ const pickRecorderMimeType = () => {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 };
 
-async function uploadToStream(uploadUrl: string, blob: Blob, fileName = "interview.webm") {
-  const form = new FormData();
-  form.append("file", blob, fileName);
-  const res = await fetch(uploadUrl, { method: "POST", body: form });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`stream upload failed (${res.status})${detail ? `: ${detail}` : ""}`);
-  }
+async function uploadToStream(
+  uploadUrl: string,
+  blob: Blob,
+  fileName = "interview.webm",
+  onProgress?: (progress: number) => void
+) {
+  await new Promise<void>((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", blob, fileName);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", uploadUrl);
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      const detail = xhr.responseText ?? "";
+      reject(
+        new Error(`stream upload failed (${xhr.status})${detail ? `: ${detail}` : ""}`)
+      );
+    };
+    xhr.onerror = () => reject(new Error("stream upload failed (network error)"));
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.max(
+          0,
+          Math.min(100, Math.round((event.loaded / event.total) * 100))
+        );
+        onProgress(percent);
+      };
+    }
+    xhr.send(form);
+  });
 }
 
 function createRecordingStream(room: Room, videoTrack: MediaStreamTrack | null) {
@@ -159,7 +196,18 @@ export default function InterviewPage({
   const [statusLoading, setStatusLoading] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const endingRef = useRef(false);
+  const handleUploadState = useCallback(
+    (next: { uploading: boolean; error: string | null; progress: number | null }) => {
+      setUploading(next.uploading);
+      setUploadError(next.error);
+      setUploadProgress(next.progress);
+    },
+    []
+  );
 
   const hasActiveJoin = isJoinSuccess(join);
 
@@ -337,6 +385,16 @@ export default function InterviewPage({
     };
   }, [publicToken, hasActiveJoin]);
 
+  useEffect(() => {
+    if (!uploading) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [uploading]);
+
   const header = useMemo(() => {
     if (secondsLeft === null) return "Loading...";
     const mm = Math.floor(secondsLeft / 60);
@@ -351,11 +409,33 @@ export default function InterviewPage({
           <div className="eyebrow">AI Interview</div>
           <h1>面接が終了しました</h1>
           <p className="lead">{endedMessage}</p>
-          <div className="actions">
-            <button className="start" type="button" onClick={() => window.close()}>
-              閉じる
-            </button>
-          </div>
+          {uploading && (
+            <>
+              <p className="upload-note">録画を保存中です。画面を閉じないでください。</p>
+              <div className="upload-progress-row">
+                <progress
+                  className="upload-progress"
+                  max={100}
+                  value={uploadProgress ?? undefined}
+                />
+                {typeof uploadProgress === "number" && (
+                  <span className="upload-percent">{uploadProgress}%</span>
+                )}
+              </div>
+            </>
+          )}
+          {uploadError && !uploading && (
+            <p className="error">
+              録画の保存に失敗しました。通信環境を確認して再読み込みしてください。
+            </p>
+          )}
+          {!uploading && (
+            <div className="actions">
+              <button className="start" type="button" onClick={() => window.close()}>
+                閉じる
+              </button>
+            </div>
+          )}
         </div>
 
         <style jsx>{`
@@ -393,6 +473,51 @@ export default function InterviewPage({
             margin: 0 0 20px;
             color: #4b5c72;
             line-height: 1.6;
+          }
+          .upload-note {
+            margin: 0 0 16px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(31, 79, 178, 0.08);
+            border: 1px solid rgba(31, 79, 178, 0.2);
+            color: #1f4fb2;
+            font-size: 13px;
+            font-weight: 600;
+          }
+          .upload-progress-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 16px;
+          }
+          .upload-progress {
+            flex: 1;
+            height: 8px;
+            border-radius: 999px;
+            accent-color: #1f4fb2;
+          }
+          .upload-progress::-webkit-progress-bar {
+            background: rgba(31, 79, 178, 0.12);
+            border-radius: 999px;
+          }
+          .upload-progress::-webkit-progress-value {
+            border-radius: 999px;
+          }
+          .upload-percent {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1f4fb2;
+            min-width: 42px;
+            text-align: right;
+          }
+          .error {
+            margin: 0 0 16px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(180, 35, 24, 0.08);
+            border: 1px solid rgba(180, 35, 24, 0.25);
+            color: #b42318;
+            font-size: 13px;
           }
           .actions {
             display: flex;
@@ -689,8 +814,32 @@ export default function InterviewPage({
               End
             </button>
           </div>
+          {(uploading || uploadError) && (
+            <div className={`upload-banner ${uploadError && !uploading ? "error" : ""}`}>
+              <div className="upload-text">
+                {uploading
+                  ? "録画を保存中です。画面を閉じないでください。"
+                  : "録画の保存に失敗しました。通信環境を確認して再読み込みしてください。"}
+              </div>
+              {uploading && (
+                <div className="upload-progress-row">
+                  <progress
+                    className="upload-progress"
+                    max={100}
+                    value={uploadProgress ?? undefined}
+                  />
+                  {typeof uploadProgress === "number" && (
+                    <span className="upload-percent">{uploadProgress}%</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-          <InterviewCanvas publicToken={publicToken} />
+          <InterviewCanvas
+            publicToken={publicToken}
+            onUploadStateChange={handleUploadState}
+          />
         </div>
         <RoomAudioRenderer />
       </LiveKitRoom>
@@ -776,6 +925,54 @@ export default function InterviewPage({
           z-index: 5;
           animation: fadeDown 0.6s ease-out both;
         }
+        .upload-banner {
+          position: absolute;
+          bottom: 20px;
+          left: 24px;
+          max-width: min(60vw, 520px);
+          padding: 10px 14px;
+          border-radius: 12px;
+          background: var(--panel-bg);
+          border: 1px solid var(--panel-border);
+          box-shadow: var(--shadow);
+          font-size: 12px;
+          font-weight: 600;
+          color: #1f2f44;
+          z-index: 4;
+        }
+        .upload-text {
+          margin-bottom: 8px;
+        }
+        .upload-progress-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .upload-progress {
+          flex: 1;
+          height: 8px;
+          border-radius: 999px;
+          accent-color: #1f4fb2;
+        }
+        .upload-progress::-webkit-progress-bar {
+          background: rgba(31, 79, 178, 0.12);
+          border-radius: 999px;
+        }
+        .upload-progress::-webkit-progress-value {
+          border-radius: 999px;
+        }
+        .upload-percent {
+          font-size: 11px;
+          font-weight: 600;
+          color: inherit;
+          min-width: 42px;
+          text-align: right;
+        }
+        .upload-banner.error {
+          background: rgba(180, 35, 24, 0.08);
+          border-color: rgba(180, 35, 24, 0.25);
+          color: #b42318;
+        }
         .timer {
           padding: 10px 14px;
           border-radius: 12px;
@@ -816,7 +1013,17 @@ export default function InterviewPage({
   );
 }
 
-function InterviewCanvas({ publicToken }: { publicToken: string }) {
+function InterviewCanvas({
+  publicToken,
+  onUploadStateChange
+}: {
+  publicToken: string;
+  onUploadStateChange: (next: {
+    uploading: boolean;
+    error: string | null;
+    progress: number | null;
+  }) => void;
+}) {
   const room = useRoomContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const chatListRef = useRef<HTMLDivElement | null>(null);
@@ -836,13 +1043,22 @@ function InterviewCanvas({ publicToken }: { publicToken: string }) {
     }
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        if (!active) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
+        let stream: MediaStream | null = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: RECORDING_VIDEO_CONSTRAINTS
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
         }
-        setLocalVideoStream(stream);
-        setCameraStatus("ready");
+        if (stream) {
+          if (!active) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          setLocalVideoStream(stream);
+          setCameraStatus("ready");
+        }
       } catch {
         if (active) setCameraStatus("failed");
       }
@@ -896,8 +1112,8 @@ function InterviewCanvas({ publicToken }: { publicToken: string }) {
       const options: MediaRecorderOptions = {};
       const mimeType = pickRecorderMimeType();
       if (mimeType) options.mimeType = mimeType;
-      options.videoBitsPerSecond = 1_000_000;
-      options.audioBitsPerSecond = 96_000;
+      options.videoBitsPerSecond = RECORDING_VIDEO_BPS;
+      options.audioBitsPerSecond = RECORDING_AUDIO_BPS;
 
       const recorder = new MediaRecorder(stream, options);
       recorderRef.current = recorder;
@@ -918,23 +1134,50 @@ function InterviewCanvas({ publicToken }: { publicToken: string }) {
         const blob = new Blob(chunksRef.current, { type: mime });
         chunksRef.current = [];
         uploadingRef.current = true;
+        onUploadStateChange({ uploading: true, error: null, progress: 0 });
 
         void (async () => {
+          let errorMessage: string | null = null;
           try {
-            const res = await fetch("/api/interview/stream/upload", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ publicToken })
-            });
-            const data = (await res.json()) as StreamUploadResponse;
-            if (!res.ok || "error" in data || !data.uploadUrl) {
-              throw new Error("UPLOAD_URL_FAILED");
+            let uploadUrl = "";
+            let uploadFileName = "interview.webm";
+            for (let attempt = 1; attempt <= UPLOAD_RETRY_COUNT; attempt++) {
+              try {
+                onUploadStateChange({ uploading: true, error: null, progress: 0 });
+                if (!uploadUrl) {
+                  const res = await fetch("/api/interview/stream/upload", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ publicToken })
+                  });
+                  const data = (await res.json()) as StreamUploadResponse;
+                  if (!res.ok || "error" in data || !data.uploadUrl) {
+                    throw new Error("UPLOAD_URL_FAILED");
+                  }
+                  uploadUrl = data.uploadUrl;
+                  uploadFileName = data.uploadFileName ?? "interview.webm";
+                }
+                await uploadToStream(uploadUrl, blob, uploadFileName, (progress) =>
+                  onUploadStateChange({ uploading: true, error: null, progress })
+                );
+                errorMessage = null;
+                break;
+              } catch (err) {
+                if (attempt >= UPLOAD_RETRY_COUNT) throw err;
+                await wait(UPLOAD_RETRY_DELAY_MS);
+              }
             }
-            await uploadToStream(data.uploadUrl, blob, data.uploadFileName ?? "interview.webm");
           } catch (err) {
             console.error("[stream] upload failed", err);
+            errorMessage =
+              "録画の保存に失敗しました。通信環境を確認して再読み込みしてください。";
           } finally {
             uploadingRef.current = false;
+            onUploadStateChange({
+              uploading: false,
+              error: errorMessage,
+              progress: errorMessage ? null : 100
+            });
           }
         })();
       };
@@ -954,7 +1197,7 @@ function InterviewCanvas({ publicToken }: { publicToken: string }) {
         recorderRef.current = null;
       }
     };
-  }, [room, publicToken, localVideoStream, cameraStatus]);
+  }, [room, publicToken, localVideoStream, cameraStatus, onUploadStateChange]);
 
   useEffect(() => {
     if (!room) return;

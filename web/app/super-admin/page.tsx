@@ -18,6 +18,7 @@ type OrgSubscriptionRow = {
   cycleEndsAt: string | null;
   usedSec: number;
   reservedSec: number;
+  activeInterviewCount: number;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
   updatedAt: string | null;
@@ -101,6 +102,19 @@ export default async function SuperAdminPage() {
   );
 
   const maxConcurrentInterviews = await getSystemMaxConcurrentInterviews(prisma);
+  const activeInterviewCounts = await prisma.interview.groupBy({
+    by: ["orgId"],
+    _count: { _all: true },
+    where: {
+      orgId: { not: null },
+      status: { in: ["used", "recording", "ending"] }
+    }
+  });
+  const activeInterviewCountByOrg = new Map(
+    activeInterviewCounts
+      .filter((row) => Boolean(row.orgId))
+      .map((row) => [row.orgId as string, row._count._all])
+  );
 
   let orgs: { id: string; name: string }[] = [];
   let orgsLoadError: string | null = null;
@@ -121,6 +135,7 @@ export default async function SuperAdminPage() {
       cycleEndsAt: subscription?.cycleEndsAt.toISOString() ?? null,
       usedSec: subscription?.usedSec ?? 0,
       reservedSec: subscription?.reservedSec ?? 0,
+      activeInterviewCount: activeInterviewCountByOrg.get(org.id) ?? 0,
       overageApproved: subscription?.overageApproved ?? false,
       renewOnCycleEnd: subscription?.renewOnCycleEnd ?? false,
       updatedAt: subscription?.updatedAt.toISOString() ?? null,
@@ -140,6 +155,7 @@ export default async function SuperAdminPage() {
       cycleEndsAt: subscription.cycleEndsAt.toISOString(),
       usedSec: subscription.usedSec,
       reservedSec: subscription.reservedSec,
+      activeInterviewCount: activeInterviewCountByOrg.get(subscription.orgId) ?? 0,
       overageApproved: subscription.overageApproved,
       renewOnCycleEnd: subscription.renewOnCycleEnd,
       updatedAt: subscription.updatedAt.toISOString(),

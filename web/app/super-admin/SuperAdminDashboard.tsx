@@ -20,6 +20,7 @@ type OrgSubscriptionRow = {
   cycleEndsAt: string | null;
   usedSec: number;
   reservedSec: number;
+  activeInterviewCount: number;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
   updatedAt: string | null;
@@ -384,6 +385,7 @@ export default function SuperAdminDashboard({
               <div>組織</div>
               <div>プラン</div>
               <div>次回更新</div>
+              <div>進行中面接数</div>
               <div>残り/超過</div>
               <div>超過承認</div>
               <div>継続</div>
@@ -424,6 +426,7 @@ export default function SuperAdminDashboard({
                       {!row.hasSubscription && <span className="badge">未加入</span>}
                     </div>
                     <div>{formatDate(row.cycleEndsAt)}</div>
+                    <div className="count">{row.activeInterviewCount}件</div>
                     <div className="usage">
                       <div>
                         {plan
@@ -731,8 +734,8 @@ export default function SuperAdminDashboard({
           grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 0.7fr) minmax(
               160px,
               0.8fr
-            ) minmax(200px, 1fr) minmax(140px, 0.6fr) minmax(120px, 0.5fr)
-            minmax(90px, 0.4fr);
+            ) minmax(120px, 0.5fr) minmax(200px, 1fr) minmax(140px, 0.6fr)
+            minmax(120px, 0.5fr) minmax(90px, 0.4fr);
           align-items: center;
           gap: 16px;
           padding: 12px 10px;
@@ -759,6 +762,9 @@ export default function SuperAdminDashboard({
         .usage {
           display: grid;
           gap: 4px;
+        }
+        .count {
+          font-weight: 600;
         }
         .badge {
           display: inline-flex;
