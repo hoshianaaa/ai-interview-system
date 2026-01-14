@@ -2160,6 +2160,22 @@ export default function AdminDashboard({
                                     </fieldset>
                                   </div>
                                 )}
+                                {selectedRow.hasRecording && (
+                                  <button
+                                    className={`ghost ${
+                                      downloadStatus === "inprogress" ? "loading" : ""
+                                    }`}
+                                    type="button"
+                                    onClick={() => void startDownload(selectedRow.interviewId)}
+                                    disabled={downloadStatus === "inprogress"}
+                                    aria-busy={downloadStatus === "inprogress"}
+                                  >
+                                    {downloadStatus === "inprogress" && (
+                                      <span className="spinner" aria-hidden="true" />
+                                    )}
+                                    <span>動画をダウンロード</span>
+                                  </button>
+                                )}
                                 <button
                                   className="danger"
                                   type="button"
@@ -2184,6 +2200,9 @@ export default function AdminDashboard({
                                   </span>
                                 )}
                               </div>
+                            )}
+                            {selectedRow.hasRecording && downloadError && (
+                              <p className="error">{downloadError}</p>
                             )}
                             {canReissueInterview && (
                               <div className="detail-actions">
@@ -2293,27 +2312,6 @@ export default function AdminDashboard({
                                   </div>
                                 )}
                               </div>
-                            )}
-                            {selectedRow.hasRecording && (
-                              <>
-                                <div className="detail-actions align-right">
-                                  <button
-                                    className={`ghost ${
-                                      downloadStatus === "inprogress" ? "loading" : ""
-                                    }`}
-                                    type="button"
-                                    onClick={() => void startDownload(selectedRow.interviewId)}
-                                    disabled={downloadStatus === "inprogress"}
-                                    aria-busy={downloadStatus === "inprogress"}
-                                  >
-                                    {downloadStatus === "inprogress" && (
-                                      <span className="spinner" aria-hidden="true" />
-                                    )}
-                                    <span>動画をダウンロード</span>
-                                  </button>
-                                </div>
-                                {downloadError && <p className="error">{downloadError}</p>}
-                              </>
                             )}
                             <div className="media">
                               <div
