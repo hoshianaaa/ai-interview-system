@@ -1988,7 +1988,16 @@ export default function AdminDashboard({
                             <div className="title">
                               {app.candidateName ? app.candidateName : "候補者名なし"}
                             </div>
-                            <span className="round-tag">面接{app.interviewCount}件</span>
+                            <span className="round-tag">
+                              {app.latestRound > 0 ? `${app.latestRound}次` : "面接前"}
+                            </span>
+                            <span
+                              className={`status-tag ${
+                                app.latestStatus === "完了" ? "done" : "pending"
+                              }`}
+                            >
+                              {app.latestStatus === "完了" ? "面接実施" : "面接未実施"}
+                            </span>
                             <span className={`decision-tag ${app.latestDecision}`}>
                               {decisionLabel(app.latestDecision)}
                             </span>
@@ -1996,7 +2005,7 @@ export default function AdminDashboard({
                           <div className="meta">
                             {app.interviewCount === 0
                               ? "面接未実施"
-                              : `最新面接: 第${app.latestRound}次 / 作成: ${formatDateTimeJst(
+                              : `最新面接: ${app.latestRound}次 / 作成: ${formatDateTimeJst(
                                   app.latestCreatedAt
                                 )}`}
                           </div>
@@ -3513,6 +3522,23 @@ export default function AdminDashboard({
           background: #e0f2fe;
           border: 1px solid #38bdf8;
           color: #0c4a6e;
+        }
+        .status-tag {
+          padding: 4px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+          border: 1px solid transparent;
+        }
+        .status-tag.done {
+          background: #ecfdf3;
+          border-color: #34d399;
+          color: #047857;
+        }
+        .status-tag.pending {
+          background: #f1f5f9;
+          border-color: #94a3b8;
+          color: #475569;
         }
         .decision-tag {
           padding: 4px 10px;
