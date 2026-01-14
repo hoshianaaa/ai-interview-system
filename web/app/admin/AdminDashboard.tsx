@@ -2009,7 +2009,7 @@ export default function AdminDashboard({
             </section>
           )}
           {activePanel === "applications" && applicationsView === "detail" && (
-            <section className="panel">
+            <section className="panel panel-detail">
               <div className="card detail-card">
                 <div className="detail-title">
                   <button
@@ -2891,6 +2891,12 @@ export default function AdminDashboard({
           display: block;
           animation: panelFade 0.45s ease;
         }
+        .panel-detail {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
         .grid {
           display: grid;
           grid-template-columns: minmax(280px, 360px) minmax(520px, 1fr);
@@ -3062,17 +3068,27 @@ export default function AdminDashboard({
           flex-direction: column;
           gap: 16px;
         }
+        .panel-detail .detail-card {
+          flex: 1;
+          min-height: 0;
+        }
         .application-detail {
-          display: grid;
+          display: flex;
+          flex-direction: column;
           gap: 2px;
+          flex: 1;
+          min-height: 0;
         }
         .interview-detail {
-          display: grid;
+          display: flex;
+          flex-direction: column;
           gap: 16px;
           border: 1px solid #111;
           border-radius: 12px;
           padding: 16px;
           min-width: 0;
+          flex: 1;
+          min-height: 0;
         }
         .interview-title {
           font-size: 13px;
@@ -3616,8 +3632,8 @@ export default function AdminDashboard({
         .video-frame {
           position: relative;
           width: 100%;
-          min-height: var(--media-panel-height, 360px);
-          height: var(--media-panel-height, 360px);
+          min-height: 0;
+          height: 100%;
         }
         .video-overlay {
           position: absolute;
@@ -3659,7 +3675,8 @@ export default function AdminDashboard({
           border-radius: 12px;
           border: 1px dashed #c2cde1;
           background: #f7f9fc;
-          min-height: var(--media-panel-height, 360px);
+          min-height: 0;
+          height: 100%;
           display: grid;
           place-items: center;
           color: #6b7a90;
@@ -3672,14 +3689,16 @@ export default function AdminDashboard({
         .video {
           display: flex;
           align-items: stretch;
-          min-height: var(--media-panel-height, 360px);
+          min-height: 0;
+          height: 100%;
         }
         .media {
-          --media-panel-height: 360px;
           display: flex;
           gap: 14px;
           align-items: stretch;
           margin-bottom: 0;
+          flex: 1;
+          min-height: 0;
         }
         .media > .video {
           flex: 1 1 auto;
@@ -3689,8 +3708,9 @@ export default function AdminDashboard({
           flex: 0 0 clamp(220px, 28%, 320px);
           min-width: 200px;
           max-width: 320px;
-          height: var(--media-panel-height, 360px);
-          max-height: var(--media-panel-height, 360px);
+          height: 100%;
+          max-height: none;
+          min-height: 0;
         }
         .chat-panel {
           border-radius: 12px;
@@ -3766,32 +3786,37 @@ export default function AdminDashboard({
           grid-template-columns: minmax(0, 3.2fr) minmax(160px, 0.8fr);
           gap: 16px;
           align-items: stretch;
+          flex: 1;
+          min-height: 0;
         }
         .application-left {
           display: grid;
+          grid-template-rows: auto 1fr;
           gap: 12px;
           min-width: 0;
+          min-height: 0;
         }
         .notes-panel {
-          display: grid;
-          gap: 0;
-          grid-template-rows: 1fr;
+          display: flex;
+          flex-direction: column;
           min-width: 0;
           width: 100%;
           align-self: stretch;
           padding-top: 24px;
           padding-bottom: 20px;
+          min-height: 0;
         }
         .notes-panel textarea {
-          min-height: calc(360px - 24px);
+          min-height: 0;
           height: 100%;
+          flex: 1;
           padding: 10px 12px;
           border-radius: 12px;
           border: 1px solid #c7d3e6;
           font-size: 14px;
           background: #f8fafc;
           resize: none;
-          margin-bottom: 12px;
+          margin-bottom: 0;
         }
         .prompt {
           display: block;
