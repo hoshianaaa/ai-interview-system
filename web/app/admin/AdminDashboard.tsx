@@ -2619,7 +2619,9 @@ export default function AdminDashboard({
         }
         .content {
           flex: 1;
-          padding: 24px 32px 60px;
+          --content-padding-top: 24px;
+          --content-padding-bottom: 60px;
+          padding: var(--content-padding-top) 32px var(--content-padding-bottom);
           display: flex;
           flex-direction: column;
           gap: 20px;
@@ -3078,6 +3080,10 @@ export default function AdminDashboard({
         .panel-detail .detail-card {
           flex: 1;
           min-height: 0;
+          max-height: calc(
+            100vh - var(--content-padding-top) - var(--content-padding-bottom)
+          );
+          overflow: hidden;
         }
         .application-detail {
           display: flex;
@@ -3085,6 +3091,7 @@ export default function AdminDashboard({
           gap: 2px;
           flex: 1;
           min-height: 0;
+          overflow: auto;
         }
         .interview-detail {
           display: flex;
@@ -3926,7 +3933,9 @@ export default function AdminDashboard({
             max-height: 60vh;
           }
           .content {
-            padding: 20px;
+            --content-padding-top: 20px;
+            --content-padding-bottom: 20px;
+            padding: var(--content-padding-top) 20px var(--content-padding-bottom);
           }
           .grid {
             grid-template-columns: 1fr;
