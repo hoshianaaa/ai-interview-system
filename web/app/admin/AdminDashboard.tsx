@@ -1552,47 +1552,50 @@ export default function AdminDashboard({
             </nav>
           </div>
           <div className="sidebar-footer">
-            {!menuCollapsed && (
-              <div className="sidebar-panel">
-                <div className="sidebar-section-title">利用状況</div>
-                <div className="billing">
-                  {billingInfo ? (
-                    <div className="billing-grid">
-                      <div className="billing-item">
-                        <span className="billing-label">プラン</span>
-                        <span className="billing-value">{planLabel}</span>
-                      </div>
-                      <div className="billing-item">
-                        <span className="billing-label">次回更新</span>
-                        <span className="billing-value">{nextBillingText}</span>
-                      </div>
-                      <div className="billing-item">
-                        <span className="billing-label">予約時間</span>
-                        <span className="billing-value">{reservedText}</span>
-                      </div>
-                      <div className="billing-item">
-                        <span className="billing-label">残り時間（確定）</span>
-                        <span className="billing-value">{remainingConfirmedText}</span>
-                      </div>
-                      <div className="billing-item">
-                        <span className="billing-label">超過時間（確定）</span>
-                        <span className="billing-value">{overageConfirmedText}</span>
-                      </div>
+            <div
+              className={`sidebar-panel sidebar-usage ${menuCollapsed ? "collapsed" : ""}`}
+              aria-hidden={menuCollapsed}
+            >
+              <div className="sidebar-section-title">利用状況</div>
+              <div className="billing">
+                {billingInfo ? (
+                  <div className="billing-grid">
+                    <div className="billing-item">
+                      <span className="billing-label">プラン</span>
+                      <span className="billing-value">{planLabel}</span>
                     </div>
-                  ) : (
-                    <div className="billing-muted">
-                      プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                    <div className="billing-item">
+                      <span className="billing-label">次回更新</span>
+                      <span className="billing-value">{nextBillingText}</span>
                     </div>
-                  )}
-                  {billingInfo?.overageLocked && (
-                    <div className="billing-alert">管理者承認待ち</div>
-                  )}
-                </div>
+                    <div className="billing-item">
+                      <span className="billing-label">予約時間</span>
+                      <span className="billing-value">{reservedText}</span>
+                    </div>
+                    <div className="billing-item">
+                      <span className="billing-label">残り時間（確定）</span>
+                      <span className="billing-value">{remainingConfirmedText}</span>
+                    </div>
+                    <div className="billing-item">
+                      <span className="billing-label">超過時間（確定）</span>
+                      <span className="billing-value">{overageConfirmedText}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="billing-muted">
+                    プラン未加入のため面接URLを発行できません。システム管理者に連絡してください。
+                  </div>
+                )}
+                {billingInfo?.overageLocked && (
+                  <div className="billing-alert">管理者承認待ち</div>
+                )}
               </div>
-            )}
+            </div>
             <div className={`sidebar-panel sidebar-user ${menuCollapsed ? "collapsed" : ""}`}>
               <div className="user">
-                {!menuCollapsed && isMounted && <OrganizationSwitcher />}
+                <div className={`sidebar-user-details ${menuCollapsed ? "collapsed" : ""}`}>
+                  {!menuCollapsed && isMounted && <OrganizationSwitcher />}
+                </div>
                 {isMounted && <UserButton />}
               </div>
             </div>
@@ -2664,13 +2667,46 @@ export default function AdminDashboard({
         }
         .sidebar-user.collapsed .user {
           justify-content: center;
+          gap: 0;
         }
-        .sidebar.collapsed .sidebar-panel {
+        .sidebar-usage {
+          max-height: 360px;
+          opacity: 1;
+          transform: translateX(0);
+          overflow: hidden;
+          background-color: #f8fafc;
+          transition: max-height 0.35s ease, opacity 0.35s ease, transform 0.35s ease,
+            padding 0.35s ease, border-color 0.35s ease, background-color 0.35s ease;
+        }
+        .sidebar-usage.collapsed {
+          max-height: 0;
+          opacity: 0;
+          transform: translateX(-12px);
+          padding: 0;
+          border-color: transparent;
+          border-width: 0;
+          background-color: transparent;
+          pointer-events: none;
+        }
+        .sidebar-user-details {
+          max-width: 240px;
+          opacity: 1;
+          transform: translateX(0);
+          overflow: hidden;
+          transition: max-width 0.35s ease, opacity 0.35s ease, transform 0.35s ease;
+        }
+        .sidebar-user-details.collapsed {
+          max-width: 0;
+          opacity: 0;
+          transform: translateX(-6px);
+          pointer-events: none;
+        }
+        .sidebar.collapsed .sidebar-panel:not(.sidebar-usage) {
           padding: 8px;
           border-radius: 12px;
         }
         .sidebar.collapsed .sidebar-footer {
-          gap: 8px;
+          gap: 0;
         }
         .billing {
           display: grid;
