@@ -9,6 +9,7 @@ import {
   toRoundedMinutes,
   type OrgPlan
 } from "@/lib/billing";
+import { formatDateJst } from "@/lib/datetime";
 
 type OrgSubscriptionRow = {
   orgId: string;
@@ -49,7 +50,7 @@ type OrgSubscriptionResponse =
 
 const formatDate = (value: string | null) => {
   if (!value) return "未加入";
-  return new Date(value).toLocaleDateString("ja-JP");
+  return formatDateJst(value);
 };
 
 const formatMinutes = (sec: number, mode: "floor" | "ceil" = "floor") =>

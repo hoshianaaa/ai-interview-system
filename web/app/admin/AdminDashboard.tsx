@@ -5,6 +5,7 @@ import Hls from "hls.js";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 import { buildBillingSummary, getPlanConfig, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
+import { formatDateJst, formatDateTimeJst } from "@/lib/datetime";
 
 type Decision = "undecided" | "pass" | "fail" | "hold";
 
@@ -1435,7 +1436,7 @@ export default function AdminDashboard({
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
   const planConfig = billingInfo ? getPlanConfig(billingInfo.planId) : null;
   const nextBillingText = billingInfo
-    ? new Date(billingInfo.cycleEndsAt).toLocaleDateString("ja-JP")
+    ? formatDateJst(billingInfo.cycleEndsAt)
     : "未加入";
   const includedSec = billingInfo ? billingInfo.includedMinutes * 60 : 0;
   const remainingConfirmedSec = billingInfo
@@ -1814,7 +1815,7 @@ export default function AdminDashboard({
                     {createResult.expiresAt && (
                       <div className="result-row">
                         <span>有効期限</span>
-                        <strong>{new Date(createResult.expiresAt).toLocaleString("ja-JP")}</strong>
+                        <strong>{formatDateTimeJst(createResult.expiresAt)}</strong>
                       </div>
                     )}
                   </div>
@@ -2037,9 +2038,9 @@ export default function AdminDashboard({
                           <div className="meta">
                             {app.interviewCount === 0
                               ? "面接未実施"
-                              : `最新面接: 第${app.latestRound}次 / 作成: ${new Date(
+                              : `最新面接: 第${app.latestRound}次 / 作成: ${formatDateTimeJst(
                                   app.latestCreatedAt
-                                ).toLocaleString("ja-JP")}`}
+                                )}`}
                           </div>
                         </div>
                       </div>
@@ -2097,7 +2098,7 @@ export default function AdminDashboard({
                     <div className="detail-title-actions">
                       <span className="detail-caption">
                         応募作成:{" "}
-                        {new Date(selectedApplication.createdAt).toLocaleString("ja-JP")}
+                        {formatDateTimeJst(selectedApplication.createdAt)}
                       </span>
                       <button
                         className="danger"
@@ -2158,7 +2159,7 @@ export default function AdminDashboard({
                                       .map((row) => (
                                         <option key={row.interviewId} value={row.interviewId}>
                                           第{row.round}次（{decisionLabel(row.decision)}）{" "}
-                                          {new Date(row.createdAt).toLocaleString("ja-JP")}
+                                          {formatDateTimeJst(row.createdAt)}
                                         </option>
                                       ))}
                                   </select>
@@ -2212,7 +2213,7 @@ export default function AdminDashboard({
                                   <span>
                                     {" "}
                                     （有効期限:{" "}
-                                    {new Date(selectedRow.expiresAt).toLocaleString("ja-JP")})
+                                    {formatDateTimeJst(selectedRow.expiresAt)})
                                   </span>
                                 )}
                               </div>
@@ -2318,9 +2319,7 @@ export default function AdminDashboard({
                                       <div className="result-row">
                                         <span>有効期限</span>
                                         <strong>
-                                          {new Date(
-                                            reissueResult.expiresAt
-                                          ).toLocaleString("ja-JP")}
+                                          {formatDateTimeJst(reissueResult.expiresAt)}
                                         </strong>
                                       </div>
                                     )}
