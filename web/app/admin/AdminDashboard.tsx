@@ -224,7 +224,6 @@ export default function AdminDashboard({
   const [deletingInterview, setDeletingInterview] = useState(false);
   const [deletingApplication, setDeletingApplication] = useState(false);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(380);
   const [activePanel, setActivePanel] = useState<"create" | "applications" | "settings">(
     "applications"
   );
@@ -245,9 +244,6 @@ export default function AdminDashboard({
   const [isMounted, setIsMounted] = useState(false);
   const allDecisionSelected =
     applicationDecisions.length === DECISION_FILTER_VALUES.length;
-  const isResizingSidebar = useRef(false);
-  const sidebarResizeStartX = useRef(0);
-  const sidebarResizeStartWidth = useRef(0);
   const [settingsDurationMin, setSettingsDurationMin] = useState(
     String(Math.min(MAX_DURATION_MIN, Math.max(1, settings.defaultDurationMin)))
   );
@@ -1408,30 +1404,6 @@ export default function AdminDashboard({
       setPrompt(defaultTemplate.body);
     }
   }, [defaultTemplate, selectedTemplateId, prompt]);
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!isResizingSidebar.current || menuCollapsed) return;
-      const delta = event.clientX - sidebarResizeStartX.current;
-      const next = Math.min(
-        520,
-        Math.max(280, sidebarResizeStartWidth.current + delta)
-      );
-      setSidebarWidth(next);
-    };
-    const handleMouseUp = () => {
-      if (!isResizingSidebar.current) return;
-      isResizingSidebar.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [menuCollapsed]);
-  const resolvedSidebarWidth = menuCollapsed ? 56 : sidebarWidth;
   const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
   const planConfig = billingInfo ? getPlanConfig(billingInfo.planId) : null;
@@ -1460,10 +1432,7 @@ export default function AdminDashboard({
   return (
     <main className="page">
       <div className={`layout ${menuCollapsed ? "collapsed" : ""}`}>
-        <aside
-          className={`sidebar ${menuCollapsed ? "collapsed" : ""}`}
-          style={{ width: resolvedSidebarWidth }}
-        >
+        <aside className={`sidebar ${menuCollapsed ? "collapsed" : ""}`}>
           <div className="sidebar-header">
             <button
               type="button"
@@ -1628,21 +1597,7 @@ export default function AdminDashboard({
               </div>
             </div>
           </div>
-          {!menuCollapsed && (
-            <div
-              className="sidebar-resizer"
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={(event) => {
-                isResizingSidebar.current = true;
-                sidebarResizeStartX.current = event.clientX;
-                sidebarResizeStartWidth.current = sidebarWidth;
-                document.body.style.cursor = "col-resize";
-                document.body.style.userSelect = "none";
-              }}
-            />
-        )}
-      </aside>
+        </aside>
         <div className="content">
           {activePanel === "applications" && applicationsView === "detail" && (
             <div
@@ -2637,7 +2592,7 @@ export default function AdminDashboard({
           min-height: 100vh;
         }
         .sidebar {
-          width: 380px;
+          width: 210px;
           background: #fff;
           border-right: 1px solid #d8e1f0;
           padding: 20px 16px;
@@ -2804,30 +2759,6 @@ export default function AdminDashboard({
           display: flex;
           flex-direction: column;
           gap: 10px;
-        }
-        .sidebar-resizer {
-          position: absolute;
-          top: var(--header-row-height);
-          right: -3px;
-          width: 6px;
-          height: calc(100% - var(--header-row-height));
-          cursor: col-resize;
-          background: transparent;
-          z-index: 1;
-        }
-        .sidebar-resizer::after {
-          content: "";
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: 2px;
-          width: 2px;
-          background: rgba(31, 79, 178, 0.15);
-          opacity: 0;
-          transition: opacity 0.2s ease;
-        }
-        .sidebar-resizer:hover::after {
-          opacity: 1;
         }
         .nav-group {
           display: grid;
@@ -3892,9 +3823,6 @@ export default function AdminDashboard({
             flex-direction: column;
             align-items: stretch;
             padding: 12px 16px;
-          }
-          .sidebar-resizer {
-            display: none;
           }
           .sidebar-header {
             padding-right: 0;
