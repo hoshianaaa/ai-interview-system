@@ -3649,7 +3649,8 @@ export default function AdminDashboard({
         .video-frame {
           position: relative;
           width: 100%;
-          min-height: 360px;
+          min-height: var(--media-panel-height, 360px);
+          height: var(--media-panel-height, 360px);
         }
         .video-overlay {
           position: absolute;
@@ -3691,7 +3692,7 @@ export default function AdminDashboard({
           border-radius: 12px;
           border: 1px dashed #c2cde1;
           background: #f7f9fc;
-          min-height: 360px;
+          min-height: var(--media-panel-height, 360px);
           display: grid;
           place-items: center;
           color: #6b7a90;
@@ -3704,9 +3705,10 @@ export default function AdminDashboard({
         .video {
           display: flex;
           align-items: stretch;
-          min-height: 360px;
+          min-height: var(--media-panel-height, 360px);
         }
         .media {
+          --media-panel-height: 360px;
           display: flex;
           gap: 14px;
           align-items: stretch;
@@ -3717,10 +3719,11 @@ export default function AdminDashboard({
           min-width: 0;
         }
         .media > .chat-panel {
-          flex: 0 1 160px;
-          min-width: 110px;
-          max-width: 160px;
-          height: 100%;
+          flex: 0 0 clamp(220px, 28%, 320px);
+          min-width: 200px;
+          max-width: 320px;
+          height: var(--media-panel-height, 360px);
+          max-height: var(--media-panel-height, 360px);
         }
         .chat-panel {
           border-radius: 12px;
@@ -3732,9 +3735,7 @@ export default function AdminDashboard({
           gap: 10px;
           min-width: 0;
           overflow: hidden;
-          height: calc(100% - 24px);
           min-height: 0;
-          max-height: calc(100% - 24px);
           transform: translateY(0);
           width: 100%;
         }
