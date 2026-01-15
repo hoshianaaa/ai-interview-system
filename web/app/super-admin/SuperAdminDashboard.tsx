@@ -84,6 +84,20 @@ const formatDate = (value: string | null) => {
   return formatDateJst(value);
 };
 
+const DATE_INPUT_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+const formatDateInput = (value: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return DATE_INPUT_FORMATTER.format(date);
+};
+
 const formatMinutes = (sec: number, mode: "floor" | "ceil" = "floor") =>
   `${toRoundedMinutes(sec, mode)}分`;
 
@@ -159,6 +173,27 @@ export default function SuperAdminDashboard({
   const [templateEditError, setTemplateEditError] = useState<string | null>(null);
   const [templateEditSaving, setTemplateEditSaving] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(false);
+  const [remainingConfirmedInputByOrg, setRemainingConfirmedInputByOrg] = useState<
+    Record<string, string>
+  >({});
+  const [overageConfirmedInputByOrg, setOverageConfirmedInputByOrg] = useState<
+    Record<string, string>
+  >({});
+  const [planStartInputByOrg, setPlanStartInputByOrg] = useState<
+    Record<string, string>
+  >({});
+  const [savingUsageByOrg, setSavingUsageByOrg] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [usageErrorByOrg, setUsageErrorByOrg] = useState<
+    Record<string, string | null>
+  >({});
+  const [savingPlanStartByOrg, setSavingPlanStartByOrg] = useState<
+    Record<string, boolean>
+  >({});
+  const [planStartErrorByOrg, setPlanStartErrorByOrg] = useState<
+    Record<string, string | null>
+  >({});
 
   const sortedRows = useMemo(
     () =>
@@ -370,13 +405,186 @@ export default function SuperAdminDashboard({
       }
       if (data.orgSubscription) {
         applySubscriptionUpdate(data);
+        const updatedPlan = getPlanConfig(data.orgSubscription.plan);
+        const updatedRemainingSec = Math.max(
+          0,
+          updatedPlan.includedMinutes * 60 - data.orgSubscription.usedSec
+        );
+        const updatedOverageSec = Math.max(
+          0,
+          data.orgSubscription.usedSec - updatedPlan.includedMinutes * 60
+        );
+        setPlanStartInputByOrg((prev) => ({
+          ...prev,
+          [orgId]: formatDateInput(data.orgSubscription.billingAnchorAt)
+        }));
+        setRemainingConfirmedInputByOrg((prev) => ({
+          ...prev,
+          [orgId]: String(toRoundedMinutes(updatedRemainingSec))
+        }));
+        setOverageConfirmedInputByOrg((prev) => ({
+          ...prev,
+          [orgId]: String(toRoundedMinutes(updatedOverageSec))
+        }));
       } else {
         applySubscriptionRemoval(orgId);
+        setPlanStartInputByOrg((prev) => {
+          const next = { ...prev };
+          delete next[orgId];
+          return next;
+        });
+        setRemainingConfirmedInputByOrg((prev) => {
+          const next = { ...prev };
+          delete next[orgId];
+          return next;
+        });
+        setOverageConfirmedInputByOrg((prev) => {
+          const next = { ...prev };
+          delete next[orgId];
+          return next;
+        });
       }
     } catch {
       setRowError({ orgId, message: "REQUEST_FAILED" });
     } finally {
       setSavingPlanByOrg((prev) => ({ ...prev, [orgId]: false }));
+    }
+  };
+
+  const updatePlanStartDate = async (row: OrgSubscriptionRow) => {
+    if (!row.hasSubscription) return;
+    const orgId = row.orgId;
+    if (savingPlanStartByOrg[orgId]) return;
+    setPlanStartErrorByOrg((prev) => ({ ...prev, [orgId]: null }));
+    const currentValue = formatDateInput(row.billingAnchorAt);
+    const nextValue = planStartInputByOrg[orgId] ?? currentValue;
+    if (!nextValue) {
+      setPlanStartErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "プラン加入日を入力してください。"
+      }));
+      return;
+    }
+    setSavingPlanStartByOrg((prev) => ({ ...prev, [orgId]: true }));
+    try {
+      const res = await fetch("/api/super-admin/org-quotas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId, planStartDate: nextValue })
+      });
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data) || !data.orgSubscription) {
+        setPlanStartErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "プラン加入日の更新に失敗しました。"
+        }));
+        return;
+      }
+      applySubscriptionUpdate(data);
+      setPlanStartInputByOrg((prev) => ({
+        ...prev,
+        [orgId]: formatDateInput(data.orgSubscription.billingAnchorAt)
+      }));
+    } catch {
+      setPlanStartErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "プラン加入日の更新に失敗しました。"
+      }));
+    } finally {
+      setSavingPlanStartByOrg((prev) => ({ ...prev, [orgId]: false }));
+    }
+  };
+
+  const updateConfirmedUsage = async (
+    row: OrgSubscriptionRow,
+    plan: ReturnType<typeof getPlanConfig> | null
+  ) => {
+    if (!plan || !row.hasSubscription) return;
+    const orgId = row.orgId;
+    if (savingUsageByOrg[orgId]) return;
+    setUsageErrorByOrg((prev) => ({ ...prev, [orgId]: null }));
+    const remainingInput =
+      remainingConfirmedInputByOrg[orgId] ??
+      String(
+        toRoundedMinutes(Math.max(0, plan.includedMinutes * 60 - row.usedSec))
+      );
+    const overageInput =
+      overageConfirmedInputByOrg[orgId] ??
+      String(toRoundedMinutes(Math.max(0, row.usedSec - plan.includedMinutes * 60)));
+    const remainingValue = Number(remainingInput.trim());
+    const overageValue = Number(overageInput.trim());
+    if (
+      !Number.isFinite(remainingValue) ||
+      !Number.isFinite(overageValue) ||
+      !Number.isInteger(remainingValue) ||
+      !Number.isInteger(overageValue) ||
+      remainingValue < 0 ||
+      overageValue < 0
+    ) {
+      setUsageErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "残り確定・超過確定は0以上の整数で入力してください。"
+      }));
+      return;
+    }
+    if (remainingValue > 0 && overageValue > 0) {
+      setUsageErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "残り確定と超過確定は同時に設定できません。"
+      }));
+      return;
+    }
+    if (remainingValue > plan.includedMinutes) {
+      setUsageErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "残り確定がプランの上限を超えています。"
+      }));
+      return;
+    }
+    setSavingUsageByOrg((prev) => ({ ...prev, [orgId]: true }));
+    try {
+      const res = await fetch("/api/super-admin/org-quotas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          orgId,
+          remainingConfirmedMin: remainingValue,
+          overageConfirmedMin: overageValue
+        })
+      });
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data) || !data.orgSubscription) {
+        setUsageErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "確定時間の更新に失敗しました。"
+        }));
+        return;
+      }
+      applySubscriptionUpdate(data);
+      const updatedPlan = getPlanConfig(data.orgSubscription.plan);
+      const updatedRemainingSec = Math.max(
+        0,
+        updatedPlan.includedMinutes * 60 - data.orgSubscription.usedSec
+      );
+      const updatedOverageSec = Math.max(
+        0,
+        data.orgSubscription.usedSec - updatedPlan.includedMinutes * 60
+      );
+      setRemainingConfirmedInputByOrg((prev) => ({
+        ...prev,
+        [orgId]: String(toRoundedMinutes(updatedRemainingSec))
+      }));
+      setOverageConfirmedInputByOrg((prev) => ({
+        ...prev,
+        [orgId]: String(toRoundedMinutes(updatedOverageSec))
+      }));
+    } catch {
+      setUsageErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "確定時間の更新に失敗しました。"
+      }));
+    } finally {
+      setSavingUsageByOrg((prev) => ({ ...prev, [orgId]: false }));
     }
   };
 
@@ -738,9 +946,10 @@ export default function SuperAdminDashboard({
             <div className="row header">
               <div>組織</div>
               <div>プラン</div>
-              <div>次回更新</div>
+              <div>プラン終了日</div>
               <div>進行中面接数</div>
-              <div>残り/超過</div>
+              <div>残り確定時間</div>
+              <div>超過時間</div>
               <div>超過承認</div>
               <div>継続</div>
               <div>詳細</div>
@@ -752,8 +961,9 @@ export default function SuperAdminDashboard({
               const currentPlanId = row.planId ?? NONE_PLAN_VALUE;
               const planDirty = currentPlanId !== selectedPlanId;
               const includedSec = plan ? plan.includedMinutes * 60 : 0;
+              const remainingConfirmedSec = Math.max(0, includedSec - row.usedSec);
+              const overageConfirmedSec = Math.max(0, row.usedSec - includedSec);
               const committedSec = row.usedSec + row.reservedSec;
-              const remainingIncludedSec = Math.max(0, includedSec - committedSec);
               const overageCommittedSec = Math.max(0, committedSec - includedSec);
               const overageRemainingSec = plan
                 ? row.overageApproved
@@ -769,6 +979,30 @@ export default function SuperAdminDashboard({
               const isPlanSaving = savingPlanByOrg[row.orgId] ?? false;
               const isEnding = endingInterviewsByOrg[row.orgId] ?? false;
               const endingError = endingErrorByOrg[row.orgId] ?? null;
+              const planStartDefault = formatDateInput(row.billingAnchorAt);
+              const planStartInput = planStartInputByOrg[row.orgId] ?? planStartDefault;
+              const planStartDirty =
+                row.hasSubscription && planStartInput !== planStartDefault;
+              const remainingConfirmedMin = plan
+                ? toRoundedMinutes(remainingConfirmedSec)
+                : 0;
+              const overageConfirmedMin = plan
+                ? toRoundedMinutes(overageConfirmedSec)
+                : 0;
+              const remainingInput =
+                remainingConfirmedInputByOrg[row.orgId] ??
+                String(remainingConfirmedMin);
+              const overageInput =
+                overageConfirmedInputByOrg[row.orgId] ??
+                String(overageConfirmedMin);
+              const usageDirty =
+                Boolean(plan) &&
+                (remainingInput !== String(remainingConfirmedMin) ||
+                  overageInput !== String(overageConfirmedMin));
+              const isUsageSaving = savingUsageByOrg[row.orgId] ?? false;
+              const usageError = usageErrorByOrg[row.orgId] ?? null;
+              const isPlanStartSaving = savingPlanStartByOrg[row.orgId] ?? false;
+              const planStartError = planStartErrorByOrg[row.orgId] ?? null;
 
               return (
                 <div className="row-group" key={row.orgId}>
@@ -784,11 +1018,10 @@ export default function SuperAdminDashboard({
                     <div>{formatDate(row.cycleEndsAt)}</div>
                     <div className="count">{row.activeInterviewCount}件</div>
                     <div className="usage">
-                      <div>
-                        {plan
-                          ? `${formatMinutes(remainingIncludedSec)} / ${plan.includedMinutes}分`
-                          : "-"}
-                      </div>
+                      <div>{plan ? formatMinutes(remainingConfirmedSec) : "-"}</div>
+                    </div>
+                    <div className="usage">
+                      <div>{plan ? formatMinutes(overageConfirmedSec) : "-"}</div>
                       {overageLocked && <span className="badge warn">承認待ち</span>}
                     </div>
                     <div>
@@ -878,7 +1111,7 @@ export default function SuperAdminDashboard({
                             </button>
                           </div>
                           <p className="subtle">
-                            プラン変更で加入日とサイクルが更新されます。
+                            プラン変更で加入日と終了日が更新されます。
                           </p>
                         </div>
                       </div>
@@ -908,27 +1141,117 @@ export default function SuperAdminDashboard({
                         </div>
                       </div>
                       <div className="detail-meta">
-                        <div>
-                          <p className="label">加入日</p>
-                          <p className="value">{formatDate(row.billingAnchorAt)}</p>
+                        <div className="meta-field">
+                          <p className="label">プラン加入日</p>
+                          <div className="plan-editor">
+                            <input
+                              type="date"
+                              value={planStartInput}
+                              onChange={(e) => {
+                                setPlanStartInputByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: e.target.value
+                                }));
+                                setPlanStartErrorByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: null
+                                }));
+                              }}
+                              disabled={!row.hasSubscription}
+                              className="input-compact"
+                            />
+                            <button
+                              type="button"
+                              disabled={
+                                !row.hasSubscription ||
+                                !planStartDirty ||
+                                isPlanStartSaving
+                              }
+                              onClick={() => void updatePlanStartDate(row)}
+                            >
+                              {isPlanStartSaving ? "更新中..." : "更新"}
+                            </button>
+                          </div>
+                          {planStartError && <p className="error">{planStartError}</p>}
                         </div>
-                        <div>
-                          <p className="label">サイクル開始</p>
-                          <p className="value">{formatDate(row.cycleStartedAt)}</p>
-                        </div>
-                        <div>
-                          <p className="label">サイクル終了</p>
+                        <div className="meta-field">
+                          <p className="label">プラン終了日</p>
                           <p className="value">{formatDate(row.cycleEndsAt)}</p>
                         </div>
                       </div>
+                      <div className="detail-meta detail-meta--usage">
+                        <div className="meta-field">
+                          <p className="label">残り確定(分)</p>
+                          <input
+                            type="number"
+                            min={0}
+                            value={remainingInput}
+                            onChange={(e) => {
+                              setRemainingConfirmedInputByOrg((prev) => ({
+                                ...prev,
+                                [row.orgId]: e.target.value
+                              }));
+                              setOverageConfirmedInputByOrg((prev) => ({
+                                ...prev,
+                                [row.orgId]: "0"
+                              }));
+                              setUsageErrorByOrg((prev) => ({
+                                ...prev,
+                                [row.orgId]: null
+                              }));
+                            }}
+                            disabled={!row.hasSubscription || !plan}
+                            className="input-compact"
+                          />
+                        </div>
+                        <div className="meta-field">
+                          <p className="label">超過確定(分)</p>
+                          <input
+                            type="number"
+                            min={0}
+                            value={overageInput}
+                            onChange={(e) => {
+                              setOverageConfirmedInputByOrg((prev) => ({
+                                ...prev,
+                                [row.orgId]: e.target.value
+                              }));
+                              setRemainingConfirmedInputByOrg((prev) => ({
+                                ...prev,
+                                [row.orgId]: "0"
+                              }));
+                              setUsageErrorByOrg((prev) => ({
+                                ...prev,
+                                [row.orgId]: null
+                              }));
+                            }}
+                            disabled={!row.hasSubscription || !plan}
+                            className="input-compact"
+                          />
+                        </div>
+                        <div className="meta-field">
+                          <p className="label">予約中</p>
+                          <p className="value">{formatMinutes(row.reservedSec)}</p>
+                        </div>
+                        <div className="meta-field action">
+                          <button
+                            type="button"
+                            disabled={
+                              !row.hasSubscription ||
+                              !plan ||
+                              !usageDirty ||
+                              isUsageSaving
+                            }
+                            onClick={() => void updateConfirmedUsage(row, plan)}
+                          >
+                            {isUsageSaving ? "更新中..." : "確定時間を更新"}
+                          </button>
+                        </div>
+                      </div>
+                      {usageError && <p className="error">{usageError}</p>}
                       <div className="detail-meta">
                         <div>
                           <p className="label">使用済み</p>
                           <p className="value">{formatMinutes(row.usedSec)}</p>
-                        </div>
-                        <div>
-                          <p className="label">予約中</p>
-                          <p className="value">{formatMinutes(row.reservedSec)}</p>
                         </div>
                         <div>
                           <p className="label">超過料金(見込み)</p>
@@ -1129,8 +1452,8 @@ export default function SuperAdminDashboard({
           grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 0.7fr) minmax(
               160px,
               0.8fr
-            ) minmax(120px, 0.5fr) minmax(200px, 1fr) minmax(140px, 0.6fr)
-            minmax(120px, 0.5fr) minmax(90px, 0.4fr);
+            ) minmax(120px, 0.5fr) minmax(140px, 0.6fr) minmax(140px, 0.6fr)
+            minmax(140px, 0.6fr) minmax(120px, 0.5fr) minmax(90px, 0.4fr);
           align-items: center;
           gap: 16px;
           padding: 12px 10px;
@@ -1250,6 +1573,19 @@ export default function SuperAdminDashboard({
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 12px;
+        }
+        .detail-meta--usage {
+          align-items: end;
+        }
+        .meta-field {
+          display: grid;
+          gap: 6px;
+        }
+        .meta-field.action {
+          align-self: end;
+        }
+        .input-compact {
+          width: min(140px, 100%);
         }
         .label {
           margin: 0;
