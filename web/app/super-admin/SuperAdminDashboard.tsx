@@ -49,6 +49,27 @@ type OrgSubscriptionResponse =
   | { orgSubscription: null }
   | { error: string };
 
+type OrgSubscriptionSnapshot = {
+  orgId: string;
+  plan: OrgPlan;
+  billingAnchorAt: string;
+  cycleStartedAt: string;
+  cycleEndsAt: string;
+  usedSec: number;
+  reservedSec: number;
+  overageApproved: boolean;
+  renewOnCycleEnd: boolean;
+  updatedAt: string;
+};
+
+type EndInterviewsResponse =
+  | {
+      endedCount: number;
+      activeInterviewCount: number;
+      orgSubscription: OrgSubscriptionSnapshot | null;
+    }
+  | { error: string };
+
 const formatDate = (value: string | null) => {
   if (!value) return "未加入";
   return formatDateJst(value);
@@ -100,6 +121,12 @@ export default function SuperAdminDashboard({
   const [savingPlanByOrg, setSavingPlanByOrg] = useState<Record<string, boolean>>(
     {}
   );
+  const [endingInterviewsByOrg, setEndingInterviewsByOrg] = useState<
+    Record<string, boolean>
+  >({});
+  const [endingErrorByOrg, setEndingErrorByOrg] = useState<
+    Record<string, string | null>
+  >({});
   const [rowError, setRowError] = useState<{ orgId: string; message: string } | null>(
     null
   );
@@ -170,6 +197,52 @@ export default function SuperAdminDashboard({
       )
     );
     setPlanByOrg((prev) => ({ ...prev, [orgId]: NONE_PLAN_VALUE }));
+  };
+
+  const applyActiveInterviewCount = (orgId: string, activeInterviewCount: number) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.orgId === orgId ? { ...row, activeInterviewCount } : row
+      )
+    );
+  };
+
+  const endActiveInterviews = async (orgId: string, activeCount: number) => {
+    if (activeCount <= 0) return;
+    if (endingInterviewsByOrg[orgId]) return;
+    const confirmed = window.confirm("進行中の面接をすべて終了しますか？");
+    if (!confirmed) return;
+
+    setEndingErrorByOrg((prev) => ({ ...prev, [orgId]: null }));
+    setEndingInterviewsByOrg((prev) => ({ ...prev, [orgId]: true }));
+    try {
+      const res = await fetch("/api/super-admin/org-interviews/end", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId })
+      });
+      const data = (await res.json()) as EndInterviewsResponse;
+      if (!res.ok || "error" in data) {
+        setEndingErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "進行中面接の終了に失敗しました。"
+        }));
+        return;
+      }
+      applyActiveInterviewCount(orgId, data.activeInterviewCount);
+      if (data.orgSubscription) {
+        applySubscriptionUpdate({ orgSubscription: data.orgSubscription });
+      } else {
+        applySubscriptionRemoval(orgId);
+      }
+    } catch {
+      setEndingErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "進行中面接の終了に失敗しました。"
+      }));
+    } finally {
+      setEndingInterviewsByOrg((prev) => ({ ...prev, [orgId]: false }));
+    }
   };
 
   const toggleRenewal = async (orgId: string, nextValue: boolean) => {
@@ -413,6 +486,8 @@ export default function SuperAdminDashboard({
               const isOverageSaving = savingOverageByOrg[row.orgId] ?? false;
               const isRenewalSaving = savingRenewalByOrg[row.orgId] ?? false;
               const isPlanSaving = savingPlanByOrg[row.orgId] ?? false;
+              const isEnding = endingInterviewsByOrg[row.orgId] ?? false;
+              const endingError = endingErrorByOrg[row.orgId] ?? null;
 
               return (
                 <div className="row-group" key={row.orgId}>
@@ -524,6 +599,31 @@ export default function SuperAdminDashboard({
                           <p className="subtle">
                             プラン変更で加入日とサイクルが更新されます。
                           </p>
+                        </div>
+                      </div>
+                      <div className="detail-actions">
+                        <div>
+                          <p className="label">進行中面接</p>
+                          <div className="plan-editor">
+                            <span className="count">{row.activeInterviewCount}件</span>
+                            <button
+                              type="button"
+                              className="danger"
+                              disabled={row.activeInterviewCount === 0 || isEnding}
+                              onClick={() =>
+                                void endActiveInterviews(
+                                  row.orgId,
+                                  row.activeInterviewCount
+                                )
+                              }
+                            >
+                              {isEnding ? "終了中..." : "進行中面接を終了"}
+                            </button>
+                          </div>
+                          <p className="subtle">
+                            進行中の面接を強制終了します。
+                          </p>
+                          {endingError && <p className="error">{endingError}</p>}
                         </div>
                       </div>
                       <div className="detail-meta">
@@ -720,6 +820,9 @@ export default function SuperAdminDashboard({
         }
         .primary {
           background: #2a5b99;
+        }
+        .danger {
+          background: #d92d20;
         }
         .table {
           display: grid;
