@@ -994,7 +994,7 @@ export default function SuperAdminDashboard({
               <div>残り確定時間</div>
               <div>超過時間</div>
               <div>超過制限時間</div>
-              <div>継続</div>
+              <div>プラン自動継続</div>
               <div>詳細</div>
             </div>
             {filteredRows.map((row) => {
