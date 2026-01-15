@@ -22,6 +22,7 @@ type OrgSubscriptionRow = {
   usedSec: number;
   reservedSec: number;
   overageLimitMinutes: number | null;
+  maxConcurrentInterviews: number | null;
   activeInterviewCount: number;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
@@ -52,6 +53,7 @@ type OrgSubscriptionResponse =
         usedSec: number;
         reservedSec: number;
         overageLimitMinutes: number | null;
+        maxConcurrentInterviews: number | null;
         overageApproved: boolean;
         renewOnCycleEnd: boolean;
         updatedAt: string;
@@ -69,6 +71,7 @@ type OrgSubscriptionSnapshot = {
   usedSec: number;
   reservedSec: number;
   overageLimitMinutes: number | null;
+  maxConcurrentInterviews: number | null;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
   updatedAt: string;
@@ -203,6 +206,15 @@ export default function SuperAdminDashboard({
   const [overageLimitErrorByOrg, setOverageLimitErrorByOrg] = useState<
     Record<string, string | null>
   >({});
+  const [maxConcurrentInputByOrg, setMaxConcurrentInputByOrg] = useState<
+    Record<string, string>
+  >({});
+  const [savingMaxConcurrentByOrg, setSavingMaxConcurrentByOrg] = useState<
+    Record<string, boolean>
+  >({});
+  const [maxConcurrentErrorByOrg, setMaxConcurrentErrorByOrg] = useState<
+    Record<string, string | null>
+  >({});
 
   const sortedRows = useMemo(
     () =>
@@ -256,6 +268,7 @@ export default function SuperAdminDashboard({
               usedSec: updated.usedSec,
               reservedSec: updated.reservedSec,
               overageLimitMinutes: updated.overageLimitMinutes ?? null,
+              maxConcurrentInterviews: updated.maxConcurrentInterviews ?? null,
               overageApproved: updated.overageApproved,
               renewOnCycleEnd: updated.renewOnCycleEnd,
               updatedAt: updated.updatedAt,
@@ -280,6 +293,7 @@ export default function SuperAdminDashboard({
               usedSec: 0,
               reservedSec: 0,
               overageLimitMinutes: null,
+              maxConcurrentInterviews: null,
               overageApproved: false,
               renewOnCycleEnd: false,
               updatedAt: null,
@@ -414,6 +428,15 @@ export default function SuperAdminDashboard({
           ...prev,
           [orgId]: String(nextOverageLimit)
         }));
+        const nextMaxConcurrent =
+          data.orgSubscription.maxConcurrentInterviews ??
+          (typeof updatedPlan.maxConcurrentInterviews === "number"
+            ? updatedPlan.maxConcurrentInterviews
+            : null);
+        setMaxConcurrentInputByOrg((prev) => ({
+          ...prev,
+          [orgId]: nextMaxConcurrent === null ? "" : String(nextMaxConcurrent)
+        }));
       } else {
         applySubscriptionRemoval(orgId);
         setPlanStartInputByOrg((prev) => {
@@ -432,6 +455,11 @@ export default function SuperAdminDashboard({
           return next;
         });
         setOverageLimitInputByOrg((prev) => {
+          const next = { ...prev };
+          delete next[orgId];
+          return next;
+        });
+        setMaxConcurrentInputByOrg((prev) => {
           const next = { ...prev };
           delete next[orgId];
           return next;
@@ -628,6 +656,78 @@ export default function SuperAdminDashboard({
       }));
     } finally {
       setSavingOverageLimitByOrg((prev) => ({ ...prev, [orgId]: false }));
+    }
+  };
+
+  const updateMaxConcurrentInterviews = async (
+    row: OrgSubscriptionRow,
+    plan: ReturnType<typeof getPlanConfig> | null
+  ) => {
+    if (!row.hasSubscription || !plan) return;
+    const orgId = row.orgId;
+    if (savingMaxConcurrentByOrg[orgId]) return;
+    setMaxConcurrentErrorByOrg((prev) => ({ ...prev, [orgId]: null }));
+    const planDefault =
+      typeof plan.maxConcurrentInterviews === "number"
+        ? plan.maxConcurrentInterviews
+        : null;
+    const fallbackValue = row.maxConcurrentInterviews ?? planDefault;
+    const inputValue =
+      maxConcurrentInputByOrg[orgId] ??
+      (fallbackValue === null ? "" : String(fallbackValue));
+    const trimmed = inputValue.trim();
+    let parsed: number | null = null;
+    if (trimmed) {
+      parsed = Number(trimmed);
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        setMaxConcurrentErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "同時面接上限数は1〜100の整数で入力してください。"
+        }));
+        return;
+      }
+      if (parsed < 1 || parsed > 100) {
+        setMaxConcurrentErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "同時面接上限数は1〜100の範囲で入力してください。"
+        }));
+        return;
+      }
+    }
+    const normalized =
+      typeof planDefault === "number" && parsed === planDefault ? null : parsed;
+    setSavingMaxConcurrentByOrg((prev) => ({ ...prev, [orgId]: true }));
+    try {
+      const res = await fetch("/api/super-admin/org-quotas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId, maxConcurrentInterviews: normalized })
+      });
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data) || !data.orgSubscription) {
+        setMaxConcurrentErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "同時面接上限数の更新に失敗しました。"
+        }));
+        return;
+      }
+      applySubscriptionUpdate(data);
+      const nextValue =
+        data.orgSubscription.maxConcurrentInterviews ??
+        (typeof plan.maxConcurrentInterviews === "number"
+          ? plan.maxConcurrentInterviews
+          : null);
+      setMaxConcurrentInputByOrg((prev) => ({
+        ...prev,
+        [orgId]: nextValue === null ? "" : String(nextValue)
+      }));
+    } catch {
+      setMaxConcurrentErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "同時面接上限数の更新に失敗しました。"
+      }));
+    } finally {
+      setSavingMaxConcurrentByOrg((prev) => ({ ...prev, [orgId]: false }));
     }
   };
 
@@ -1055,6 +1155,22 @@ export default function SuperAdminDashboard({
               const isOverageLimitSaving =
                 savingOverageLimitByOrg[row.orgId] ?? false;
               const overageLimitError = overageLimitErrorByOrg[row.orgId] ?? null;
+              const maxConcurrentDefault = plan
+                ? row.maxConcurrentInterviews ??
+                  (typeof plan.maxConcurrentInterviews === "number"
+                    ? plan.maxConcurrentInterviews
+                    : null)
+                : null;
+              const maxConcurrentDefaultText =
+                maxConcurrentDefault === null ? "" : String(maxConcurrentDefault);
+              const maxConcurrentInput =
+                maxConcurrentInputByOrg[row.orgId] ?? maxConcurrentDefaultText;
+              const maxConcurrentDirty =
+                Boolean(plan) && maxConcurrentInput !== maxConcurrentDefaultText;
+              const isMaxConcurrentSaving =
+                savingMaxConcurrentByOrg[row.orgId] ?? false;
+              const maxConcurrentError =
+                maxConcurrentErrorByOrg[row.orgId] ?? null;
 
               return (
                 <div className="row-group" key={row.orgId}>
@@ -1320,6 +1436,46 @@ export default function SuperAdminDashboard({
                           </div>
                           {overageLimitError && (
                             <p className="error">{overageLimitError}</p>
+                          )}
+                        </div>
+                        <div className="meta-field">
+                          <p className="label">同時面接上限数(件)</p>
+                          <div className="plan-editor">
+                            <input
+                              type="number"
+                              min={1}
+                              max={100}
+                              value={maxConcurrentInput}
+                              onChange={(e) => {
+                                setMaxConcurrentInputByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: e.target.value
+                                }));
+                                setMaxConcurrentErrorByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: null
+                                }));
+                              }}
+                              disabled={!row.hasSubscription || !plan}
+                              className="input-compact"
+                            />
+                            <button
+                              type="button"
+                              disabled={
+                                !row.hasSubscription ||
+                                !plan ||
+                                !maxConcurrentDirty ||
+                                isMaxConcurrentSaving
+                              }
+                              onClick={() =>
+                                void updateMaxConcurrentInterviews(row, plan)
+                              }
+                            >
+                              {isMaxConcurrentSaving ? "更新中..." : "更新"}
+                            </button>
+                          </div>
+                          {maxConcurrentError && (
+                            <p className="error">{maxConcurrentError}</p>
                           )}
                         </div>
                       </div>

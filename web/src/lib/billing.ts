@@ -97,6 +97,7 @@ export type BillingSummary = {
   includedMinutes: number;
   overageRateYenPerMin: number;
   overageLimitMinutes: number;
+  maxConcurrentInterviews: number | null;
   cycleStartedAt: Date;
   cycleEndsAt: Date;
   usedSec: number;
@@ -117,6 +118,7 @@ export const buildBillingSummary = (subscription: {
   reservedSec: number;
   overageApproved: boolean;
   overageLimitMinutes?: number | null;
+  maxConcurrentInterviews?: number | null;
 }): BillingSummary => {
   const plan = getPlanConfig(subscription.plan);
   const includedSec = plan.includedMinutes * 60;
@@ -126,6 +128,8 @@ export const buildBillingSummary = (subscription: {
   const overageChargeYen = calcOverageYen(overageUsedSec, plan.overageRateYenPerMin);
   const overageLimitMinutes =
     subscription.overageLimitMinutes ?? plan.includedMinutes;
+  const maxConcurrentInterviews =
+    subscription.maxConcurrentInterviews ?? plan.maxConcurrentInterviews ?? null;
   const overageLimitSec = overageLimitMinutes * 60;
   const overageCommittedSec = Math.max(0, committedSec - includedSec);
   const overageRemainingSec = Math.max(0, overageLimitSec - overageCommittedSec);
@@ -137,6 +141,7 @@ export const buildBillingSummary = (subscription: {
     includedMinutes: plan.includedMinutes,
     overageRateYenPerMin: plan.overageRateYenPerMin,
     overageLimitMinutes,
+    maxConcurrentInterviews,
     cycleStartedAt: subscription.cycleStartedAt,
     cycleEndsAt: subscription.cycleEndsAt,
     usedSec: subscription.usedSec,

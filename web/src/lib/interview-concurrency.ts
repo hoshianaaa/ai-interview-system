@@ -33,7 +33,10 @@ export const getConcurrencyBlockReason = async (
     const subscription = await client.orgSubscription.findUnique({ where: { orgId } });
     if (subscription) {
       const plan = getPlanConfig(subscription.plan);
-      const maxOrg = plan.maxConcurrentInterviews;
+      const maxOrg =
+        typeof subscription.maxConcurrentInterviews === "number"
+          ? subscription.maxConcurrentInterviews
+          : plan.maxConcurrentInterviews;
       if (typeof maxOrg === "number" && maxOrg > 0) {
         const activeOrg = await client.interview.count({
           where: { orgId, status: { in: ACTIVE_INTERVIEW_STATUSES } }

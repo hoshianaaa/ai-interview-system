@@ -120,6 +120,7 @@ export default async function HomePage() {
         includedMinutes: summary.includedMinutes,
         overageRateYenPerMin: summary.overageRateYenPerMin,
         overageLimitMinutes: summary.overageLimitMinutes,
+        maxConcurrentInterviews: summary.maxConcurrentInterviews,
         cycleStartedAt: summary.cycleStartedAt.toISOString(),
         cycleEndsAt: summary.cycleEndsAt.toISOString(),
         usedSec: summary.usedSec,

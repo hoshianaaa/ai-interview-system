@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
-import { buildBillingSummary, getPlanConfig, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
+import { buildBillingSummary, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
 import { formatDateJst, formatDateTimeJst } from "@/lib/datetime";
 
 type Decision = "undecided" | "pass" | "fail" | "hold";
@@ -98,6 +98,7 @@ type OrgBillingInfo = {
   includedMinutes: number;
   overageRateYenPerMin: number;
   overageLimitMinutes: number;
+  maxConcurrentInterviews: number | null;
   cycleStartedAt: string;
   cycleEndsAt: string;
   usedSec: number;
@@ -344,7 +345,8 @@ export default function AdminDashboard({
         usedSec: current.usedSec,
         reservedSec: current.reservedSec + normalized,
         overageApproved: current.overageApproved,
-        overageLimitMinutes: current.overageLimitMinutes
+        overageLimitMinutes: current.overageLimitMinutes,
+        maxConcurrentInterviews: current.maxConcurrentInterviews
       });
       return {
         planId: summary.planId,
@@ -352,6 +354,7 @@ export default function AdminDashboard({
         includedMinutes: summary.includedMinutes,
         overageRateYenPerMin: summary.overageRateYenPerMin,
         overageLimitMinutes: summary.overageLimitMinutes,
+        maxConcurrentInterviews: summary.maxConcurrentInterviews,
         cycleStartedAt: summary.cycleStartedAt.toISOString(),
         cycleEndsAt: summary.cycleEndsAt.toISOString(),
         usedSec: summary.usedSec,
@@ -1513,7 +1516,6 @@ export default function AdminDashboard({
   }, [defaultTemplate, selectedTemplateId, prompt]);
   const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
-  const planConfig = billingInfo ? getPlanConfig(billingInfo.planId) : null;
   const nextBillingText = billingInfo
     ? formatDateJst(billingInfo.cycleEndsAt)
     : "未加入";
@@ -1527,8 +1529,8 @@ export default function AdminDashboard({
     : "-";
   const reservedText = billingInfo ? formatMinutes(billingInfo.reservedSec, "ceil") : "-";
   const maxConcurrentText = billingInfo
-    ? typeof planConfig?.maxConcurrentInterviews === "number"
-      ? `${planConfig.maxConcurrentInterviews}件`
+    ? typeof billingInfo.maxConcurrentInterviews === "number"
+      ? `${billingInfo.maxConcurrentInterviews}件`
       : "制限なし"
     : "";
   const overageLimitText = billingInfo ? `${billingInfo.overageLimitMinutes}分` : "";

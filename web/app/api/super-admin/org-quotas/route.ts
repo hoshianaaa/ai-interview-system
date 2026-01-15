@@ -55,6 +55,17 @@ const parseNonNegativeInt = (value: unknown) => {
   return null;
 };
 
+const parseOptionalMaxConcurrent = (value: unknown) => {
+  if (value === null) return { ok: true, value: null };
+  if (typeof value === "string" && !value.trim()) {
+    return { ok: true, value: null };
+  }
+  const parsed = parseNonNegativeInt(value);
+  if (parsed === null) return { ok: false, value: null };
+  if (parsed < 1 || parsed > 100) return { ok: false, value: null };
+  return { ok: true, value: parsed };
+};
+
 const parsePlanStartDate = (value: unknown) => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -86,6 +97,7 @@ export async function GET() {
       usedSec: row.usedSec,
       reservedSec: row.reservedSec,
       overageLimitMinutes: row.overageLimitMinutes,
+      maxConcurrentInterviews: row.maxConcurrentInterviews,
       overageApproved: row.overageApproved,
       renewOnCycleEnd: row.renewOnCycleEnd,
       updatedAt: row.updatedAt.toISOString()
@@ -114,6 +126,7 @@ export async function PATCH(req: Request) {
   const hasRemainingConfirmed = hasOwn(body, "remainingConfirmedMin");
   const hasOverageConfirmed = hasOwn(body, "overageConfirmedMin");
   const hasOverageLimitMinutes = hasOwn(body, "overageLimitMinutes");
+  const hasMaxConcurrent = hasOwn(body, "maxConcurrentInterviews");
   const hasPlanStartDate = hasOwn(body, "planStartDate");
   if (
     !hasOverage &&
@@ -122,6 +135,7 @@ export async function PATCH(req: Request) {
     !hasRemainingConfirmed &&
     !hasOverageConfirmed &&
     !hasOverageLimitMinutes &&
+    !hasMaxConcurrent &&
     !hasPlanStartDate
   ) {
     return NextResponse.json({ error: "INVALID_SUBSCRIPTION_INPUT" }, { status: 400 });
@@ -166,6 +180,18 @@ export async function PATCH(req: Request) {
         { status: 400 }
       );
     }
+  }
+
+  let maxConcurrentInterviews: number | null = null;
+  if (hasMaxConcurrent) {
+    const parsed = parseOptionalMaxConcurrent(body.maxConcurrentInterviews);
+    if (!parsed.ok) {
+      return NextResponse.json(
+        { error: "INVALID_MAX_CONCURRENT" },
+        { status: 400 }
+      );
+    }
+    maxConcurrentInterviews = parsed.value;
   }
 
   if (
@@ -248,6 +274,7 @@ export async function PATCH(req: Request) {
         usedSec,
         reservedSec: 0,
         overageLimitMinutes: nextOverageLimitMinutes,
+        maxConcurrentInterviews,
         overageApproved: nextOverageApproved ?? false,
         renewOnCycleEnd: nextRenewOnCycleEnd ?? false
       }
@@ -266,6 +293,7 @@ export async function PATCH(req: Request) {
       usedSec?: number;
       reservedSec?: number;
       overageLimitMinutes?: number | null;
+      maxConcurrentInterviews?: number | null;
       overageApproved?: boolean;
       renewOnCycleEnd?: boolean;
     } = {};
@@ -289,6 +317,9 @@ export async function PATCH(req: Request) {
     }
     if (overageLimitMinutes !== null && !nextPlanId) {
       data.overageLimitMinutes = overageLimitMinutes;
+    }
+    if (hasMaxConcurrent) {
+      data.maxConcurrentInterviews = maxConcurrentInterviews;
     }
     if (nextOverageApproved !== null) {
       data.overageApproved = nextOverageApproved;
@@ -328,6 +359,7 @@ export async function PATCH(req: Request) {
       usedSec: updated.usedSec,
       reservedSec: updated.reservedSec,
       overageLimitMinutes: updated.overageLimitMinutes,
+      maxConcurrentInterviews: updated.maxConcurrentInterviews,
       overageApproved: updated.overageApproved,
       renewOnCycleEnd: updated.renewOnCycleEnd,
       updatedAt: updated.updatedAt.toISOString()
