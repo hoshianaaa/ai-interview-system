@@ -18,6 +18,7 @@ type OrgSubscriptionRow = {
   cycleEndsAt: string | null;
   usedSec: number;
   reservedSec: number;
+  overageLimitMinutes: number | null;
   activeInterviewCount: number;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
@@ -155,6 +156,7 @@ export default async function SuperAdminPage() {
       cycleEndsAt: subscription?.cycleEndsAt.toISOString() ?? null,
       usedSec: subscription?.usedSec ?? 0,
       reservedSec: subscription?.reservedSec ?? 0,
+      overageLimitMinutes: subscription?.overageLimitMinutes ?? null,
       activeInterviewCount: activeInterviewCountByOrg.get(org.id) ?? 0,
       overageApproved: subscription?.overageApproved ?? false,
       renewOnCycleEnd: subscription?.renewOnCycleEnd ?? false,
@@ -175,6 +177,7 @@ export default async function SuperAdminPage() {
       cycleEndsAt: subscription.cycleEndsAt.toISOString(),
       usedSec: subscription.usedSec,
       reservedSec: subscription.reservedSec,
+      overageLimitMinutes: subscription.overageLimitMinutes ?? null,
       activeInterviewCount: activeInterviewCountByOrg.get(subscription.orgId) ?? 0,
       overageApproved: subscription.overageApproved,
       renewOnCycleEnd: subscription.renewOnCycleEnd,

@@ -105,7 +105,7 @@ type OrgBillingInfo = {
   remainingIncludedSec: number;
   overageUsedSec: number;
   overageChargeYen: number;
-  overageRemainingSec: number | null;
+  overageRemainingSec: number;
   overageApproved: boolean;
   overageLocked: boolean;
 } | null;
@@ -141,7 +141,7 @@ const formatCreateErrorMessage = (error: string, fallbackPrefix: string) => {
     return "プラン未加入のため面接を作成できません。システム管理者に連絡してください。";
   }
   if (error === "ORG_OVERAGE_LOCKED") {
-    return "超過上限に到達しています。管理者承認待ちです。";
+    return "超過上限に到達しています。";
   }
   if (error === "ORG_TIME_LIMIT_EXCEEDED") {
     return "利用可能時間が不足しています。";
@@ -343,7 +343,8 @@ export default function AdminDashboard({
         cycleEndsAt: new Date(current.cycleEndsAt),
         usedSec: current.usedSec,
         reservedSec: current.reservedSec + normalized,
-        overageApproved: current.overageApproved
+        overageApproved: current.overageApproved,
+        overageLimitMinutes: current.overageLimitMinutes
       });
       return {
         planId: summary.planId,
@@ -1532,7 +1533,7 @@ export default function AdminDashboard({
     : "";
   const overageLimitText = billingInfo ? `${billingInfo.overageLimitMinutes}分` : "";
   const overageNoteText = billingInfo
-    ? `超過時間は+${overageLimitText}まで自動超過できます。超える場合はサポートの承認が必要です。`
+    ? `超過時間は+${overageLimitText}まで利用できます。`
     : "プラン未加入のため超過上限は表示されません。";
 
   return (
@@ -1693,7 +1694,7 @@ export default function AdminDashboard({
                   </div>
                 )}
                 {billingInfo?.overageLocked && (
-                  <div className="billing-alert">管理者承認待ち</div>
+                  <div className="billing-alert">超過上限に到達</div>
                 )}
               </div>
             </div>
@@ -1744,7 +1745,7 @@ export default function AdminDashboard({
                 )}
                 {billingInfo?.overageLocked && (
                   <p className="warning">
-                    超過上限に到達しています。管理者承認待ちのため面接URLを発行できません。
+                    超過上限に到達しています。面接URLを発行できません。
                   </p>
                 )}
                 <div className="form-row">

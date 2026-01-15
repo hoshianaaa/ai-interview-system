@@ -108,29 +108,24 @@ export async function POST(req: Request) {
 
       const plan = getPlanConfig(subscription.plan);
       const includedSec = plan.includedMinutes * 60;
-      const overageLimitSec = plan.overageLimitMinutes * 60;
+      const overageLimitMinutes =
+        subscription.overageLimitMinutes ?? plan.includedMinutes;
+      const overageLimitSec = overageLimitMinutes * 60;
       const committedSec = subscription.usedSec + subscription.reservedSec;
       const cappedMaxSec = includedSec + overageLimitSec;
 
-      if (!subscription.overageApproved) {
-        const updatedCount = await tx.$executeRaw`
-          UPDATE "OrgSubscription"
-          SET "reservedSec" = "reservedSec" + ${durationSec},
-              "updatedAt" = NOW()
-          WHERE "orgId" = ${orgId}
-            AND ("usedSec" + "reservedSec" + ${durationSec}) <= ${cappedMaxSec};
-        `;
-        if (updatedCount === 0) {
-          if (committedSec >= cappedMaxSec) {
-            throw new Error("ORG_OVERAGE_LOCKED");
-          }
-          throw new Error("ORG_TIME_LIMIT_EXCEEDED");
+      const updatedCount = await tx.$executeRaw`
+        UPDATE "OrgSubscription"
+        SET "reservedSec" = "reservedSec" + ${durationSec},
+            "updatedAt" = NOW()
+        WHERE "orgId" = ${orgId}
+          AND ("usedSec" + "reservedSec" + ${durationSec}) <= ${cappedMaxSec};
+      `;
+      if (updatedCount === 0) {
+        if (committedSec >= cappedMaxSec) {
+          throw new Error("ORG_OVERAGE_LOCKED");
         }
-      } else {
-        await tx.orgSubscription.update({
-          where: { orgId },
-          data: { reservedSec: { increment: durationSec } }
-        });
+        throw new Error("ORG_TIME_LIMIT_EXCEEDED");
       }
 
       let applicationId = applicationIdRaw;

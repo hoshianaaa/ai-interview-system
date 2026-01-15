@@ -129,6 +129,7 @@ model OrgSubscription {
   cycleEndsAt     DateTime
   usedSec         Int      @default(0)
   reservedSec     Int      @default(0)
+  overageLimitMinutes Int?
   overageApproved Boolean  @default(false)
   renewOnCycleEnd Boolean  @default(false)
   createdAt       DateTime @default(now())

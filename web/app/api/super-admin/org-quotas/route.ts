@@ -85,6 +85,7 @@ export async function GET() {
       cycleEndsAt: row.cycleEndsAt.toISOString(),
       usedSec: row.usedSec,
       reservedSec: row.reservedSec,
+      overageLimitMinutes: row.overageLimitMinutes,
       overageApproved: row.overageApproved,
       renewOnCycleEnd: row.renewOnCycleEnd,
       updatedAt: row.updatedAt.toISOString()
@@ -112,6 +113,7 @@ export async function PATCH(req: Request) {
   const hasRenew = hasOwn(body, "renewOnCycleEnd");
   const hasRemainingConfirmed = hasOwn(body, "remainingConfirmedMin");
   const hasOverageConfirmed = hasOwn(body, "overageConfirmedMin");
+  const hasOverageLimitMinutes = hasOwn(body, "overageLimitMinutes");
   const hasPlanStartDate = hasOwn(body, "planStartDate");
   if (
     !hasOverage &&
@@ -119,6 +121,7 @@ export async function PATCH(req: Request) {
     !hasRenew &&
     !hasRemainingConfirmed &&
     !hasOverageConfirmed &&
+    !hasOverageLimitMinutes &&
     !hasPlanStartDate
   ) {
     return NextResponse.json({ error: "INVALID_SUBSCRIPTION_INPUT" }, { status: 400 });
@@ -149,6 +152,17 @@ export async function PATCH(req: Request) {
     if (overageConfirmedMin === null) {
       return NextResponse.json(
         { error: "INVALID_OVERAGE_CONFIRMED" },
+        { status: 400 }
+      );
+    }
+  }
+
+  let overageLimitMinutes: number | null = null;
+  if (hasOverageLimitMinutes) {
+    overageLimitMinutes = parseNonNegativeInt(body.overageLimitMinutes);
+    if (overageLimitMinutes === null) {
+      return NextResponse.json(
+        { error: "INVALID_OVERAGE_LIMIT" },
         { status: 400 }
       );
     }
@@ -206,6 +220,8 @@ export async function PATCH(req: Request) {
     const anchor = planStartDate ?? now;
     const cycle = getCycleRange(anchor, now);
     const includedMin = getPlanConfig(nextPlanId).includedMinutes;
+    const nextOverageLimitMinutes =
+      overageLimitMinutes ?? includedMin;
     let usedSec = 0;
     if (remainingConfirmedMin !== null || overageConfirmedMin !== null) {
       if (remainingConfirmedMin !== null && remainingConfirmedMin > includedMin) {
@@ -231,6 +247,7 @@ export async function PATCH(req: Request) {
         cycleEndsAt: cycle.end,
         usedSec,
         reservedSec: 0,
+        overageLimitMinutes: nextOverageLimitMinutes,
         overageApproved: nextOverageApproved ?? false,
         renewOnCycleEnd: nextRenewOnCycleEnd ?? false
       }
@@ -248,24 +265,30 @@ export async function PATCH(req: Request) {
       cycleEndsAt?: Date;
       usedSec?: number;
       reservedSec?: number;
+      overageLimitMinutes?: number | null;
       overageApproved?: boolean;
       renewOnCycleEnd?: boolean;
     } = {};
     if (nextPlanId) {
       const anchor = planStartDate ?? now;
       const cycle = getCycleRange(anchor, now);
+      const includedMin = getPlanConfig(nextPlanId).includedMinutes;
       data.plan = nextPlanId;
       data.billingAnchorAt = anchor;
       data.cycleStartedAt = cycle.start;
       data.cycleEndsAt = cycle.end;
       data.usedSec = 0;
       data.reservedSec = 0;
+      data.overageLimitMinutes = overageLimitMinutes ?? includedMin;
     }
     if (planStartDate && !nextPlanId) {
       const cycle = getCycleRange(planStartDate, now);
       data.billingAnchorAt = planStartDate;
       data.cycleStartedAt = cycle.start;
       data.cycleEndsAt = cycle.end;
+    }
+    if (overageLimitMinutes !== null && !nextPlanId) {
+      data.overageLimitMinutes = overageLimitMinutes;
     }
     if (nextOverageApproved !== null) {
       data.overageApproved = nextOverageApproved;
@@ -304,6 +327,7 @@ export async function PATCH(req: Request) {
       cycleEndsAt: updated.cycleEndsAt.toISOString(),
       usedSec: updated.usedSec,
       reservedSec: updated.reservedSec,
+      overageLimitMinutes: updated.overageLimitMinutes,
       overageApproved: updated.overageApproved,
       renewOnCycleEnd: updated.renewOnCycleEnd,
       updatedAt: updated.updatedAt.toISOString()

@@ -137,6 +137,7 @@ export async function POST(req: Request) {
           cycleEndsAt: subscription.cycleEndsAt.toISOString(),
           usedSec: subscription.usedSec,
           reservedSec: subscription.reservedSec,
+          overageLimitMinutes: subscription.overageLimitMinutes,
           overageApproved: subscription.overageApproved,
           renewOnCycleEnd: subscription.renewOnCycleEnd,
           updatedAt: subscription.updatedAt.toISOString()

@@ -21,6 +21,7 @@ type OrgSubscriptionRow = {
   cycleEndsAt: string | null;
   usedSec: number;
   reservedSec: number;
+  overageLimitMinutes: number | null;
   activeInterviewCount: number;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
@@ -50,6 +51,7 @@ type OrgSubscriptionResponse =
         cycleEndsAt: string;
         usedSec: number;
         reservedSec: number;
+        overageLimitMinutes: number | null;
         overageApproved: boolean;
         renewOnCycleEnd: boolean;
         updatedAt: string;
@@ -66,6 +68,7 @@ type OrgSubscriptionSnapshot = {
   cycleEndsAt: string;
   usedSec: number;
   reservedSec: number;
+  overageLimitMinutes: number | null;
   overageApproved: boolean;
   renewOnCycleEnd: boolean;
   updatedAt: string;
@@ -143,9 +146,6 @@ export default function SuperAdminDashboard({
   });
   const [query, setQuery] = useState("");
   const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
-  const [savingOverageByOrg, setSavingOverageByOrg] = useState<
-    Record<string, boolean>
-  >({});
   const [savingRenewalByOrg, setSavingRenewalByOrg] = useState<
     Record<string, boolean>
   >({});
@@ -192,6 +192,15 @@ export default function SuperAdminDashboard({
     Record<string, boolean>
   >({});
   const [planStartErrorByOrg, setPlanStartErrorByOrg] = useState<
+    Record<string, string | null>
+  >({});
+  const [overageLimitInputByOrg, setOverageLimitInputByOrg] = useState<
+    Record<string, string>
+  >({});
+  const [savingOverageLimitByOrg, setSavingOverageLimitByOrg] = useState<
+    Record<string, boolean>
+  >({});
+  const [overageLimitErrorByOrg, setOverageLimitErrorByOrg] = useState<
     Record<string, string | null>
   >({});
 
@@ -246,6 +255,7 @@ export default function SuperAdminDashboard({
               cycleEndsAt: updated.cycleEndsAt,
               usedSec: updated.usedSec,
               reservedSec: updated.reservedSec,
+              overageLimitMinutes: updated.overageLimitMinutes ?? null,
               overageApproved: updated.overageApproved,
               renewOnCycleEnd: updated.renewOnCycleEnd,
               updatedAt: updated.updatedAt,
@@ -269,6 +279,7 @@ export default function SuperAdminDashboard({
               cycleEndsAt: null,
               usedSec: 0,
               reservedSec: 0,
+              overageLimitMinutes: null,
               overageApproved: false,
               renewOnCycleEnd: false,
               updatedAt: null,
@@ -355,35 +366,6 @@ export default function SuperAdminDashboard({
     }
   };
 
-  const toggleOverageApproval = async (orgId: string, nextValue: boolean) => {
-    setRowError(null);
-    setSavingOverageByOrg((prev) => ({ ...prev, [orgId]: true }));
-    try {
-      const res = await fetch("/api/super-admin/org-quotas", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId, overageApproved: nextValue })
-      });
-      const data = (await res.json()) as OrgSubscriptionResponse;
-      if (!res.ok || !("orgSubscription" in data)) {
-        setRowError({
-          orgId,
-          message: "error" in data ? data.error : "REQUEST_FAILED"
-        });
-        return;
-      }
-      if (!data.orgSubscription) {
-        setRowError({ orgId, message: "SUBSCRIPTION_NOT_FOUND" });
-        return;
-      }
-      applySubscriptionUpdate(data);
-    } catch {
-      setRowError({ orgId, message: "REQUEST_FAILED" });
-    } finally {
-      setSavingOverageByOrg((prev) => ({ ...prev, [orgId]: false }));
-    }
-  };
-
   const updatePlan = async (orgId: string) => {
     const selectedPlanId = planByOrg[orgId] ?? NONE_PLAN_VALUE;
     const planId = selectedPlanId === NONE_PLAN_VALUE ? null : selectedPlanId;
@@ -414,6 +396,8 @@ export default function SuperAdminDashboard({
           0,
           data.orgSubscription.usedSec - updatedPlan.includedMinutes * 60
         );
+        const nextOverageLimit =
+          data.orgSubscription.overageLimitMinutes ?? updatedPlan.includedMinutes;
         setPlanStartInputByOrg((prev) => ({
           ...prev,
           [orgId]: formatDateInput(data.orgSubscription.billingAnchorAt)
@@ -425,6 +409,10 @@ export default function SuperAdminDashboard({
         setOverageConfirmedInputByOrg((prev) => ({
           ...prev,
           [orgId]: String(toRoundedMinutes(updatedOverageSec))
+        }));
+        setOverageLimitInputByOrg((prev) => ({
+          ...prev,
+          [orgId]: String(nextOverageLimit)
         }));
       } else {
         applySubscriptionRemoval(orgId);
@@ -439,6 +427,11 @@ export default function SuperAdminDashboard({
           return next;
         });
         setOverageConfirmedInputByOrg((prev) => {
+          const next = { ...prev };
+          delete next[orgId];
+          return next;
+        });
+        setOverageLimitInputByOrg((prev) => {
           const next = { ...prev };
           delete next[orgId];
           return next;
@@ -585,6 +578,56 @@ export default function SuperAdminDashboard({
       }));
     } finally {
       setSavingUsageByOrg((prev) => ({ ...prev, [orgId]: false }));
+    }
+  };
+
+  const updateOverageLimit = async (
+    row: OrgSubscriptionRow,
+    plan: ReturnType<typeof getPlanConfig> | null
+  ) => {
+    if (!row.hasSubscription || !plan) return;
+    const orgId = row.orgId;
+    if (savingOverageLimitByOrg[orgId]) return;
+    setOverageLimitErrorByOrg((prev) => ({ ...prev, [orgId]: null }));
+    const fallbackLimit =
+      row.overageLimitMinutes ?? plan.includedMinutes;
+    const inputValue =
+      overageLimitInputByOrg[orgId] ?? String(fallbackLimit);
+    const parsed = Number(inputValue.trim());
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+      setOverageLimitErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "超過制限時間は0以上の整数で入力してください。"
+      }));
+      return;
+    }
+    setSavingOverageLimitByOrg((prev) => ({ ...prev, [orgId]: true }));
+    try {
+      const res = await fetch("/api/super-admin/org-quotas", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orgId, overageLimitMinutes: parsed })
+      });
+      const data = (await res.json()) as OrgSubscriptionResponse;
+      if (!res.ok || !("orgSubscription" in data) || !data.orgSubscription) {
+        setOverageLimitErrorByOrg((prev) => ({
+          ...prev,
+          [orgId]: "超過制限時間の更新に失敗しました。"
+        }));
+        return;
+      }
+      applySubscriptionUpdate(data);
+      setOverageLimitInputByOrg((prev) => ({
+        ...prev,
+        [orgId]: String(data.orgSubscription.overageLimitMinutes ?? parsed)
+      }));
+    } catch {
+      setOverageLimitErrorByOrg((prev) => ({
+        ...prev,
+        [orgId]: "超過制限時間の更新に失敗しました。"
+      }));
+    } finally {
+      setSavingOverageLimitByOrg((prev) => ({ ...prev, [orgId]: false }));
     }
   };
 
@@ -917,8 +960,8 @@ export default function SuperAdminDashboard({
       <section className="card">
         <div className="card-header">
           <div>
-            <h2>組織ごとのプランと超過承認</h2>
-            <p className="subtle">超過上限の承認状況と利用状況を確認できます。</p>
+            <h2>組織ごとのプランと利用状況</h2>
+            <p className="subtle">利用状況と上限を確認できます。</p>
           </div>
           <div className="search">
             <input
@@ -950,7 +993,7 @@ export default function SuperAdminDashboard({
               <div>進行中面接数</div>
               <div>残り確定時間</div>
               <div>超過時間</div>
-              <div>超過承認</div>
+              <div>超過制限時間</div>
               <div>継続</div>
               <div>詳細</div>
             </div>
@@ -965,16 +1008,17 @@ export default function SuperAdminDashboard({
               const overageConfirmedSec = Math.max(0, row.usedSec - includedSec);
               const committedSec = row.usedSec + row.reservedSec;
               const overageCommittedSec = Math.max(0, committedSec - includedSec);
-              const overageRemainingSec = plan
-                ? row.overageApproved
-                  ? null
-                  : Math.max(0, plan.overageLimitMinutes * 60 - overageCommittedSec)
-                : null;
-              const overageLocked =
-                plan && !row.overageApproved && overageRemainingSec === 0;
+              const overageLimitMinutes = plan
+                ? row.overageLimitMinutes ?? plan.includedMinutes
+                : 0;
+              const overageLimitSec = overageLimitMinutes * 60;
+              const overageRemainingSec = Math.max(
+                0,
+                overageLimitSec - overageCommittedSec
+              );
+              const overageLocked = plan && overageRemainingSec === 0;
               const isExpanded = expandedOrgId === row.orgId;
               const error = rowError?.orgId === row.orgId ? rowError.message : null;
-              const isOverageSaving = savingOverageByOrg[row.orgId] ?? false;
               const isRenewalSaving = savingRenewalByOrg[row.orgId] ?? false;
               const isPlanSaving = savingPlanByOrg[row.orgId] ?? false;
               const isEnding = endingInterviewsByOrg[row.orgId] ?? false;
@@ -1003,6 +1047,14 @@ export default function SuperAdminDashboard({
               const usageError = usageErrorByOrg[row.orgId] ?? null;
               const isPlanStartSaving = savingPlanStartByOrg[row.orgId] ?? false;
               const planStartError = planStartErrorByOrg[row.orgId] ?? null;
+              const overageLimitDefault = plan ? overageLimitMinutes : 0;
+              const overageLimitInput =
+                overageLimitInputByOrg[row.orgId] ?? String(overageLimitDefault);
+              const overageLimitDirty =
+                Boolean(plan) && overageLimitInput !== String(overageLimitDefault);
+              const isOverageLimitSaving =
+                savingOverageLimitByOrg[row.orgId] ?? false;
+              const overageLimitError = overageLimitErrorByOrg[row.orgId] ?? null;
 
               return (
                 <div className="row-group" key={row.orgId}>
@@ -1022,27 +1074,10 @@ export default function SuperAdminDashboard({
                     </div>
                     <div className="usage">
                       <div>{plan ? formatMinutes(overageConfirmedSec) : "-"}</div>
-                      {overageLocked && <span className="badge warn">承認待ち</span>}
+                      {overageLocked && <span className="badge warn">制限到達</span>}
                     </div>
-                    <div>
-                      <button
-                        type="button"
-                        className={row.overageApproved ? "ghost" : "primary"}
-                        disabled={!row.hasSubscription || isOverageSaving}
-                        onClick={() =>
-                          void toggleOverageApproval(
-                            row.orgId,
-                            !row.overageApproved
-                          )
-                        }
-                      >
-                        {isOverageSaving
-                          ? "更新中..."
-                          : row.overageApproved
-                            ? "承認解除"
-                            : "承認"}
-                      </button>
-                      {error && <p className="error">{error}</p>}
+                    <div className="usage">
+                      <div>{plan ? formatMinutes(overageLimitSec) : "-"}</div>
                     </div>
                     <div>
                       <button
@@ -1062,6 +1097,7 @@ export default function SuperAdminDashboard({
                           {row.renewOnCycleEnd ? "ON" : "OFF"}
                         </span>
                       </button>
+                      {error && <p className="error">{error}</p>}
                     </div>
                     <div>
                       <button
@@ -1113,6 +1149,7 @@ export default function SuperAdminDashboard({
                           <p className="subtle">
                             プラン変更で加入日と終了日が更新されます。
                           </p>
+                          {error && <p className="error">{error}</p>}
                         </div>
                       </div>
                       <div className="detail-actions">
@@ -1245,6 +1282,45 @@ export default function SuperAdminDashboard({
                           >
                             {isUsageSaving ? "更新中..." : "確定時間を更新"}
                           </button>
+                        </div>
+                      </div>
+                      <div className="detail-meta detail-meta--limit">
+                        <div className="meta-field">
+                          <p className="label">超過制限時間(分)</p>
+                          <div className="plan-editor">
+                            <input
+                              type="number"
+                              min={0}
+                              value={overageLimitInput}
+                              onChange={(e) => {
+                                setOverageLimitInputByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: e.target.value
+                                }));
+                                setOverageLimitErrorByOrg((prev) => ({
+                                  ...prev,
+                                  [row.orgId]: null
+                                }));
+                              }}
+                              disabled={!row.hasSubscription || !plan}
+                              className="input-compact"
+                            />
+                            <button
+                              type="button"
+                              disabled={
+                                !row.hasSubscription ||
+                                !plan ||
+                                !overageLimitDirty ||
+                                isOverageLimitSaving
+                              }
+                              onClick={() => void updateOverageLimit(row, plan)}
+                            >
+                              {isOverageLimitSaving ? "更新中..." : "更新"}
+                            </button>
+                          </div>
+                          {overageLimitError && (
+                            <p className="error">{overageLimitError}</p>
+                          )}
                         </div>
                       </div>
                       {usageError && <p className="error">{usageError}</p>}
