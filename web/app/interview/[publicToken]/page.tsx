@@ -200,6 +200,7 @@ export default function InterviewPage({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const endingRef = useRef(false);
+  const unloadConfirmRef = useRef(false);
   const handleUploadState = useCallback(
     (next: { uploading: boolean; error: string | null; progress: number | null }) => {
       setUploading(next.uploading);
@@ -378,12 +379,21 @@ export default function InterviewPage({
     }
 
     window.addEventListener("pagehide", sendEndBeacon);
-    window.addEventListener("beforeunload", sendEndBeacon);
     return () => {
       window.removeEventListener("pagehide", sendEndBeacon);
-      window.removeEventListener("beforeunload", sendEndBeacon);
     };
   }, [publicToken, hasActiveJoin]);
+
+  useEffect(() => {
+    if (!hasActiveJoin || ending) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      unloadConfirmRef.current = true;
+      event.preventDefault();
+      event.returnValue = "面接結果が失われる可能性があります。";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasActiveJoin, ending]);
 
   useEffect(() => {
     if (!uploading) return;
@@ -798,6 +808,9 @@ export default function InterviewPage({
         onConnected={() => setConnected(true)}
         onDisconnected={() => {
           if (connected) {
+            if (unloadConfirmRef.current) {
+              return;
+            }
             void endInterview();
           } else {
             setJoin({ error: "Connection failed. Please refresh the page." });
