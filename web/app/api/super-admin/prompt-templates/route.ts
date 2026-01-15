@@ -1,25 +1,39 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
+import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
 
 export const runtime = "nodejs";
 
 const MAX_TEMPLATE_NAME = 80;
 const MAX_TEMPLATE_BODY = 4000;
 
-export async function GET() {
+const requireSuperAdmin = async () => {
   const { orgId } = await auth();
   if (!orgId) {
-    return NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 });
+    return { ok: false as const, response: NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 }) };
   }
+  if (!isSuperAdminOrgId(orgId)) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "SUPER_ADMIN_ONLY" }, { status: 403 })
+    };
+  }
+  if (!SUPER_ADMIN_ORG_ID) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "SUPER_ADMIN_ORG_ID_REQUIRED" }, { status: 500 })
+    };
+  }
+  return { ok: true as const, orgId };
+};
 
-  const orgIds =
-    SUPER_ADMIN_ORG_ID && SUPER_ADMIN_ORG_ID !== orgId
-      ? [orgId, SUPER_ADMIN_ORG_ID]
-      : [orgId];
+export async function GET() {
+  const authResult = await requireSuperAdmin();
+  if (!authResult.ok) return authResult.response;
+
   const templates = await prisma.promptTemplate.findMany({
-    where: { orgId: orgIds.length === 1 ? orgIds[0] : { in: orgIds } },
+    where: { orgId: SUPER_ADMIN_ORG_ID },
     orderBy: { createdAt: "desc" }
   });
 
@@ -29,17 +43,14 @@ export async function GET() {
       name: row.name,
       body: row.body,
       isDefault: row.isDefault,
-      isShared: Boolean(SUPER_ADMIN_ORG_ID && row.orgId === SUPER_ADMIN_ORG_ID),
       createdAt: row.createdAt.toISOString()
     }))
   });
 }
 
 export async function POST(req: Request) {
-  const { orgId } = await auth();
-  if (!orgId) {
-    return NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 });
-  }
+  const authResult = await requireSuperAdmin();
+  if (!authResult.ok) return authResult.response;
 
   const body = await req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -59,7 +70,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "BODY_TOO_LONG" }, { status: 400 });
   }
 
-  const exists = await prisma.promptTemplate.findFirst({ where: { orgId, name } });
+  const exists = await prisma.promptTemplate.findFirst({
+    where: { orgId: SUPER_ADMIN_ORG_ID, name }
+  });
   if (exists) {
     return NextResponse.json({ error: "NAME_ALREADY_EXISTS" }, { status: 409 });
   }
@@ -67,14 +80,14 @@ export async function POST(req: Request) {
   const created = await prisma.$transaction(async (tx) => {
     if (isDefault) {
       await tx.promptTemplate.updateMany({
-        where: { orgId },
+        where: { orgId: SUPER_ADMIN_ORG_ID },
         data: { isDefault: false }
       });
     }
     return tx.promptTemplate.create({
       data: {
         templateId: crypto.randomUUID(),
-        orgId,
+        orgId: SUPER_ADMIN_ORG_ID,
         name,
         body: promptBody,
         isDefault
@@ -88,17 +101,14 @@ export async function POST(req: Request) {
       name: created.name,
       body: created.body,
       isDefault: created.isDefault,
-      isShared: Boolean(SUPER_ADMIN_ORG_ID && created.orgId === SUPER_ADMIN_ORG_ID),
       createdAt: created.createdAt.toISOString()
     }
   });
 }
 
 export async function PATCH(req: Request) {
-  const { orgId } = await auth();
-  if (!orgId) {
-    return NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 });
-  }
+  const authResult = await requireSuperAdmin();
+  if (!authResult.ok) return authResult.response;
 
   const body = await req.json().catch(() => ({}));
   const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
@@ -122,12 +132,16 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "BODY_TOO_LONG" }, { status: 400 });
   }
 
-  const existing = await prisma.promptTemplate.findFirst({ where: { templateId, orgId } });
+  const existing = await prisma.promptTemplate.findFirst({
+    where: { templateId, orgId: SUPER_ADMIN_ORG_ID }
+  });
   if (!existing) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const duplicate = await prisma.promptTemplate.findFirst({ where: { orgId, name } });
+  const duplicate = await prisma.promptTemplate.findFirst({
+    where: { orgId: SUPER_ADMIN_ORG_ID, name }
+  });
   if (duplicate && duplicate.templateId !== templateId) {
     return NextResponse.json({ error: "NAME_ALREADY_EXISTS" }, { status: 409 });
   }
@@ -135,7 +149,7 @@ export async function PATCH(req: Request) {
   const updated = await prisma.$transaction(async (tx) => {
     if (isDefault === true) {
       await tx.promptTemplate.updateMany({
-        where: { orgId },
+        where: { orgId: SUPER_ADMIN_ORG_ID },
         data: { isDefault: false }
       });
       return tx.promptTemplate.update({
@@ -161,17 +175,14 @@ export async function PATCH(req: Request) {
       name: updated.name,
       body: updated.body,
       isDefault: updated.isDefault,
-      isShared: Boolean(SUPER_ADMIN_ORG_ID && updated.orgId === SUPER_ADMIN_ORG_ID),
       createdAt: updated.createdAt.toISOString()
     }
   });
 }
 
 export async function DELETE(req: Request) {
-  const { orgId } = await auth();
-  if (!orgId) {
-    return NextResponse.json({ error: "ORG_REQUIRED" }, { status: 400 });
-  }
+  const authResult = await requireSuperAdmin();
+  if (!authResult.ok) return authResult.response;
 
   const body = await req.json().catch(() => ({}));
   const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
@@ -179,7 +190,9 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "templateId is required" }, { status: 400 });
   }
 
-  const existing = await prisma.promptTemplate.findFirst({ where: { templateId, orgId } });
+  const existing = await prisma.promptTemplate.findFirst({
+    where: { templateId, orgId: SUPER_ADMIN_ORG_ID }
+  });
   if (!existing) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

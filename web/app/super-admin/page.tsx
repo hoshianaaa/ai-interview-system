@@ -25,6 +25,14 @@ type OrgSubscriptionRow = {
   hasSubscription: boolean;
 };
 
+type PromptTemplateRow = {
+  templateId: string;
+  name: string;
+  body: string;
+  isDefault: boolean;
+  createdAt: string;
+};
+
 const listAllOrganizations = async () => {
   const client = await clerkClient();
   const limit = 100;
@@ -85,6 +93,18 @@ export default async function SuperAdminPage() {
       />
     );
   }
+
+  const templates = await prisma.promptTemplate.findMany({
+    where: { orgId: SUPER_ADMIN_ORG_ID },
+    orderBy: { createdAt: "desc" }
+  });
+  const templateData: PromptTemplateRow[] = templates.map((row) => ({
+    templateId: row.templateId,
+    name: row.name,
+    body: row.body,
+    isDefault: row.isDefault,
+    createdAt: row.createdAt.toISOString()
+  }));
 
   const subscriptions = await prisma.orgSubscription.findMany({
     orderBy: { orgId: "asc" }
@@ -168,6 +188,7 @@ export default async function SuperAdminPage() {
       initialRows={rows}
       orgsLoadError={orgsLoadError}
       systemSettings={{ maxConcurrentInterviews }}
+      promptTemplates={templateData}
     />
   );
 }

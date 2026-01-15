@@ -10,6 +10,7 @@ import {
   type OrgPlan
 } from "@/lib/billing";
 import { formatDateJst } from "@/lib/datetime";
+import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
 
 type OrgSubscriptionRow = {
   orgId: string;
@@ -29,6 +30,14 @@ type OrgSubscriptionRow = {
 
 type SystemSettings = {
   maxConcurrentInterviews: number;
+};
+
+type PromptTemplate = {
+  templateId: string;
+  name: string;
+  body: string;
+  isDefault: boolean;
+  createdAt: string;
 };
 
 type OrgSubscriptionResponse =
@@ -84,17 +93,25 @@ const planLabel = (planId: OrgPlan | null) => {
   return planId;
 };
 
+const formatTemplateLabel = (template: PromptTemplate) =>
+  `${template.name}${template.isDefault ? "（デフォルト）" : ""}`;
+
+const getTemplateSeedBody = (templates: PromptTemplate[]) =>
+  templates.find((row) => row.isDefault)?.body ?? DEFAULT_INTERVIEW_PROMPT;
+
 const NONE_PLAN_VALUE = "none" as const;
 type PlanSelectValue = OrgPlan | typeof NONE_PLAN_VALUE;
 
 export default function SuperAdminDashboard({
   initialRows,
   orgsLoadError,
-  systemSettings
+  systemSettings,
+  promptTemplates
 }: {
   initialRows: OrgSubscriptionRow[];
   orgsLoadError?: string | null;
   systemSettings: SystemSettings;
+  promptTemplates: PromptTemplate[];
 }) {
   const [rows, setRows] = useState<OrgSubscriptionRow[]>(initialRows);
   const [currentSystemSettings, setCurrentSystemSettings] = useState(systemSettings);
@@ -130,6 +147,18 @@ export default function SuperAdminDashboard({
   const [rowError, setRowError] = useState<{ orgId: string; message: string } | null>(
     null
   );
+  const [templates, setTemplates] = useState(
+    promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
+  );
+  const [templateEditorId, setTemplateEditorId] = useState("");
+  const [templateEditName, setTemplateEditName] = useState("");
+  const [templateEditBody, setTemplateEditBody] = useState(() =>
+    getTemplateSeedBody(promptTemplates)
+  );
+  const [templateEditDefault, setTemplateEditDefault] = useState(false);
+  const [templateEditError, setTemplateEditError] = useState<string | null>(null);
+  const [templateEditSaving, setTemplateEditSaving] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
 
   const sortedRows = useMemo(
     () =>
@@ -150,6 +179,23 @@ export default function SuperAdminDashboard({
         row.orgId.toLowerCase().includes(trimmed)
     );
   }, [sortedRows, query]);
+  const selectedTemplate = useMemo(
+    () =>
+      templateEditorId
+        ? templates.find((row) => row.templateId === templateEditorId) ?? null
+        : null,
+    [templates, templateEditorId]
+  );
+  const templateDirty = selectedTemplate
+    ? templateEditName !== selectedTemplate.name ||
+      templateEditBody !== selectedTemplate.body ||
+      templateEditDefault !== selectedTemplate.isDefault
+    : Boolean(
+        templateEditName.trim() || templateEditBody.trim() || templateEditDefault
+      );
+  const canSaveTemplate =
+    Boolean(templateEditName.trim() && templateEditBody.trim()) &&
+    (selectedTemplate ? templateDirty : true);
 
   const applySubscriptionUpdate = (next: OrgSubscriptionResponse) => {
     if (!("orgSubscription" in next) || !next.orgSubscription) return;
@@ -334,6 +380,149 @@ export default function SuperAdminDashboard({
     }
   };
 
+  const reloadTemplates = async () => {
+    setTemplateLoading(true);
+    setTemplateEditError(null);
+    try {
+      const res = await fetch("/api/super-admin/prompt-templates");
+      const data = (await res.json()) as { templates?: PromptTemplate[]; error?: string };
+      if (Array.isArray(data.templates)) {
+        const nextTemplates = data.templates.map((row) => ({
+          ...row,
+          isDefault: Boolean(row.isDefault)
+        }));
+        const seedBody = getTemplateSeedBody(nextTemplates);
+        setTemplates(nextTemplates);
+        if (
+          templateEditorId &&
+          !data.templates.some((row) => row.templateId === templateEditorId)
+        ) {
+          setTemplateEditorId("");
+          setTemplateEditName("");
+          setTemplateEditBody(seedBody);
+          setTemplateEditDefault(false);
+        }
+      } else if (data.error) {
+        setTemplateEditError("テンプレートの取得に失敗しました");
+      }
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
+  const saveTemplate = async () => {
+    const name = templateEditName.trim();
+    const body = templateEditBody.trim();
+    if (!name) {
+      setTemplateEditError("テンプレート名を入力してください");
+      return;
+    }
+    if (!body) {
+      setTemplateEditError("本文が空です");
+      return;
+    }
+    setTemplateEditSaving(true);
+    setTemplateEditError(null);
+    try {
+      const isUpdate = Boolean(templateEditorId);
+      const res = await fetch("/api/super-admin/prompt-templates", {
+        method: isUpdate ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateId: templateEditorId || undefined,
+          name,
+          body,
+          isDefault: templateEditDefault
+        })
+      });
+      const data = (await res.json()) as { template?: PromptTemplate; error?: string };
+      if (data.template) {
+        const normalized = {
+          ...data.template,
+          isDefault: Boolean(data.template.isDefault)
+        };
+        setTemplates((prev) => {
+          const filtered = prev.filter((row) => row.templateId !== normalized.templateId);
+          return [normalized, ...filtered];
+        });
+        setTemplateEditorId(normalized.templateId);
+        setTemplateEditName(normalized.name);
+        setTemplateEditBody(normalized.body);
+        setTemplateEditDefault(normalized.isDefault);
+        return;
+      }
+      if (res.status === 409) {
+        setTemplateEditError("同名のテンプレートが既にあります");
+        return;
+      }
+      setTemplateEditError(isUpdate ? "保存に失敗しました" : "作成に失敗しました");
+    } finally {
+      setTemplateEditSaving(false);
+    }
+  };
+
+  const deleteTemplate = async () => {
+    if (!templateEditorId) return;
+    const ok = window.confirm("このテンプレートを削除しますか？");
+    if (!ok) return;
+    setTemplateEditSaving(true);
+    setTemplateEditError(null);
+    try {
+      const res = await fetch("/api/super-admin/prompt-templates", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateId: templateEditorId })
+      });
+      if (res.ok) {
+        const nextTemplates = templates.filter(
+          (row) => row.templateId !== templateEditorId
+        );
+        setTemplates(nextTemplates);
+        setTemplateEditorId("");
+        setTemplateEditName("");
+        setTemplateEditBody(getTemplateSeedBody(nextTemplates));
+        setTemplateEditDefault(false);
+        return;
+      }
+      setTemplateEditError("削除に失敗しました");
+    } finally {
+      setTemplateEditSaving(false);
+    }
+  };
+
+  const resetTemplateEditor = () => {
+    setTemplateEditError(null);
+    if (!templateEditorId) {
+      setTemplateEditName("");
+      setTemplateEditBody(getTemplateSeedBody(templates));
+      setTemplateEditDefault(false);
+      return;
+    }
+    const template = templates.find((row) => row.templateId === templateEditorId);
+    if (template) {
+      setTemplateEditName(template.name);
+      setTemplateEditBody(template.body);
+      setTemplateEditDefault(Boolean(template.isDefault));
+    }
+  };
+
+  const selectTemplateForEdit = (templateId: string) => {
+    setTemplateEditorId(templateId);
+    setTemplateEditError(null);
+    if (!templateId) {
+      setTemplateEditName("");
+      setTemplateEditBody(getTemplateSeedBody(templates));
+      setTemplateEditDefault(false);
+      return;
+    }
+    const template = templates.find((row) => row.templateId === templateId);
+    if (template) {
+      setTemplateEditName(template.name);
+      setTemplateEditBody(template.body);
+      setTemplateEditDefault(Boolean(template.isDefault));
+    }
+  };
+
   const systemDirty =
     systemLimitInput.trim() !==
     String(currentSystemSettings.maxConcurrentInterviews);
@@ -422,6 +611,98 @@ export default function SuperAdminDashboard({
             </div>
           </div>
           {systemError && <p className="error">{systemError}</p>}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <h2>共通プロンプトテンプレート</h2>
+            <p className="subtle">
+              ここで作成したテンプレートは全組織で利用できます。
+            </p>
+          </div>
+        </div>
+        <div className="template-editor">
+          <div className="form-row">
+            <label>テンプレート一覧</label>
+            <div className="template-controls">
+              <select
+                value={templateEditorId}
+                onChange={(e) => selectTemplateForEdit(e.target.value)}
+              >
+                <option value="">新規テンプレート</option>
+                {templates.map((template) => (
+                  <option key={template.templateId} value={template.templateId}>
+                    {formatTemplateLabel(template)}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="ghost"
+                onClick={() => void reloadTemplates()}
+                type="button"
+                disabled={templateLoading}
+              >
+                {templateLoading ? "取得中..." : "再読み込み"}
+              </button>
+            </div>
+            <p className="helper">テンプレートの作成・編集・削除ができます。</p>
+          </div>
+          <div className="form-row">
+            <label>テンプレート名</label>
+            <input
+              value={templateEditName}
+              onChange={(e) => setTemplateEditName(e.target.value)}
+              placeholder="例）PM候補者向け"
+            />
+          </div>
+          <div className="form-row">
+            <label>本文</label>
+            <textarea
+              value={templateEditBody}
+              onChange={(e) => setTemplateEditBody(e.target.value)}
+              placeholder="テンプレート本文を入力してください"
+            />
+          </div>
+          <div className="form-row">
+            <label>デフォルト設定</label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={templateEditDefault}
+                onChange={(e) => setTemplateEditDefault(e.target.checked)}
+              />
+              <span>このテンプレートをデフォルトにする</span>
+            </label>
+          </div>
+          {templateEditError && <p className="error">{templateEditError}</p>}
+          <div className="edit-actions">
+            <button
+              className="ghost"
+              onClick={resetTemplateEditor}
+              disabled={templateEditSaving}
+            >
+              リセット
+            </button>
+            <button
+              className="primary"
+              onClick={() => void saveTemplate()}
+              disabled={!canSaveTemplate || templateEditSaving}
+            >
+              {templateEditSaving ? "保存中..." : "保存"}
+            </button>
+          </div>
+          {templateEditorId && (
+            <button
+              className="danger"
+              type="button"
+              onClick={() => void deleteTemplate()}
+              disabled={templateEditSaving}
+            >
+              テンプレートを削除
+            </button>
+          )}
         </div>
       </section>
 
@@ -750,6 +1031,17 @@ export default function SuperAdminDashboard({
           color: #0d1b2a;
           background: #f9fbff;
         }
+        textarea {
+          border-radius: 10px;
+          border: 1px solid #c9d2e2;
+          padding: 10px 12px;
+          font-size: 14px;
+          font-family: inherit;
+          color: #0d1b2a;
+          background: #f9fbff;
+          min-height: 180px;
+          resize: vertical;
+        }
         select {
           border-radius: 10px;
           border: 1px solid #c9d2e2;
@@ -918,6 +1210,41 @@ export default function SuperAdminDashboard({
         }
         .system-control input {
           width: 120px;
+        }
+        .template-editor {
+          display: grid;
+          gap: 16px;
+        }
+        .form-row {
+          display: grid;
+          gap: 8px;
+        }
+        .template-controls {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .template-controls select {
+          min-width: min(320px, 100%);
+        }
+        .checkbox {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          color: #3a4a5e;
+        }
+        .edit-actions {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .helper {
+          margin: 0;
+          font-size: 12px;
+          color: #6b7a90;
         }
         .detail-meta {
           display: grid;
