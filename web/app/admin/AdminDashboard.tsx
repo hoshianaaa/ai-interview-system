@@ -1996,7 +1996,7 @@ export default function AdminDashboard({
                                 app.latestStatus === "完了" ? "done" : "pending"
                               }`}
                             >
-                              {app.latestStatus === "完了" ? "面接実施" : "面接未実施"}
+                              {app.latestStatus === "完了" ? "面接実施済み" : "面接未実施"}
                             </span>
                             <span className={`decision-tag ${app.latestDecision}`}>
                               {decisionLabel(app.latestDecision)}
