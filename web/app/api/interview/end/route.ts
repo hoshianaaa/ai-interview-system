@@ -6,6 +6,7 @@ import { refreshOrgSubscription } from "@/lib/subscription";
 export const runtime = "nodejs";
 
 const MAX_TOKEN_LENGTH = 128;
+const MIN_BILLABLE_DURATION_SEC = 60;
 
 const resolveActualDurationSec = (
   interview: { candidateJoinedAt: Date | null; usedAt: Date | null },
@@ -59,8 +60,15 @@ export async function POST(req: Request) {
 
     const actualDurationSec =
       current.actualDurationSec ?? resolveActualDurationSec(current, endedAt);
+    const billableDurationSec =
+      actualDurationSec > 0
+        ? Math.max(MIN_BILLABLE_DURATION_SEC, actualDurationSec)
+        : 0;
     const reservedSec = current.quotaReservedSec ?? 0;
-    const billedSec = reservedSec > 0 ? Math.min(reservedSec, actualDurationSec) : actualDurationSec;
+    const billedSec =
+      reservedSec > 0
+        ? Math.min(reservedSec, billableDurationSec)
+        : billableDurationSec;
     const shouldSettle = reservedSec > 0 && !current.quotaSettledAt;
     if (shouldSettle && current.orgId) {
       let subscription = await tx.orgSubscription.findUnique({

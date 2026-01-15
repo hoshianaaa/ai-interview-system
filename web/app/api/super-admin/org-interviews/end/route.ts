@@ -8,6 +8,7 @@ import { isSuperAdminOrgId } from "@/lib/super-admin";
 export const runtime = "nodejs";
 
 const ACTIVE_INTERVIEW_STATUSES = ["used", "recording", "ending"] as const;
+const MIN_BILLABLE_DURATION_SEC = 60;
 
 const normalizeOrgId = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
@@ -69,9 +70,15 @@ export async function POST(req: Request) {
 
       const actualDurationSec =
         current.actualDurationSec ?? resolveActualDurationSec(current, endedAt);
+      const billableDurationSec =
+        actualDurationSec > 0
+          ? Math.max(MIN_BILLABLE_DURATION_SEC, actualDurationSec)
+          : 0;
       const reservedSec = current.quotaReservedSec ?? 0;
       const billedSec =
-        reservedSec > 0 ? Math.min(reservedSec, actualDurationSec) : actualDurationSec;
+        reservedSec > 0
+          ? Math.min(reservedSec, billableDurationSec)
+          : billableDurationSec;
       const shouldSettle = reservedSec > 0 && !current.quotaSettledAt;
       if (shouldSettle && current.orgId) {
         let subscription = await tx.orgSubscription.findUnique({

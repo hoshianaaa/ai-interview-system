@@ -43,31 +43,39 @@ export default async function HomePage() {
     where: { orgId }
   });
   const now = new Date();
-  const data = interviews.map((row) => ({
-    interviewId: row.interviewId,
-    applicationId: row.applicationId,
-    url: `${baseUrl}/interview/${row.publicToken ?? row.interviewId}`,
-    status: getProgressStatusLabel(
-      { status: row.status, expiresAt: row.expiresAt, usedAt: row.usedAt },
-      now
-    ),
-    decision: row.decision,
-    round: row.round,
-    applicationCandidateName: row.application?.candidateName ?? null,
-    applicationEmail: row.application?.candidateEmail ?? null,
-    applicationNotes: row.application?.applicationNotes ?? null,
-    applicationCreatedAt: row.application?.createdAt
-      ? row.application.createdAt.toISOString()
-      : row.createdAt.toISOString(),
-    applicationUpdatedAt: row.application?.updatedAt
-      ? row.application.updatedAt.toISOString()
-      : row.createdAt.toISOString(),
-    prompt: row.interviewPrompt ?? null,
-    durationSec: row.durationSec,
-    expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
-    createdAt: row.createdAt.toISOString(),
-    hasRecording: Boolean(row.streamUid)
-  }));
+  const data = interviews.map((row) => {
+    const hasRecording = Boolean(row.streamUid);
+    return {
+      interviewId: row.interviewId,
+      applicationId: row.applicationId,
+      url: `${baseUrl}/interview/${row.publicToken ?? row.interviewId}`,
+      status: getProgressStatusLabel(
+        {
+          status: row.status,
+          expiresAt: row.expiresAt,
+          usedAt: row.usedAt,
+          hasRecording
+        },
+        now
+      ),
+      decision: row.decision,
+      round: row.round,
+      applicationCandidateName: row.application?.candidateName ?? null,
+      applicationEmail: row.application?.candidateEmail ?? null,
+      applicationNotes: row.application?.applicationNotes ?? null,
+      applicationCreatedAt: row.application?.createdAt
+        ? row.application.createdAt.toISOString()
+        : row.createdAt.toISOString(),
+      applicationUpdatedAt: row.application?.updatedAt
+        ? row.application.updatedAt.toISOString()
+        : row.createdAt.toISOString(),
+      prompt: row.interviewPrompt ?? null,
+      durationSec: row.durationSec,
+      expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+      hasRecording
+    };
+  });
   const applicationData = applications.map((row) => ({
     applicationId: row.applicationId,
     candidateName: row.candidateName ?? null,

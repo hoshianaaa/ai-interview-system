@@ -1,12 +1,18 @@
 import { InterviewStatus } from "@prisma/client";
 
-export type ProgressStatus = "scheduled" | "completed" | "noShow" | "failed";
+export type ProgressStatus =
+  | "scheduled"
+  | "completed"
+  | "noShow"
+  | "failed"
+  | "interrupted";
 
 const PROGRESS_STATUS_LABELS: Record<ProgressStatus, string> = {
   scheduled: "実施待ち",
   completed: "完了",
   noShow: "未参加",
-  failed: "失敗（エラー）"
+  failed: "失敗（エラー）",
+  interrupted: "途中終了"
 };
 
 export function isInterviewExpired(
@@ -21,11 +27,15 @@ export function getProgressStatus(
     status: InterviewStatus;
     expiresAt: Date | null;
     usedAt: Date | null;
+    hasRecording?: boolean | null;
   },
   now: Date = new Date()
 ): ProgressStatus {
   if (input.status === "failed") return "failed";
-  if (input.status === "completed") return "completed";
+  if (input.status === "completed") {
+    if (input.usedAt && input.hasRecording === false) return "interrupted";
+    return "completed";
+  }
   if (isInterviewExpired(input.expiresAt, now) && !input.usedAt) return "noShow";
   return "scheduled";
 }
@@ -35,6 +45,7 @@ export function getProgressStatusLabel(
     status: InterviewStatus;
     expiresAt: Date | null;
     usedAt: Date | null;
+    hasRecording?: boolean | null;
   },
   now: Date = new Date()
 ): string {

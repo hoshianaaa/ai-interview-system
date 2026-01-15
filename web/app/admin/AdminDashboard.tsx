@@ -141,7 +141,13 @@ const MAX_EXPIRES_DAYS = 6;
 const MAX_EXPIRES_HOURS = 23;
 const DEFAULT_EXPIRES_WEEKS = 1;
 const MAX_DURATION_MIN = 10;
-const INTERVIEW_STATUS_OPTIONS = ["実施待ち", "完了", "未参加", "失敗（エラー）"] as const;
+const INTERVIEW_STATUS_OPTIONS = [
+  "実施待ち",
+  "完了",
+  "途中終了",
+  "未参加",
+  "失敗（エラー）"
+] as const;
 const APPLICATIONS_PER_PAGE = 10;
 
 export default function AdminDashboard({
@@ -1315,6 +1321,8 @@ export default function AdminDashboard({
     selectedApplication?.interviewCount === 0 ? "面接を追加" : "次の面接URLを発行";
   const canReissueInterview =
     selectedRow?.status === "未参加" || selectedRow?.status === "失敗（エラー）";
+  const videoEmptyLabel =
+    selectedRow?.status === "途中終了" ? "面接途中終了（録画がありません）" : "録画がありません";
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
@@ -1969,49 +1977,59 @@ export default function AdminDashboard({
                   <div className="empty">条件に一致する応募がありません</div>
                 ) : (
                   <div className="list">
-                    {paginatedApplicationRows.map((app) => (
-                      <div
-                        key={app.applicationId}
-                        className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => selectApplicationFromList(app.applicationId)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            selectApplicationFromList(app.applicationId);
-                          }
-                        }}
-                      >
-                        <div>
-                          <div className="title-row">
-                            <div className="title">
-                              {app.candidateName ? app.candidateName : "候補者名なし"}
+                    {paginatedApplicationRows.map((app) => {
+                      const statusLabel =
+                        app.latestStatus === "完了"
+                          ? "面接実施済み"
+                          : app.latestStatus === "途中終了"
+                            ? "面接途中終了"
+                            : "面接未実施";
+                      const statusClass =
+                        app.latestStatus === "完了"
+                          ? "done"
+                          : app.latestStatus === "途中終了"
+                            ? "interrupted"
+                            : "pending";
+                      return (
+                        <div
+                          key={app.applicationId}
+                          className={`row ${selectedApplicationId === app.applicationId ? "selected" : ""}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => selectApplicationFromList(app.applicationId)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              selectApplicationFromList(app.applicationId);
+                            }
+                          }}
+                        >
+                          <div>
+                            <div className="title-row">
+                              <div className="title">
+                                {app.candidateName ? app.candidateName : "候補者名なし"}
+                              </div>
+                              <span className="round-tag">
+                                {app.latestRound > 0 ? `${app.latestRound}次` : "面接前"}
+                              </span>
+                              <span className={`status-tag ${statusClass}`}>
+                                {statusLabel}
+                              </span>
+                              <span className={`decision-tag ${app.latestDecision}`}>
+                                {decisionLabel(app.latestDecision)}
+                              </span>
                             </div>
-                            <span className="round-tag">
-                              {app.latestRound > 0 ? `${app.latestRound}次` : "面接前"}
-                            </span>
-                            <span
-                              className={`status-tag ${
-                                app.latestStatus === "完了" ? "done" : "pending"
-                              }`}
-                            >
-                              {app.latestStatus === "完了" ? "面接実施済み" : "面接未実施"}
-                            </span>
-                            <span className={`decision-tag ${app.latestDecision}`}>
-                              {decisionLabel(app.latestDecision)}
-                            </span>
-                          </div>
-                          <div className="meta">
-                            {app.interviewCount === 0
-                              ? "面接未実施"
-                              : `最新面接: ${app.latestRound}次 / 作成: ${formatDateTimeJst(
-                                  app.latestCreatedAt
-                                )}`}
+                            <div className="meta">
+                              {app.interviewCount === 0
+                                ? "面接未実施"
+                                : `最新面接: ${app.latestRound}次 / 作成: ${formatDateTimeJst(
+                                    app.latestCreatedAt
+                                  )}`}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2351,7 +2369,7 @@ export default function AdminDashboard({
                                     )}
                                   </div>
                                 ) : (
-                                  <div className="video-empty">録画がありません</div>
+                                  <div className="video-empty">{videoEmptyLabel}</div>
                                 )}
                               </div>
                               <div className="chat-panel">
@@ -3544,6 +3562,11 @@ export default function AdminDashboard({
           background: #f1f5f9;
           border-color: #94a3b8;
           color: #475569;
+        }
+        .status-tag.interrupted {
+          background: #fff7ed;
+          border-color: #fb923c;
+          color: #c2410c;
         }
         .decision-tag {
           padding: 4px 10px;
