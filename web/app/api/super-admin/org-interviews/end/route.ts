@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import type { InterviewStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { clients } from "@/lib/livekit";
 import { refreshOrgSubscription } from "@/lib/subscription";
@@ -7,7 +8,11 @@ import { isSuperAdminOrgId } from "@/lib/super-admin";
 
 export const runtime = "nodejs";
 
-const ACTIVE_INTERVIEW_STATUSES = ["used", "recording", "ending"] as const;
+const ACTIVE_INTERVIEW_STATUSES: InterviewStatus[] = [
+  "used",
+  "recording",
+  "ending"
+];
 const MIN_BILLABLE_DURATION_SEC = 60;
 
 const normalizeOrgId = (value: unknown) =>

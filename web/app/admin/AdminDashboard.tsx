@@ -78,10 +78,10 @@ type PromptTemplate = {
 };
 
 const getTemplateSeedBody = (templates: PromptTemplate[]) => {
-  const orgDefault = templates.find((row) => row.isDefault && !row.isShared);
-  if (orgDefault) return orgDefault.body;
   const sharedDefault = templates.find((row) => row.isDefault && row.isShared);
   if (sharedDefault) return sharedDefault.body;
+  const orgDefault = templates.find((row) => row.isDefault && !row.isShared);
+  if (orgDefault) return orgDefault.body;
   return DEFAULT_INTERVIEW_PROMPT;
 };
 
@@ -209,6 +209,7 @@ export default function AdminDashboard({
       isShared: Boolean(row.isShared)
     }))
   );
+  const templateSeedBody = useMemo(() => getTemplateSeedBody(templates), [templates]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
@@ -696,7 +697,7 @@ export default function AdminDashboard({
     setTemplateEditError(null);
     if (!templateEditorId) {
       setTemplateEditName("");
-      setTemplateEditBody(getTemplateSeedBody(templates));
+      setTemplateEditBody(templateSeedBody);
       setTemplateEditDefault(false);
       return;
     }
@@ -713,7 +714,7 @@ export default function AdminDashboard({
     setTemplateEditError(null);
     if (!templateId) {
       setTemplateEditName("");
-      setTemplateEditBody(getTemplateSeedBody(templates));
+      setTemplateEditBody(templateSeedBody);
       setTemplateEditDefault(false);
       return;
     }
@@ -1514,6 +1515,11 @@ export default function AdminDashboard({
       setPrompt(defaultTemplate.body);
     }
   }, [defaultTemplate, selectedTemplateId, prompt]);
+  useEffect(() => {
+    if (templateEditorId) return;
+    if (templateEditName.trim() || templateEditDefault) return;
+    setTemplateEditBody(templateSeedBody);
+  }, [templateSeedBody, templateEditorId, templateEditName, templateEditDefault]);
   const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
   const nextBillingText = billingInfo
@@ -2695,7 +2701,7 @@ export default function AdminDashboard({
                           value={templateEditBody}
                           onChange={(e) => setTemplateEditBody(e.target.value)}
                           placeholder="テンプレート本文を入力してください"
-                          readOnly={isSharedTemplate}
+                          readOnly={isSharedTemplate || !templateEditorId}
                         />
                       </div>
                       <div className="form-row">

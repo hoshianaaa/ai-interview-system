@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import {
   calcOverageYen,
@@ -119,6 +119,8 @@ const formatTemplateLabel = (template: PromptTemplate) =>
 const getTemplateSeedBody = (templates: PromptTemplate[]) =>
   templates.find((row) => row.isDefault)?.body ?? DEFAULT_INTERVIEW_PROMPT;
 
+const DEFAULT_SHARED_TEMPLATE_NAME = "共通デフォルト";
+
 const NONE_PLAN_VALUE = "none" as const;
 type PlanSelectValue = OrgPlan | typeof NONE_PLAN_VALUE;
 
@@ -169,9 +171,8 @@ export default function SuperAdminDashboard({
   );
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
-  const [templateEditBody, setTemplateEditBody] = useState(() =>
-    getTemplateSeedBody(promptTemplates)
-  );
+  const initialSeedBody = getTemplateSeedBody(promptTemplates);
+  const [templateEditBody, setTemplateEditBody] = useState(initialSeedBody);
   const [templateEditDefault, setTemplateEditDefault] = useState(false);
   const [templateEditError, setTemplateEditError] = useState<string | null>(null);
   const [templateEditSaving, setTemplateEditSaving] = useState(false);
@@ -216,6 +217,29 @@ export default function SuperAdminDashboard({
     Record<string, string | null>
   >({});
 
+  const sharedDefaultTemplate = useMemo(
+    () => templates.find((row) => row.isDefault) ?? null,
+    [templates]
+  );
+  const templateSeedBody = sharedDefaultTemplate?.body ?? DEFAULT_INTERVIEW_PROMPT;
+  const prevSeedBodyRef = useRef(templateSeedBody);
+  const prevEditorIdRef = useRef(templateEditorId);
+
+  useEffect(() => {
+    if (templateEditorId) {
+      prevSeedBodyRef.current = templateSeedBody;
+      prevEditorIdRef.current = templateEditorId;
+      return;
+    }
+    const becameDeselected = Boolean(prevEditorIdRef.current);
+    const seedChanged = templateSeedBody !== prevSeedBodyRef.current;
+    if (becameDeselected || seedChanged) {
+      setTemplateEditBody(templateSeedBody);
+    }
+    prevSeedBodyRef.current = templateSeedBody;
+    prevEditorIdRef.current = templateEditorId;
+  }, [templateSeedBody, templateEditorId]);
+
   const sortedRows = useMemo(
     () =>
       [...rows].sort((a, b) =>
@@ -246,12 +270,16 @@ export default function SuperAdminDashboard({
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
       templateEditDefault !== selectedTemplate.isDefault
-    : Boolean(
-        templateEditName.trim() || templateEditBody.trim() || templateEditDefault
-      );
+    : Boolean(templateEditName.trim() || templateEditBody.trim() || templateEditDefault);
+  const templateEditBodyTrimmed = templateEditBody.trim();
+  const templateSeedBodyTrimmed = templateSeedBody.trim();
+  const isSeedDirty = templateEditBodyTrimmed !== templateSeedBodyTrimmed;
+  const isEditingSeed = !templateEditorId && !templateEditName.trim();
   const canSaveTemplate =
-    Boolean(templateEditName.trim() && templateEditBody.trim()) &&
-    (selectedTemplate ? templateDirty : true);
+    Boolean(templateEditBodyTrimmed) &&
+    (selectedTemplate
+      ? templateDirty
+      : Boolean(templateEditName.trim()) || (isEditingSeed && isSeedDirty));
 
   const applySubscriptionUpdate = (next: OrgSubscriptionResponse) => {
     if (!("orgSubscription" in next) || !next.orgSubscription) return;
@@ -742,7 +770,7 @@ export default function SuperAdminDashboard({
           ...row,
           isDefault: Boolean(row.isDefault)
         }));
-        const seedBody = getTemplateSeedBody(nextTemplates);
+        const nextSeedBody = getTemplateSeedBody(nextTemplates);
         setTemplates(nextTemplates);
         if (
           templateEditorId &&
@@ -750,7 +778,7 @@ export default function SuperAdminDashboard({
         ) {
           setTemplateEditorId("");
           setTemplateEditName("");
-          setTemplateEditBody(seedBody);
+          setTemplateEditBody(nextSeedBody);
           setTemplateEditDefault(false);
         }
       } else if (data.error) {
@@ -764,7 +792,8 @@ export default function SuperAdminDashboard({
   const saveTemplate = async () => {
     const name = templateEditName.trim();
     const body = templateEditBody.trim();
-    if (!name) {
+    const isSeedUpdate = !templateEditorId && !name && body !== templateSeedBodyTrimmed;
+    if (!name && !isSeedUpdate) {
       setTemplateEditError("テンプレート名を入力してください");
       return;
     }
@@ -775,12 +804,68 @@ export default function SuperAdminDashboard({
     setTemplateEditSaving(true);
     setTemplateEditError(null);
     try {
-      const isUpdate = Boolean(templateEditorId);
+      if (isSeedUpdate) {
+        const defaultTemplate = sharedDefaultTemplate;
+        const fallbackTemplate =
+          defaultTemplate ??
+          templates.find((row) => row.name === DEFAULT_SHARED_TEMPLATE_NAME);
+        const seedRes = await fetch("/api/super-admin/prompt-templates", {
+          method: fallbackTemplate ? "PATCH" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            templateId: fallbackTemplate?.templateId,
+            name: fallbackTemplate?.name ?? DEFAULT_SHARED_TEMPLATE_NAME,
+            body,
+            isDefault: true
+          })
+        });
+        const seedData = (await seedRes.json()) as {
+          template?: PromptTemplate;
+          error?: string;
+        };
+        if (seedData.template) {
+          const normalized = {
+            ...seedData.template,
+            isDefault: Boolean(seedData.template.isDefault)
+          };
+          setTemplates((prev) => {
+            const filtered = prev.filter(
+              (row) => row.templateId !== normalized.templateId
+            );
+            return [normalized, ...filtered];
+          });
+          setTemplateEditorId("");
+          setTemplateEditName("");
+          setTemplateEditBody(normalized.body);
+          setTemplateEditDefault(normalized.isDefault);
+          return;
+        }
+        if (seedRes.status === 409) {
+          setTemplateEditError("同名のテンプレートが既にあります");
+          return;
+        }
+        setTemplateEditError("保存に失敗しました");
+        return;
+      }
+      const existing =
+        !templateEditorId && templates.find((row) => row.name === name);
+      let targetTemplateId = templateEditorId;
+      let isUpdate = Boolean(templateEditorId);
+      if (existing) {
+        const ok = window.confirm(
+          "同名のテンプレートがあります。内容を更新しますか？"
+        );
+        if (!ok) {
+          return;
+        }
+        isUpdate = true;
+        targetTemplateId = existing.templateId;
+      }
       const res = await fetch("/api/super-admin/prompt-templates", {
         method: isUpdate ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          templateId: templateEditorId || undefined,
+          templateId: targetTemplateId || undefined,
           name,
           body,
           isDefault: templateEditDefault
@@ -793,7 +878,9 @@ export default function SuperAdminDashboard({
           isDefault: Boolean(data.template.isDefault)
         };
         setTemplates((prev) => {
-          const filtered = prev.filter((row) => row.templateId !== normalized.templateId);
+          const filtered = prev.filter(
+            (row) => row.templateId !== normalized.templateId
+          );
           return [normalized, ...filtered];
         });
         setTemplateEditorId(normalized.templateId);
@@ -831,7 +918,7 @@ export default function SuperAdminDashboard({
         setTemplates(nextTemplates);
         setTemplateEditorId("");
         setTemplateEditName("");
-        setTemplateEditBody(getTemplateSeedBody(nextTemplates));
+        setTemplateEditBody(templateSeedBody);
         setTemplateEditDefault(false);
         return;
       }
@@ -845,7 +932,7 @@ export default function SuperAdminDashboard({
     setTemplateEditError(null);
     if (!templateEditorId) {
       setTemplateEditName("");
-      setTemplateEditBody(getTemplateSeedBody(templates));
+      setTemplateEditBody(templateSeedBody);
       setTemplateEditDefault(false);
       return;
     }
@@ -862,7 +949,7 @@ export default function SuperAdminDashboard({
     setTemplateEditError(null);
     if (!templateId) {
       setTemplateEditName("");
-      setTemplateEditBody(getTemplateSeedBody(templates));
+      setTemplateEditBody(templateSeedBody);
       setTemplateEditDefault(false);
       return;
     }
