@@ -119,6 +119,10 @@ type CreateSuccessResponse = {
 
 type CreateResponse = CreateSuccessResponse | { error: string };
 
+type EndInterviewResponse =
+  | { interviewId: string; status: string; hasRecording: boolean }
+  | { error: string };
+
 const isCreateSuccess = (
   value: CreateResponse | null
 ): value is CreateSuccessResponse => Boolean(value && "url" in value);
@@ -143,6 +147,7 @@ const DEFAULT_EXPIRES_WEEKS = 1;
 const MAX_DURATION_MIN = 10;
 const INTERVIEW_STATUS_OPTIONS = [
   "実施待ち",
+  "実施中",
   "完了",
   "途中終了",
   "未参加",
@@ -229,6 +234,12 @@ export default function AdminDashboard({
     useState<CreateResponse | null>(null);
   const [deletingInterview, setDeletingInterview] = useState(false);
   const [deletingApplication, setDeletingApplication] = useState(false);
+  const [endingInterviewById, setEndingInterviewById] = useState<
+    Record<string, boolean>
+  >({});
+  const [endingInterviewErrorById, setEndingInterviewErrorById] = useState<
+    Record<string, string | null>
+  >({});
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [activePanel, setActivePanel] = useState<"create" | "applications" | "settings">(
     "applications"
@@ -1078,6 +1089,47 @@ export default function AdminDashboard({
     }
   }
 
+  async function endInterviewFromList(interviewId: string) {
+    if (endingInterviewById[interviewId]) return;
+    const ok = window.confirm("面接を途中終了しますか？");
+    if (!ok) return;
+    setEndingInterviewErrorById((prev) => ({ ...prev, [interviewId]: null }));
+    setEndingInterviewById((prev) => ({ ...prev, [interviewId]: true }));
+    try {
+      const res = await fetch("/api/admin/interview/end", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interviewId })
+      });
+      const data = (await res.json()) as EndInterviewResponse;
+      if (!res.ok || "error" in data) {
+        setEndingInterviewErrorById((prev) => ({
+          ...prev,
+          [interviewId]: "面接の終了に失敗しました。"
+        }));
+        return;
+      }
+      setRows((prev) =>
+        prev.map((row) =>
+          row.interviewId === data.interviewId
+            ? {
+                ...row,
+                status: data.status,
+                hasRecording: data.hasRecording
+              }
+            : row
+        )
+      );
+    } catch {
+      setEndingInterviewErrorById((prev) => ({
+        ...prev,
+        [interviewId]: "面接の終了に失敗しました。"
+      }));
+    } finally {
+      setEndingInterviewById((prev) => ({ ...prev, [interviewId]: false }));
+    }
+  }
+
   async function deleteApplication() {
     if (!selectedApplication) return;
     const ok = window.confirm("この応募を削除しますか？関連する面接も削除されます。");
@@ -1301,7 +1353,8 @@ export default function AdminDashboard({
     () => templates.find((row) => row.isDefault) ?? null,
     [templates]
   );
-  const isDecisionLocked = selectedRow?.status === "実施待ち";
+  const isDecisionLocked =
+    selectedRow?.status === "実施待ち" || selectedRow?.status === "実施中";
   const normalizedApplicationName = editApplicationCandidateName.trim();
   const normalizedApplicationEmail = editApplicationEmail.trim();
   const normalizedApplicationNotes = editApplicationNotes.trim();
@@ -1981,15 +2034,33 @@ export default function AdminDashboard({
                       const statusLabel =
                         app.latestStatus === "完了"
                           ? "面接実施済み"
+                          : app.latestStatus === "実施中"
+                            ? "面接実施中"
                           : app.latestStatus === "途中終了"
                             ? "面接途中終了"
                             : "面接未実施";
                       const statusClass =
                         app.latestStatus === "完了"
                           ? "done"
+                          : app.latestStatus === "実施中"
+                            ? "inprogress"
                           : app.latestStatus === "途中終了"
                             ? "interrupted"
                             : "pending";
+                      const activeInterview = app.interviews
+                        .filter((row) => row.status === "実施中")
+                        .sort(
+                          (a, b) =>
+                            new Date(b.createdAt).getTime() -
+                            new Date(a.createdAt).getTime()
+                        )[0];
+                      const activeInterviewId = activeInterview?.interviewId ?? null;
+                      const isEnding = activeInterviewId
+                        ? endingInterviewById[activeInterviewId] ?? false
+                        : false;
+                      const endError = activeInterviewId
+                        ? endingInterviewErrorById[activeInterviewId] ?? null
+                        : null;
                       return (
                         <div
                           key={app.applicationId}
@@ -2004,7 +2075,7 @@ export default function AdminDashboard({
                             }
                           }}
                         >
-                          <div>
+                          <div className="row-content">
                             <div className="title-row">
                               <div className="title">
                                 {app.candidateName ? app.candidateName : "候補者名なし"}
@@ -2027,6 +2098,23 @@ export default function AdminDashboard({
                                   )}`}
                             </div>
                           </div>
+                          {activeInterview && (
+                            <div className="row-actions">
+                              <button
+                                className="danger"
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  void endInterviewFromList(activeInterview.interviewId);
+                                }}
+                                disabled={isEnding}
+                              >
+                                {isEnding ? "終了中..." : "面接を途中終了"}
+                              </button>
+                              {endError && <span className="row-error">{endError}</span>}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -3511,8 +3599,25 @@ export default function AdminDashboard({
           background: #f6f8fc;
           border: 1px solid #d8e1f0;
           display: grid;
-          gap: 6px;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          column-gap: 12px;
+          row-gap: 6px;
           cursor: pointer;
+        }
+        .row-content {
+          display: grid;
+          gap: 6px;
+        }
+        .row-actions {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 6px;
+        }
+        .row-error {
+          font-size: 11px;
+          color: #b42318;
         }
         .row.selected {
           border-color: #1f4fb2;
@@ -3557,6 +3662,11 @@ export default function AdminDashboard({
           background: #ecfdf3;
           border-color: #34d399;
           color: #047857;
+        }
+        .status-tag.inprogress {
+          background: #e0f2fe;
+          border-color: #38bdf8;
+          color: #0c4a6e;
         }
         .status-tag.pending {
           background: #f1f5f9;
@@ -3965,6 +4075,12 @@ export default function AdminDashboard({
           }
           .interview-top-row {
             flex-direction: column;
+          }
+          .row {
+            grid-template-columns: 1fr;
+          }
+          .row-actions {
+            align-items: flex-start;
           }
           .application-split {
             grid-template-columns: 1fr;
