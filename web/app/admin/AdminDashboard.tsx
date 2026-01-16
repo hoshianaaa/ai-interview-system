@@ -210,8 +210,10 @@ export default function AdminDashboard({
   );
   const [newCandidateName, setNewCandidateName] = useState("");
   const [newCandidateEmail, setNewCandidateEmail] = useState("");
-  const [prompt, setPrompt] = useState(DEFAULT_INTERVIEW_PROMPT);
-  const [openingMessage, setOpeningMessage] = useState("");
+  const [prompt, setPrompt] = useState(() => getTemplateSeedBody(promptTemplates));
+  const [openingMessage, setOpeningMessage] = useState(() =>
+    getTemplateSeedOpeningMessage(promptTemplates)
+  );
   const [templates, setTemplates] = useState(
     promptTemplates.map((row) => ({
       ...row,
@@ -224,6 +226,8 @@ export default function AdminDashboard({
     () => getTemplateSeedOpeningMessage(templates),
     [templates]
   );
+  const prevSeedPromptRef = useRef(templateSeedBody);
+  const prevSeedOpeningMessageRef = useRef(templateSeedOpeningMessage);
   const visibleTemplates = useMemo(
     () =>
       templates.filter(
@@ -594,8 +598,8 @@ export default function AdminDashboard({
           !data.templates.some((row) => row.templateId === selectedTemplateId)
         ) {
           setSelectedTemplateId("");
-          setPrompt(DEFAULT_INTERVIEW_PROMPT);
-          setOpeningMessage("");
+          setPrompt(seedBody);
+          setOpeningMessage(seedOpeningMessage);
         }
       } else if (data.error) {
         setTemplateEditError("テンプレートの取得に失敗しました");
@@ -681,15 +685,18 @@ export default function AdminDashboard({
         const nextTemplates = templates.filter(
           (row) => row.templateId !== templateEditorId
         );
+        const seedBody = getTemplateSeedBody(nextTemplates);
+        const seedOpeningMessage = getTemplateSeedOpeningMessage(nextTemplates);
         setTemplates(nextTemplates);
         if (selectedTemplateId === templateEditorId) {
           setSelectedTemplateId("");
-          setPrompt(DEFAULT_INTERVIEW_PROMPT);
+          setPrompt(seedBody);
+          setOpeningMessage(seedOpeningMessage);
         }
         setTemplateEditorId("");
         setTemplateEditName("");
-        setTemplateEditBody(getTemplateSeedBody(nextTemplates));
-        setTemplateEditOpeningMessage(getTemplateSeedOpeningMessage(nextTemplates));
+        setTemplateEditBody(seedBody);
+        setTemplateEditOpeningMessage(seedOpeningMessage);
         setTemplateEditDefault(false);
         return;
       }
@@ -790,13 +797,15 @@ export default function AdminDashboard({
   function applyTemplate(templateId: string) {
     setSelectedTemplateId(templateId);
     if (!templateId) {
-      setPrompt(DEFAULT_INTERVIEW_PROMPT);
-      setOpeningMessage("");
+      setPrompt(templateSeedBody);
+      setOpeningMessage(templateSeedOpeningMessage);
       return;
     }
     const template = templates.find((row) => row.templateId === templateId);
-    setPrompt(template ? template.body : DEFAULT_INTERVIEW_PROMPT);
-    setOpeningMessage(template?.openingMessage ?? "");
+    setPrompt(template ? template.body : templateSeedBody);
+    setOpeningMessage(
+      template?.openingMessage ?? templateSeedOpeningMessage
+    );
   }
 
   function selectApplication(applicationId: string) {
@@ -1575,13 +1584,48 @@ export default function AdminDashboard({
   }, [applicationsView, selectedApplication, selectedId]);
 
   useEffect(() => {
-    if (selectedTemplateId || prompt.trim() !== DEFAULT_INTERVIEW_PROMPT.trim()) return;
+    const prevSeedPrompt = prevSeedPromptRef.current;
+    const prevSeedOpening = prevSeedOpeningMessageRef.current;
+    const seedChanged =
+      templateSeedBody !== prevSeedPrompt ||
+      templateSeedOpeningMessage !== prevSeedOpening;
+    if (seedChanged) {
+      const usingSeed =
+        !selectedTemplateId &&
+        prompt.trim() === prevSeedPrompt.trim() &&
+        openingMessage.trim() === prevSeedOpening.trim();
+      if (usingSeed) {
+        setPrompt(templateSeedBody);
+        setOpeningMessage(templateSeedOpeningMessage);
+      }
+    }
+    prevSeedPromptRef.current = templateSeedBody;
+    prevSeedOpeningMessageRef.current = templateSeedOpeningMessage;
+  }, [
+    templateSeedBody,
+    templateSeedOpeningMessage,
+    selectedTemplateId,
+    prompt,
+    openingMessage
+  ]);
+
+  useEffect(() => {
+    if (selectedTemplateId) return;
+    if (prompt.trim() !== templateSeedBody.trim()) return;
+    if (openingMessage.trim() !== templateSeedOpeningMessage.trim()) return;
     if (defaultTemplate) {
       setSelectedTemplateId(defaultTemplate.templateId);
       setPrompt(defaultTemplate.body);
       setOpeningMessage(defaultTemplate.openingMessage ?? "");
     }
-  }, [defaultTemplate, selectedTemplateId, prompt]);
+  }, [
+    defaultTemplate,
+    selectedTemplateId,
+    prompt,
+    openingMessage,
+    templateSeedBody,
+    templateSeedOpeningMessage
+  ]);
   useEffect(() => {
     if (templateEditorId) return;
     if (templateEditName.trim() || templateEditDefault) return;
