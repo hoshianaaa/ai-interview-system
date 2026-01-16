@@ -31,6 +31,7 @@ type PromptTemplateRow = {
   templateId: string;
   name: string;
   body: string;
+  openingMessage: string | null;
   isDefault: boolean;
   createdAt: string;
 };
@@ -104,6 +105,7 @@ export default async function SuperAdminPage() {
     templateId: row.templateId,
     name: row.name,
     body: row.body,
+    openingMessage: row.openingMessage ?? null,
     isDefault: row.isDefault,
     createdAt: row.createdAt.toISOString()
   }));

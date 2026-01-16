@@ -70,6 +70,23 @@ def resolve_prompt(ctx: JobContext) -> str:
     return DEFAULT_INTERVIEW_PROMPT
 
 
+def resolve_opening_message(ctx: JobContext) -> str | None:
+    metadata = getattr(ctx.job, "metadata", "") or ""
+    if not isinstance(metadata, str):
+        metadata = str(metadata)
+    if not metadata:
+        return None
+    try:
+        parsed = json.loads(metadata)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(parsed, dict):
+        opening_message = parsed.get("openingMessage")
+        if isinstance(opening_message, str) and opening_message.strip():
+            return opening_message.strip()
+    return None
+
+
 _http_port_raw = os.getenv("AGENT_HTTP_PORT", "").strip()
 _http_port = int(_http_port_raw) if _http_port_raw else 8081
 server = AgentServer(port=_http_port)
@@ -167,10 +184,17 @@ async def entrypoint(ctx: JobContext):
             logger.warning("Failed to register transcript handlers: %s", exc)
 
     prompt = resolve_prompt(ctx)
+    opening_message = resolve_opening_message(ctx)
     await session.start(
         agent=DefaultInterviewAgent(prompt=prompt),
         room=ctx.room,
     )
+
+    if opening_message:
+        try:
+            await session.say(opening_message)
+        except Exception as exc:
+            logger.warning("Failed to send opening message: %s", exc)
 
     logger.info("Agent session started for room=%s", ctx.room.name)
 

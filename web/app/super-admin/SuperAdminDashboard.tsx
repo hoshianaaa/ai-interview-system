@@ -10,7 +10,7 @@ import {
   type OrgPlan
 } from "@/lib/billing";
 import { formatDateJst } from "@/lib/datetime";
-import { DEFAULT_INTERVIEW_PROMPT } from "@/lib/prompts";
+import { DEFAULT_INTERVIEW_PROMPT, SHARED_TEMPLATE_SEED_NAME } from "@/lib/prompts";
 
 type OrgSubscriptionRow = {
   orgId: string;
@@ -38,6 +38,7 @@ type PromptTemplate = {
   templateId: string;
   name: string;
   body: string;
+  openingMessage: string | null;
   isDefault: boolean;
   createdAt: string;
 };
@@ -113,13 +114,17 @@ const planLabel = (planId: OrgPlan | null) => {
   return planId;
 };
 
-const formatTemplateLabel = (template: PromptTemplate) =>
-  `${template.name}${template.isDefault ? "（デフォルト）" : ""}`;
+const formatTemplateLabel = (template: PromptTemplate) => template.name;
 
-const getTemplateSeedBody = (templates: PromptTemplate[]) =>
-  templates.find((row) => row.isDefault)?.body ?? DEFAULT_INTERVIEW_PROMPT;
+const getTemplateSeedBody = (templates: PromptTemplate[]) => {
+  const seed = templates.find((row) => row.name === SHARED_TEMPLATE_SEED_NAME);
+  return seed ? seed.body : DEFAULT_INTERVIEW_PROMPT;
+};
 
-const DEFAULT_SHARED_TEMPLATE_NAME = "共通デフォルト";
+const getTemplateSeedOpeningMessage = (templates: PromptTemplate[]) => {
+  const seed = templates.find((row) => row.name === SHARED_TEMPLATE_SEED_NAME);
+  return seed?.openingMessage ?? "";
+};
 
 const NONE_PLAN_VALUE = "none" as const;
 type PlanSelectValue = OrgPlan | typeof NONE_PLAN_VALUE;
@@ -172,8 +177,11 @@ export default function SuperAdminDashboard({
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
   const initialSeedBody = getTemplateSeedBody(promptTemplates);
+  const initialSeedOpeningMessage = getTemplateSeedOpeningMessage(promptTemplates);
   const [templateEditBody, setTemplateEditBody] = useState(initialSeedBody);
-  const [templateEditDefault, setTemplateEditDefault] = useState(false);
+  const [templateEditOpeningMessage, setTemplateEditOpeningMessage] = useState(
+    initialSeedOpeningMessage
+  );
   const [templateEditError, setTemplateEditError] = useState<string | null>(null);
   const [templateEditSaving, setTemplateEditSaving] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(false);
@@ -217,28 +225,56 @@ export default function SuperAdminDashboard({
     Record<string, string | null>
   >({});
 
-  const sharedDefaultTemplate = useMemo(
-    () => templates.find((row) => row.isDefault) ?? null,
+  const visibleTemplates = useMemo(
+    () => templates.filter((row) => row.name !== SHARED_TEMPLATE_SEED_NAME),
     [templates]
   );
-  const templateSeedBody = sharedDefaultTemplate?.body ?? DEFAULT_INTERVIEW_PROMPT;
+  const seedTemplate = useMemo(
+    () => templates.find((row) => row.name === SHARED_TEMPLATE_SEED_NAME) ?? null,
+    [templates]
+  );
+  const templateSeedBody = useMemo(
+    () => getTemplateSeedBody(templates),
+    [templates]
+  );
+  const templateSeedOpeningMessage = useMemo(
+    () => getTemplateSeedOpeningMessage(templates),
+    [templates]
+  );
   const prevSeedBodyRef = useRef(templateSeedBody);
+  const prevSeedOpeningMessageRef = useRef(templateSeedOpeningMessage);
   const prevEditorIdRef = useRef(templateEditorId);
 
   useEffect(() => {
     if (templateEditorId) {
       prevSeedBodyRef.current = templateSeedBody;
+      prevSeedOpeningMessageRef.current = templateSeedOpeningMessage;
+      prevEditorIdRef.current = templateEditorId;
+      return;
+    }
+    if (templateEditName.trim()) {
+      prevSeedBodyRef.current = templateSeedBody;
+      prevSeedOpeningMessageRef.current = templateSeedOpeningMessage;
       prevEditorIdRef.current = templateEditorId;
       return;
     }
     const becameDeselected = Boolean(prevEditorIdRef.current);
     const seedChanged = templateSeedBody !== prevSeedBodyRef.current;
-    if (becameDeselected || seedChanged) {
+    const seedOpeningMessageChanged =
+      templateSeedOpeningMessage !== prevSeedOpeningMessageRef.current;
+    if (becameDeselected || seedChanged || seedOpeningMessageChanged) {
       setTemplateEditBody(templateSeedBody);
+      setTemplateEditOpeningMessage(templateSeedOpeningMessage);
     }
     prevSeedBodyRef.current = templateSeedBody;
+    prevSeedOpeningMessageRef.current = templateSeedOpeningMessage;
     prevEditorIdRef.current = templateEditorId;
-  }, [templateSeedBody, templateEditorId]);
+  }, [
+    templateSeedBody,
+    templateSeedOpeningMessage,
+    templateEditorId,
+    templateEditName
+  ]);
 
   const sortedRows = useMemo(
     () =>
@@ -269,11 +305,19 @@ export default function SuperAdminDashboard({
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
-      templateEditDefault !== selectedTemplate.isDefault
-    : Boolean(templateEditName.trim() || templateEditBody.trim() || templateEditDefault);
+      templateEditOpeningMessage !== (selectedTemplate.openingMessage ?? "")
+    : Boolean(
+        templateEditName.trim() ||
+          templateEditBody.trim() ||
+          templateEditOpeningMessage.trim()
+      );
   const templateEditBodyTrimmed = templateEditBody.trim();
+  const templateEditOpeningMessageTrimmed = templateEditOpeningMessage.trim();
   const templateSeedBodyTrimmed = templateSeedBody.trim();
-  const isSeedDirty = templateEditBodyTrimmed !== templateSeedBodyTrimmed;
+  const templateSeedOpeningMessageTrimmed = templateSeedOpeningMessage.trim();
+  const isSeedDirty =
+    templateEditBodyTrimmed !== templateSeedBodyTrimmed ||
+    templateEditOpeningMessageTrimmed !== templateSeedOpeningMessageTrimmed;
   const isEditingSeed = !templateEditorId && !templateEditName.trim();
   const canSaveTemplate =
     Boolean(templateEditBodyTrimmed) &&
@@ -771,6 +815,7 @@ export default function SuperAdminDashboard({
           isDefault: Boolean(row.isDefault)
         }));
         const nextSeedBody = getTemplateSeedBody(nextTemplates);
+        const nextSeedOpeningMessage = getTemplateSeedOpeningMessage(nextTemplates);
         setTemplates(nextTemplates);
         if (
           templateEditorId &&
@@ -779,7 +824,7 @@ export default function SuperAdminDashboard({
           setTemplateEditorId("");
           setTemplateEditName("");
           setTemplateEditBody(nextSeedBody);
-          setTemplateEditDefault(false);
+          setTemplateEditOpeningMessage(nextSeedOpeningMessage);
         }
       } else if (data.error) {
         setTemplateEditError("テンプレートの取得に失敗しました");
@@ -792,7 +837,12 @@ export default function SuperAdminDashboard({
   const saveTemplate = async () => {
     const name = templateEditName.trim();
     const body = templateEditBody.trim();
-    const isSeedUpdate = !templateEditorId && !name && body !== templateSeedBodyTrimmed;
+    const openingMessageValue = templateEditOpeningMessage.trim();
+    const isSeedUpdate =
+      !templateEditorId &&
+      !name &&
+      (body !== templateSeedBodyTrimmed ||
+        openingMessageValue !== templateSeedOpeningMessageTrimmed);
     if (!name && !isSeedUpdate) {
       setTemplateEditError("テンプレート名を入力してください");
       return;
@@ -805,18 +855,15 @@ export default function SuperAdminDashboard({
     setTemplateEditError(null);
     try {
       if (isSeedUpdate) {
-        const defaultTemplate = sharedDefaultTemplate;
-        const fallbackTemplate =
-          defaultTemplate ??
-          templates.find((row) => row.name === DEFAULT_SHARED_TEMPLATE_NAME);
         const seedRes = await fetch("/api/super-admin/prompt-templates", {
-          method: fallbackTemplate ? "PATCH" : "POST",
+          method: seedTemplate ? "PATCH" : "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            templateId: fallbackTemplate?.templateId,
-            name: fallbackTemplate?.name ?? DEFAULT_SHARED_TEMPLATE_NAME,
+            templateId: seedTemplate?.templateId,
+            name: SHARED_TEMPLATE_SEED_NAME,
             body,
-            isDefault: true
+            openingMessage: openingMessageValue,
+            isDefault: false
           })
         });
         const seedData = (await seedRes.json()) as {
@@ -837,7 +884,7 @@ export default function SuperAdminDashboard({
           setTemplateEditorId("");
           setTemplateEditName("");
           setTemplateEditBody(normalized.body);
-          setTemplateEditDefault(normalized.isDefault);
+          setTemplateEditOpeningMessage(normalized.openingMessage ?? "");
           return;
         }
         if (seedRes.status === 409) {
@@ -868,7 +915,7 @@ export default function SuperAdminDashboard({
           templateId: targetTemplateId || undefined,
           name,
           body,
-          isDefault: templateEditDefault
+          openingMessage: openingMessageValue
         })
       });
       const data = (await res.json()) as { template?: PromptTemplate; error?: string };
@@ -886,7 +933,7 @@ export default function SuperAdminDashboard({
         setTemplateEditorId(normalized.templateId);
         setTemplateEditName(normalized.name);
         setTemplateEditBody(normalized.body);
-        setTemplateEditDefault(normalized.isDefault);
+        setTemplateEditOpeningMessage(normalized.openingMessage ?? "");
         return;
       }
       if (res.status === 409) {
@@ -919,7 +966,7 @@ export default function SuperAdminDashboard({
         setTemplateEditorId("");
         setTemplateEditName("");
         setTemplateEditBody(templateSeedBody);
-        setTemplateEditDefault(false);
+        setTemplateEditOpeningMessage(templateSeedOpeningMessage);
         return;
       }
       setTemplateEditError("削除に失敗しました");
@@ -933,14 +980,14 @@ export default function SuperAdminDashboard({
     if (!templateEditorId) {
       setTemplateEditName("");
       setTemplateEditBody(templateSeedBody);
-      setTemplateEditDefault(false);
+      setTemplateEditOpeningMessage(templateSeedOpeningMessage);
       return;
     }
     const template = templates.find((row) => row.templateId === templateEditorId);
     if (template) {
       setTemplateEditName(template.name);
       setTemplateEditBody(template.body);
-      setTemplateEditDefault(Boolean(template.isDefault));
+      setTemplateEditOpeningMessage(template.openingMessage ?? "");
     }
   };
 
@@ -950,14 +997,14 @@ export default function SuperAdminDashboard({
     if (!templateId) {
       setTemplateEditName("");
       setTemplateEditBody(templateSeedBody);
-      setTemplateEditDefault(false);
+      setTemplateEditOpeningMessage(templateSeedOpeningMessage);
       return;
     }
     const template = templates.find((row) => row.templateId === templateId);
     if (template) {
       setTemplateEditName(template.name);
       setTemplateEditBody(template.body);
-      setTemplateEditDefault(Boolean(template.isDefault));
+      setTemplateEditOpeningMessage(template.openingMessage ?? "");
     }
   };
 
@@ -1070,7 +1117,7 @@ export default function SuperAdminDashboard({
                 onChange={(e) => selectTemplateForEdit(e.target.value)}
               >
                 <option value="">新規テンプレート</option>
-                {templates.map((template) => (
+                {visibleTemplates.map((template) => (
                   <option key={template.templateId} value={template.templateId}>
                     {formatTemplateLabel(template)}
                   </option>
@@ -1104,15 +1151,12 @@ export default function SuperAdminDashboard({
             />
           </div>
           <div className="form-row">
-            <label>デフォルト設定</label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={templateEditDefault}
-                onChange={(e) => setTemplateEditDefault(e.target.checked)}
-              />
-              <span>このテンプレートをデフォルトにする</span>
-            </label>
+            <label>最初の発言</label>
+            <textarea
+              value={templateEditOpeningMessage}
+              onChange={(e) => setTemplateEditOpeningMessage(e.target.value)}
+              placeholder="面接の冒頭でAIが話す内容を入力してください"
+            />
           </div>
           {templateEditError && <p className="error">{templateEditError}</p>}
           <div className="edit-actions">

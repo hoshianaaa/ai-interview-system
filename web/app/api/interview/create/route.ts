@@ -44,6 +44,8 @@ export async function POST(req: Request) {
     typeof body.candidateEmail === "string" ? body.candidateEmail.trim() || null : null;
   const promptRaw = typeof body.prompt === "string" ? body.prompt : "";
   const promptTrimmed = promptRaw.trim();
+  const openingMessageRaw =
+    typeof body.openingMessage === "string" ? body.openingMessage.trim() : "";
   if (!applicationIdRaw && candidateName && candidateName.length > MAX_CANDIDATE_NAME) {
     return NextResponse.json({ error: "CANDIDATE_NAME_TOO_LONG" }, { status: 400 });
   }
@@ -56,7 +58,11 @@ export async function POST(req: Request) {
   if (promptTrimmed.length > MAX_PROMPT_CHARS) {
     return NextResponse.json({ error: "PROMPT_TOO_LONG" }, { status: 400 });
   }
+  if (openingMessageRaw.length > MAX_PROMPT_CHARS) {
+    return NextResponse.json({ error: "OPENING_MESSAGE_TOO_LONG" }, { status: 400 });
+  }
   const prompt = promptTrimmed ? promptTrimmed : DEFAULT_INTERVIEW_PROMPT;
+  const openingMessage = openingMessageRaw ? openingMessageRaw : null;
 
   let expiresInWeeks = parseDurationPart(body.expiresInWeeks, MAX_EXPIRES_WEEKS);
   let expiresInDays = parseDurationPart(body.expiresInDays, MAX_EXPIRES_DAYS);
@@ -73,15 +79,16 @@ export async function POST(req: Request) {
   const roomName = makeRoomName(interviewId);
 
   let result: {
-    interview: {
-      interviewId: string;
-      publicToken: string | null;
-      round: number;
-      createdAt: Date;
-      durationSec: number;
-      expiresAt: Date | null;
-      interviewPrompt: string | null;
-    };
+      interview: {
+        interviewId: string;
+        publicToken: string | null;
+        round: number;
+        createdAt: Date;
+        durationSec: number;
+        expiresAt: Date | null;
+        interviewPrompt: string | null;
+        openingMessage: string | null;
+      };
     applicationId: string;
     applicationCandidateName: string | null;
     applicationCandidateEmail: string | null;
@@ -189,6 +196,7 @@ export async function POST(req: Request) {
           round,
           candidateIdentity: makeCandidateIdentity(interviewId),
           interviewPrompt: prompt,
+          openingMessage,
           agentName: body.agentName ?? env.agentName,
           expiresAt
         }
@@ -202,7 +210,8 @@ export async function POST(req: Request) {
           createdAt: interview.createdAt,
           durationSec: interview.durationSec,
           expiresAt: interview.expiresAt ?? null,
-          interviewPrompt: interview.interviewPrompt ?? null
+          interviewPrompt: interview.interviewPrompt ?? null,
+          openingMessage: interview.openingMessage ?? null
         },
         applicationId,
         applicationCandidateName,
@@ -241,6 +250,7 @@ export async function POST(req: Request) {
     applicationCreatedAt: result.applicationRecord?.createdAt.toISOString() ?? null,
     applicationUpdatedAt: result.applicationRecord?.updatedAt.toISOString() ?? null,
     durationSec: result.interview.durationSec,
-    prompt: result.interview.interviewPrompt ?? null
+    prompt: result.interview.interviewPrompt ?? null,
+    openingMessage: result.interview.openingMessage ?? null
   });
 }

@@ -88,9 +88,15 @@ export async function POST(req: Request) {
     typeof updated.interviewPrompt === "string" && updated.interviewPrompt.trim()
       ? updated.interviewPrompt
       : DEFAULT_INTERVIEW_PROMPT;
+  const openingMessage =
+    typeof updated.openingMessage === "string" && updated.openingMessage.trim()
+      ? updated.openingMessage.trim()
+      : null;
   // Explicit dispatch: agent must be running and registered with matching agent_name
   const dispatchInfo = await dispatch.createDispatch(updated.roomName, updated.agentName, {
-    metadata: JSON.stringify({ prompt: dispatchPrompt })
+    metadata: JSON.stringify(
+      openingMessage ? { prompt: dispatchPrompt, openingMessage } : { prompt: dispatchPrompt }
+    )
   });
 
   await prisma.interview.update({

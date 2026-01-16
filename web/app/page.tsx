@@ -77,6 +77,7 @@ export default async function HomePage() {
         ? row.application.updatedAt.toISOString()
         : row.createdAt.toISOString(),
       prompt: row.interviewPrompt ?? null,
+      openingMessage: row.openingMessage ?? null,
       durationSec: row.durationSec,
       expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
       createdAt: row.createdAt.toISOString(),
@@ -95,6 +96,7 @@ export default async function HomePage() {
     templateId: row.templateId,
     name: row.name,
     body: row.body,
+    openingMessage: row.openingMessage ?? null,
     isDefault: row.isDefault,
     isShared: Boolean(SUPER_ADMIN_ORG_ID && row.orgId === SUPER_ADMIN_ORG_ID),
     createdAt: row.createdAt.toISOString()

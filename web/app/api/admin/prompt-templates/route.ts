@@ -28,6 +28,7 @@ export async function GET() {
       templateId: row.templateId,
       name: row.name,
       body: row.body,
+      openingMessage: row.openingMessage ?? null,
       isDefault: row.isDefault,
       isShared: Boolean(SUPER_ADMIN_ORG_ID && row.orgId === SUPER_ADMIN_ORG_ID),
       createdAt: row.createdAt.toISOString()
@@ -44,6 +45,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const promptBody = typeof body.body === "string" ? body.body.trim() : "";
+  const openingMessageRaw =
+    typeof body.openingMessage === "string" ? body.openingMessage.trim() : "";
   const isDefault = typeof body.isDefault === "boolean" ? body.isDefault : false;
 
   if (!name) {
@@ -57,6 +60,9 @@ export async function POST(req: Request) {
   }
   if (promptBody.length > MAX_TEMPLATE_BODY) {
     return NextResponse.json({ error: "BODY_TOO_LONG" }, { status: 400 });
+  }
+  if (openingMessageRaw.length > MAX_TEMPLATE_BODY) {
+    return NextResponse.json({ error: "OPENING_MESSAGE_TOO_LONG" }, { status: 400 });
   }
 
   const exists = await prisma.promptTemplate.findFirst({ where: { orgId, name } });
@@ -77,6 +83,7 @@ export async function POST(req: Request) {
         orgId,
         name,
         body: promptBody,
+        openingMessage: openingMessageRaw || null,
         isDefault
       }
     });
@@ -87,6 +94,7 @@ export async function POST(req: Request) {
       templateId: created.templateId,
       name: created.name,
       body: created.body,
+      openingMessage: created.openingMessage ?? null,
       isDefault: created.isDefault,
       isShared: Boolean(SUPER_ADMIN_ORG_ID && created.orgId === SUPER_ADMIN_ORG_ID),
       createdAt: created.createdAt.toISOString()
@@ -104,6 +112,8 @@ export async function PATCH(req: Request) {
   const templateId = typeof body.templateId === "string" ? body.templateId.trim() : "";
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const promptBody = typeof body.body === "string" ? body.body.trim() : "";
+  const openingMessageRaw =
+    typeof body.openingMessage === "string" ? body.openingMessage.trim() : "";
   const isDefault = typeof body.isDefault === "boolean" ? body.isDefault : null;
 
   if (!templateId) {
@@ -120,6 +130,9 @@ export async function PATCH(req: Request) {
   }
   if (promptBody.length > MAX_TEMPLATE_BODY) {
     return NextResponse.json({ error: "BODY_TOO_LONG" }, { status: 400 });
+  }
+  if (openingMessageRaw.length > MAX_TEMPLATE_BODY) {
+    return NextResponse.json({ error: "OPENING_MESSAGE_TOO_LONG" }, { status: 400 });
   }
 
   const existing = await prisma.promptTemplate.findFirst({ where: { templateId, orgId } });
@@ -140,18 +153,28 @@ export async function PATCH(req: Request) {
       });
       return tx.promptTemplate.update({
         where: { templateId },
-        data: { name, body: promptBody, isDefault: true }
+        data: {
+          name,
+          body: promptBody,
+          openingMessage: openingMessageRaw || null,
+          isDefault: true
+        }
       });
     }
     if (isDefault === false) {
       return tx.promptTemplate.update({
         where: { templateId },
-        data: { name, body: promptBody, isDefault: false }
+        data: {
+          name,
+          body: promptBody,
+          openingMessage: openingMessageRaw || null,
+          isDefault: false
+        }
       });
     }
     return tx.promptTemplate.update({
       where: { templateId },
-      data: { name, body: promptBody }
+      data: { name, body: promptBody, openingMessage: openingMessageRaw || null }
     });
   });
 
@@ -160,6 +183,7 @@ export async function PATCH(req: Request) {
       templateId: updated.templateId,
       name: updated.name,
       body: updated.body,
+      openingMessage: updated.openingMessage ?? null,
       isDefault: updated.isDefault,
       isShared: Boolean(SUPER_ADMIN_ORG_ID && updated.orgId === SUPER_ADMIN_ORG_ID),
       createdAt: updated.createdAt.toISOString()

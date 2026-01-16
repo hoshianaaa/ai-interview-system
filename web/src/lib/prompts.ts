@@ -1,3 +1,5 @@
+export const SHARED_TEMPLATE_SEED_NAME = "共通デフォルト";
+
 export const DEFAULT_INTERVIEW_PROMPT = `あなたは日本語で話す面接官の人工知能です。
 目的は候補者の経験と考え方を短時間で把握することです。
 質問は大きく三つだけにします。
