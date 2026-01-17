@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -41,6 +42,60 @@ DEFAULT_INTERVIEW_PROMPT = (
     "本質問3: 次の職場や役割で実現したいことは何ですか。"
 )
 
+SPEECH_STYLE_SUFFIX = (
+    "\n\n# 発話ルール\n"
+    "・1文は短く、20〜30文字程度にする。\n"
+    "・句読点を多めに入れる。\n"
+    "・英語は使わず、日本語のみで話す（固有名詞は最小限）。\n"
+    "・文末に英語の挨拶や付け足しを入れない。\n"
+    "・難しい言い回しは避け、話し言葉で説明する。\n"
+    "・丁寧語で落ち着いて話す。"
+)
+
+
+def apply_speech_style(prompt: str) -> str:
+    if "# 発話ルール" in prompt:
+        return prompt
+    return f"{prompt.strip()}{SPEECH_STYLE_SUFFIX}"
+
+
+def normalize_tts_text(text: str) -> str:
+    if not text:
+        return text
+    normalized = text.replace("?", "？").replace("!", "！")
+    normalized = _strip_trailing_english(normalized)
+    normalized = re.sub(r"([。！？])(?=\\S)", r"\\1\n", normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized
+
+
+def _strip_trailing_english(text: str) -> str:
+    # Remove trailing English sentence fragments that sometimes appear at the end.
+    if not re.search(r"[\u3040-\u30ff\u4e00-\u9fff]", text):
+        return text
+    tail_pattern = re.compile(
+        r"(.*?[。！？])\\s*([A-Za-z][A-Za-z0-9\\s,.'\"!?-]{4,})\\s*$",
+        re.S,
+    )
+    match = tail_pattern.match(text)
+    if match:
+        return match.group(1)
+    fallback_pattern = re.compile(
+        r"(.*?)[\\s　]+([A-Za-z][A-Za-z0-9\\s,.'\"!?-]{6,})\\s*$",
+        re.S,
+    )
+    match = fallback_pattern.match(text)
+    if match:
+        return match.group(1).rstrip()
+    glued_pattern = re.compile(
+        r"(.*?[\u3040-\u30ff\u4e00-\u9fff])([A-Za-z][A-Za-z0-9'\"!?-]{4,})\\s*$",
+        re.S,
+    )
+    match = glued_pattern.match(text)
+    if match:
+        return match.group(1).rstrip()
+    return text
+
 
 class DefaultInterviewAgent(Agent):
     """
@@ -50,6 +105,13 @@ class DefaultInterviewAgent(Agent):
 
     def __init__(self, prompt: str = DEFAULT_INTERVIEW_PROMPT) -> None:
         super().__init__(instructions=prompt)
+
+    async def tts_node(self, text, model_settings):
+        async def _normalized():
+            async for chunk in text:
+                yield normalize_tts_text(chunk)
+
+        return Agent.default.tts_node(self, _normalized(), model_settings)
 
 
 def resolve_prompt(ctx: JobContext) -> str:
@@ -64,10 +126,10 @@ def resolve_prompt(ctx: JobContext) -> str:
         if isinstance(parsed, dict):
             prompt = parsed.get("prompt")
             if isinstance(prompt, str) and prompt.strip():
-                return prompt.strip()
+                return apply_speech_style(prompt.strip())
         if metadata.strip():
-            return metadata.strip()
-    return DEFAULT_INTERVIEW_PROMPT
+            return apply_speech_style(metadata.strip())
+    return apply_speech_style(DEFAULT_INTERVIEW_PROMPT)
 
 
 def resolve_opening_message(ctx: JobContext) -> str | None:
@@ -126,14 +188,33 @@ async def entrypoint(ctx: JobContext):
     # If you want to start without external providers, you can still keep the
     # structure and later fill these in. However, a voice agent typically needs all.
 
+    stt_model = os.getenv("STT_MODEL", "deepgram/nova-2")
+    tts_model = os.getenv("TTS_MODEL", "elevenlabs/eleven_turbo_v2_5")
+
     session = AgentSession(
-        stt=inference.STT(model="deepgram/nova-2", language="ja"),
-        llm=inference.LLM(model="openai/gpt-4o"),
+        stt=inference.STT(
+            model=stt_model,
+            language="ja",
+            extra_kwargs={
+                "punctuate": True,
+                "smart_format": True,
+                "numerals": True,
+                "filler_words": False,
+            },
+        ),
+        llm=inference.LLM(
+            model=os.getenv("LLM_MODEL", "openai/gpt-4o"),
+            extra_kwargs={
+                "temperature": 0.2,
+                "top_p": 0.9,
+            },
+        ),
         tts=inference.TTS(
-            model="elevenlabs/eleven_turbo_v2_5",
+            model=tts_model,
             # Set a default voice ID; change to your preferred voice
             voice=os.getenv("ELEVENLABS_VOICE", "XrExE9yKIg1WjnnlVkGX"),
             language="ja",
+            extra_kwargs={"apply_text_normalization": "on"},
         ),
         # Optional: turn detection
         # turn_detection=MultilingualModel(),
