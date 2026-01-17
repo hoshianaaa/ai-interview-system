@@ -39,7 +39,6 @@ type PromptTemplate = {
   name: string;
   body: string;
   openingMessage: string | null;
-  isDefault: boolean;
   createdAt: string;
 };
 
@@ -172,7 +171,7 @@ export default function SuperAdminDashboard({
     null
   );
   const [templates, setTemplates] = useState(
-    promptTemplates.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }))
+    promptTemplates.map((row) => ({ ...row }))
   );
   const [templateEditorId, setTemplateEditorId] = useState("");
   const [templateEditName, setTemplateEditName] = useState("");
@@ -810,10 +809,7 @@ export default function SuperAdminDashboard({
       const res = await fetch("/api/super-admin/prompt-templates");
       const data = (await res.json()) as { templates?: PromptTemplate[]; error?: string };
       if (Array.isArray(data.templates)) {
-        const nextTemplates = data.templates.map((row) => ({
-          ...row,
-          isDefault: Boolean(row.isDefault)
-        }));
+        const nextTemplates = data.templates.map((row) => ({ ...row }));
         const nextSeedBody = getTemplateSeedBody(nextTemplates);
         const nextSeedOpeningMessage = getTemplateSeedOpeningMessage(nextTemplates);
         setTemplates(nextTemplates);
@@ -862,8 +858,7 @@ export default function SuperAdminDashboard({
             templateId: seedTemplate?.templateId,
             name: SHARED_TEMPLATE_SEED_NAME,
             body,
-            openingMessage: openingMessageValue,
-            isDefault: false
+            openingMessage: openingMessageValue
           })
         });
         const seedData = (await seedRes.json()) as {
@@ -872,8 +867,7 @@ export default function SuperAdminDashboard({
         };
         if (seedData.template) {
           const normalized = {
-            ...seedData.template,
-            isDefault: Boolean(seedData.template.isDefault)
+            ...seedData.template
           };
           setTemplates((prev) => {
             const filtered = prev.filter(
@@ -921,8 +915,7 @@ export default function SuperAdminDashboard({
       const data = (await res.json()) as { template?: PromptTemplate; error?: string };
       if (data.template) {
         const normalized = {
-          ...data.template,
-          isDefault: Boolean(data.template.isDefault)
+          ...data.template
         };
         setTemplates((prev) => {
           const filtered = prev.filter(

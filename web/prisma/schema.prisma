@@ -105,7 +105,7 @@ model PromptTemplate {
   name       String
   body       String   @db.Text
   openingMessage String? @db.Text
-  isDefault  Boolean  @default(false)
+  isShared   Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

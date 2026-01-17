@@ -74,7 +74,6 @@ type PromptTemplate = {
   name: string;
   body: string;
   openingMessage: string | null;
-  isDefault: boolean;
   isShared: boolean;
   createdAt: string;
 };
@@ -160,9 +159,7 @@ const formatCreateErrorMessage = (error: string, fallbackPrefix: string) => {
 };
 
 const formatTemplateLabel = (template: PromptTemplate) => {
-  const tags: string[] = [template.isShared ? "共通" : "組織"];
-  if (template.isDefault && !template.isShared) tags.push("デフォルト");
-  return `${template.name}（${tags.join("・")}）`;
+  return `${template.name}（${template.isShared ? "共通" : "組織"}）`;
 };
 
 const MAX_EXPIRES_WEEKS = 4;
@@ -217,7 +214,6 @@ export default function AdminDashboard({
   const [templates, setTemplates] = useState(
     promptTemplates.map((row) => ({
       ...row,
-      isDefault: Boolean(row.isDefault),
       isShared: Boolean(row.isShared)
     }))
   );
@@ -244,7 +240,6 @@ export default function AdminDashboard({
   const [templateEditOpeningMessage, setTemplateEditOpeningMessage] = useState(() =>
     getTemplateSeedOpeningMessage(promptTemplates)
   );
-  const [templateEditDefault, setTemplateEditDefault] = useState(false);
   const [templateEditError, setTemplateEditError] = useState<string | null>(null);
   const [templateEditSaving, setTemplateEditSaving] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(false);
@@ -577,7 +572,6 @@ export default function AdminDashboard({
       if (Array.isArray(data.templates)) {
         const nextTemplates = data.templates.map((row) => ({
           ...row,
-          isDefault: Boolean(row.isDefault),
           isShared: Boolean(row.isShared)
         }));
         const seedBody = getTemplateSeedBody(nextTemplates);
@@ -636,13 +630,12 @@ export default function AdminDashboard({
           templateId: templateEditorId || undefined,
           name,
           body,
-          openingMessage: openingMessageValue,
-          isDefault: templateEditDefault
+          openingMessage: openingMessageValue
         })
       });
       const data = (await res.json()) as { template?: PromptTemplate; error?: string };
       if (data.template) {
-        const normalized = { ...data.template, isDefault: Boolean(data.template.isDefault) };
+        const normalized = { ...data.template };
         setTemplates((prev) => {
           const filtered = prev.filter((row) => row.templateId !== normalized.templateId);
           return [normalized, ...filtered];
@@ -651,7 +644,6 @@ export default function AdminDashboard({
         setTemplateEditName(normalized.name);
         setTemplateEditBody(normalized.body);
         setTemplateEditOpeningMessage(normalized.openingMessage ?? "");
-        setTemplateEditDefault(normalized.isDefault);
         return;
       }
       if (res.status === 409) {
@@ -763,7 +755,6 @@ export default function AdminDashboard({
       setTemplateEditName("");
       setTemplateEditBody(templateSeedBody);
       setTemplateEditOpeningMessage(templateSeedOpeningMessage);
-      setTemplateEditDefault(false);
       return;
     }
     const template = templates.find((row) => row.templateId === templateEditorId);
@@ -771,7 +762,6 @@ export default function AdminDashboard({
       setTemplateEditName(template.name);
       setTemplateEditBody(template.body);
       setTemplateEditOpeningMessage(template.openingMessage ?? "");
-      setTemplateEditDefault(Boolean(template.isDefault));
     }
   }
 
@@ -782,7 +772,6 @@ export default function AdminDashboard({
       setTemplateEditName("");
       setTemplateEditBody(templateSeedBody);
       setTemplateEditOpeningMessage(templateSeedOpeningMessage);
-      setTemplateEditDefault(false);
       return;
     }
     const template = templates.find((row) => row.templateId === templateId);
@@ -790,7 +779,6 @@ export default function AdminDashboard({
       setTemplateEditName(template.name);
       setTemplateEditBody(template.body);
       setTemplateEditOpeningMessage(template.openingMessage ?? "");
-      setTemplateEditDefault(Boolean(template.isDefault));
     }
   }
 
@@ -1467,10 +1455,6 @@ export default function AdminDashboard({
     [templates, templateEditorId]
   );
   const isSharedTemplate = Boolean(selectedTemplate?.isShared);
-  const defaultTemplate = useMemo(
-    () => templates.find((row) => row.isDefault && !row.isShared) ?? null,
-    [templates]
-  );
   const isDecisionLocked =
     selectedRow?.status === "実施待ち" || selectedRow?.status === "実施中";
   const normalizedApplicationName = editApplicationCandidateName.trim();
@@ -1497,13 +1481,11 @@ export default function AdminDashboard({
   const templateDirty = selectedTemplate
     ? templateEditName !== selectedTemplate.name ||
       templateEditBody !== selectedTemplate.body ||
-      templateEditOpeningMessage !== (selectedTemplate.openingMessage ?? "") ||
-      templateEditDefault !== selectedTemplate.isDefault
+      templateEditOpeningMessage !== (selectedTemplate.openingMessage ?? "")
     : Boolean(
         templateEditName.trim() ||
-          templateEditBody.trim() ||
-          templateEditOpeningMessage.trim() ||
-          templateEditDefault
+        templateEditBody.trim() ||
+        templateEditOpeningMessage.trim()
       );
   const canSaveTemplate =
     !isSharedTemplate &&
@@ -1610,33 +1592,15 @@ export default function AdminDashboard({
   ]);
 
   useEffect(() => {
-    if (selectedTemplateId) return;
-    if (prompt.trim() !== templateSeedBody.trim()) return;
-    if (openingMessage.trim() !== templateSeedOpeningMessage.trim()) return;
-    if (defaultTemplate) {
-      setSelectedTemplateId(defaultTemplate.templateId);
-      setPrompt(defaultTemplate.body);
-      setOpeningMessage(defaultTemplate.openingMessage ?? "");
-    }
-  }, [
-    defaultTemplate,
-    selectedTemplateId,
-    prompt,
-    openingMessage,
-    templateSeedBody,
-    templateSeedOpeningMessage
-  ]);
-  useEffect(() => {
     if (templateEditorId) return;
-    if (templateEditName.trim() || templateEditDefault) return;
+    if (templateEditName.trim()) return;
     setTemplateEditBody(templateSeedBody);
     setTemplateEditOpeningMessage(templateSeedOpeningMessage);
   }, [
     templateSeedBody,
     templateSeedOpeningMessage,
     templateEditorId,
-    templateEditName,
-    templateEditDefault
+    templateEditName
   ]);
   const canCreateInterview = Boolean(billingInfo) && !billingInfo?.overageLocked;
   const planLabel = billingInfo ? formatPlanLabel(billingInfo.planId) : "未加入";
@@ -1949,7 +1913,7 @@ export default function AdminDashboard({
                       value={selectedTemplateId}
                       onChange={(e) => applyTemplate(e.target.value)}
                     >
-                      <option value="">デフォルト（標準プロンプト）</option>
+                      <option value="">標準プロンプト</option>
                       {visibleTemplates.map((template) => (
                         <option key={template.templateId} value={template.templateId}>
                           {formatTemplateLabel(template)}
@@ -2854,18 +2818,6 @@ export default function AdminDashboard({
                           placeholder="面接の冒頭でAIが話す内容を入力してください"
                           readOnly={isSharedTemplate}
                         />
-                      </div>
-                      <div className="form-row">
-                        <label>デフォルト設定</label>
-                        <label className="checkbox">
-                          <input
-                            type="checkbox"
-                            checked={templateEditDefault}
-                            onChange={(e) => setTemplateEditDefault(e.target.checked)}
-                            disabled={isSharedTemplate}
-                          />
-                          <span>このテンプレートをデフォルトにする</span>
-                        </label>
                       </div>
                       {templateEditError && <p className="error">{templateEditError}</p>}
                       <div className="edit-actions">

@@ -32,7 +32,6 @@ type PromptTemplateRow = {
   name: string;
   body: string;
   openingMessage: string | null;
-  isDefault: boolean;
   createdAt: string;
 };
 
@@ -98,7 +97,7 @@ export default async function SuperAdminPage() {
   }
 
   const templates = await prisma.promptTemplate.findMany({
-    where: { orgId: SUPER_ADMIN_ORG_ID },
+    where: { orgId: SUPER_ADMIN_ORG_ID, isShared: true },
     orderBy: { createdAt: "desc" }
   });
   const templateData: PromptTemplateRow[] = templates.map((row) => ({
@@ -106,7 +105,6 @@ export default async function SuperAdminPage() {
     name: row.name,
     body: row.body,
     openingMessage: row.openingMessage ?? null,
-    isDefault: row.isDefault,
     createdAt: row.createdAt.toISOString()
   }));
 

@@ -33,14 +33,12 @@ export default async function HomePage() {
     where: { orgId },
     orderBy: { createdAt: "desc" }
   });
-  const templateOrgIds =
-    SUPER_ADMIN_ORG_ID && SUPER_ADMIN_ORG_ID !== orgId
-      ? [orgId, SUPER_ADMIN_ORG_ID]
-      : [orgId];
   const templates = await prisma.promptTemplate.findMany({
-    where: {
-      orgId: templateOrgIds.length === 1 ? templateOrgIds[0] : { in: templateOrgIds }
-    },
+    where: SUPER_ADMIN_ORG_ID
+      ? {
+          OR: [{ orgId }, { isShared: true }]
+        }
+      : { orgId },
     orderBy: { createdAt: "desc" }
   });
   const settings = await prisma.orgSetting.findUnique({
@@ -97,8 +95,7 @@ export default async function HomePage() {
     name: row.name,
     body: row.body,
     openingMessage: row.openingMessage ?? null,
-    isDefault: row.isDefault,
-    isShared: Boolean(SUPER_ADMIN_ORG_ID && row.orgId === SUPER_ADMIN_ORG_ID),
+    isShared: row.isShared,
     createdAt: row.createdAt.toISOString()
   }));
   const defaultDurationMin = Math.min(
