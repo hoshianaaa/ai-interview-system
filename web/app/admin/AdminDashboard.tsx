@@ -1624,7 +1624,7 @@ export default function AdminDashboard({
     : "";
   const overageLimitText = billingInfo ? `${billingInfo.overageLimitMinutes}分` : "";
   const overageNoteText = billingInfo
-    ? `超過時間は+${overageLimitText}まで利用できます。`
+    ? ""
     : "プラン未加入のため超過上限は表示されません。";
 
   return (
@@ -2757,11 +2757,13 @@ export default function AdminDashboard({
                         <strong>{maxConcurrentText}</strong>
                       </div>
                       <div className="result-row">
-                        <span>超過上限(自動)</span>
+                        <span>超過上限</span>
                         <strong>{overageLimitText}</strong>
                       </div>
                     </div>
-                    <p className="settings-note">{overageNoteText}</p>
+                    {overageNoteText && (
+                      <p className="settings-note">{overageNoteText}</p>
+                    )}
                   </div>
                   <div className="settings-section">
                     <h3>プロンプトテンプレート</h3>
