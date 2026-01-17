@@ -1455,6 +1455,7 @@ export default function AdminDashboard({
     [templates, templateEditorId]
   );
   const isSharedTemplate = Boolean(selectedTemplate?.isShared);
+  const isSeedTemplateEditor = !templateEditorId && !templateEditName.trim();
   const isDecisionLocked =
     selectedRow?.status === "実施待ち" || selectedRow?.status === "実施中";
   const normalizedApplicationName = editApplicationCandidateName.trim();
@@ -2807,7 +2808,7 @@ export default function AdminDashboard({
                           value={templateEditBody}
                           onChange={(e) => setTemplateEditBody(e.target.value)}
                           placeholder="テンプレート本文を入力してください"
-                          readOnly={isSharedTemplate}
+                          readOnly={isSharedTemplate || isSeedTemplateEditor}
                         />
                       </div>
                       <div className="form-row">
@@ -2816,7 +2817,7 @@ export default function AdminDashboard({
                           value={templateEditOpeningMessage}
                           onChange={(e) => setTemplateEditOpeningMessage(e.target.value)}
                           placeholder="面接の冒頭でAIが話す内容を入力してください"
-                          readOnly={isSharedTemplate}
+                          readOnly={isSharedTemplate || isSeedTemplateEditor}
                         />
                       </div>
                       {templateEditError && <p className="error">{templateEditError}</p>}

@@ -2,6 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import type { OrgSubscription } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
+import { SHARED_TEMPLATE_SEED_NAME } from "@/lib/prompts";
 import type { OrgPlan } from "@/lib/billing";
 import { refreshOrgSubscription } from "@/lib/subscription";
 import { getSystemMaxConcurrentInterviews } from "@/lib/system-settings";
@@ -97,7 +98,10 @@ export default async function SuperAdminPage() {
   }
 
   const templates = await prisma.promptTemplate.findMany({
-    where: { orgId: SUPER_ADMIN_ORG_ID, isShared: true },
+    where: {
+      orgId: SUPER_ADMIN_ORG_ID,
+      OR: [{ isShared: true }, { name: SHARED_TEMPLATE_SEED_NAME }]
+    },
     orderBy: { createdAt: "desc" }
   });
   const templateData: PromptTemplateRow[] = templates.map((row) => ({

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { SHARED_TEMPLATE_SEED_NAME } from "@/lib/prompts";
 import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
 
 export const runtime = "nodejs";
@@ -33,7 +34,10 @@ export async function GET() {
   if (!authResult.ok) return authResult.response;
 
   const templates = await prisma.promptTemplate.findMany({
-    where: { orgId: SUPER_ADMIN_ORG_ID, isShared: true },
+    where: {
+      orgId: SUPER_ADMIN_ORG_ID,
+      OR: [{ isShared: true }, { name: SHARED_TEMPLATE_SEED_NAME }]
+    },
     orderBy: { createdAt: "desc" }
   });
 
@@ -134,7 +138,11 @@ export async function PATCH(req: Request) {
   }
 
   const existing = await prisma.promptTemplate.findFirst({
-    where: { templateId, orgId: SUPER_ADMIN_ORG_ID, isShared: true }
+    where: {
+      templateId,
+      orgId: SUPER_ADMIN_ORG_ID,
+      OR: [{ isShared: true }, { name: SHARED_TEMPLATE_SEED_NAME }]
+    }
   });
   if (!existing) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
