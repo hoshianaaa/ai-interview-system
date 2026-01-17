@@ -6,6 +6,8 @@ import { getProgressStatusLabel } from "@/lib/interview-status";
 import { buildBillingSummary } from "@/lib/billing";
 import { refreshOrgSubscription } from "@/lib/subscription";
 import { SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
+import { DEFAULT_CANDIDATE_EMAIL_TEMPLATE } from "@/lib/email-templates";
+import { SYSTEM_SETTINGS_ID } from "@/lib/system-settings";
 
 export default async function HomePage() {
   const { orgId } = await auth();
@@ -43,6 +45,9 @@ export default async function HomePage() {
   });
   const settings = await prisma.orgSetting.findUnique({
     where: { orgId }
+  });
+  const systemSettings = await prisma.systemSetting.findUnique({
+    where: { id: SYSTEM_SETTINGS_ID }
   });
   const subscription = await prisma.orgSubscription.findUnique({
     where: { orgId }
@@ -106,8 +111,11 @@ export default async function HomePage() {
     defaultDurationMin,
     defaultExpiresWeeks: settings?.defaultExpiresWeeks ?? 1,
     defaultExpiresDays: settings?.defaultExpiresDays ?? 0,
-    defaultExpiresHours: settings?.defaultExpiresHours ?? 0
+    defaultExpiresHours: settings?.defaultExpiresHours ?? 0,
+    candidateEmailTemplate: settings?.candidateEmailTemplate ?? null
   };
+  const systemCandidateEmailTemplate =
+    systemSettings?.candidateEmailTemplate ?? DEFAULT_CANDIDATE_EMAIL_TEMPLATE;
   let billingData = null;
   if (subscription) {
     const current = await refreshOrgSubscription(prisma, subscription, now);
@@ -141,6 +149,7 @@ export default async function HomePage() {
       promptTemplates={templateData}
       settings={settingsData}
       billing={billingData}
+      systemCandidateEmailTemplate={systemCandidateEmailTemplate}
     />
   );
 }

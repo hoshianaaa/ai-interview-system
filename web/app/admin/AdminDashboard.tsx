@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
-import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import { OrganizationSwitcher, UserButton, useOrganization, useUser } from "@clerk/nextjs";
 import { DEFAULT_INTERVIEW_PROMPT, SHARED_TEMPLATE_SEED_NAME } from "@/lib/prompts";
+import { CANDIDATE_EMAIL_TEMPLATE_VARIABLES } from "@/lib/email-templates";
 import { buildBillingSummary, toRoundedMinutes, type OrgPlan } from "@/lib/billing";
 import { formatDateJst, formatDateTimeJst } from "@/lib/datetime";
 
@@ -97,6 +98,7 @@ type OrgSettings = {
   defaultExpiresWeeks: number;
   defaultExpiresDays: number;
   defaultExpiresHours: number;
+  candidateEmailTemplate: string | null;
 };
 
 type OrgBillingInfo = {
@@ -162,6 +164,38 @@ const formatTemplateLabel = (template: PromptTemplate) => {
   return `${template.name}（${template.isShared ? "共通" : "組織"}）`;
 };
 
+const EMAIL_TEMPLATE_VARIABLE_LABELS = CANDIDATE_EMAIL_TEMPLATE_VARIABLES.map(
+  (item) => `{{${item.key}}}（${item.label}）`
+).join(" / ");
+
+const EMAIL_FALLBACK_ORG_NAME = "（組織名未設定）";
+const EMAIL_FALLBACK_USER_NAME = "（担当者未設定）";
+const EMAIL_FALLBACK_EXPIRES_AT = "（有効期限未設定）";
+
+const buildCandidateEmailBody = (template: string, variables: Record<string, string>) =>
+  template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
+    const value = variables[key];
+    return value ?? match;
+  });
+
+const copyToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  textarea.style.left = "-1000px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  return ok;
+};
+
 const MAX_EXPIRES_WEEKS = 4;
 const MAX_EXPIRES_DAYS = 6;
 const MAX_EXPIRES_HOURS = 23;
@@ -182,17 +216,32 @@ export default function AdminDashboard({
   applications: initialApplications,
   promptTemplates,
   settings,
-  billing
+  billing,
+  systemCandidateEmailTemplate
 }: {
   interviews: InterviewRow[];
   applications: ApplicationData[];
   promptTemplates: PromptTemplate[];
   settings: OrgSettings;
   billing: OrgBillingInfo;
+  systemCandidateEmailTemplate: string;
 }) {
+  const { organization } = useOrganization();
+  const { user } = useUser();
   const [rows, setRows] = useState(interviews);
   const [applications, setApplications] = useState(initialApplications);
   const [orgSettings, setOrgSettings] = useState(settings);
+  const [systemEmailTemplate, setSystemEmailTemplate] = useState(
+    systemCandidateEmailTemplate
+  );
+  const [candidateEmailTemplate, setCandidateEmailTemplate] = useState(
+    settings.candidateEmailTemplate ?? systemCandidateEmailTemplate
+  );
+  const [candidateEmailTemplateSaving, setCandidateEmailTemplateSaving] =
+    useState(false);
+  const [candidateEmailTemplateError, setCandidateEmailTemplateError] = useState<
+    string | null
+  >(null);
   const [durationMinInput, setDurationMinInput] = useState(
     String(Math.min(MAX_DURATION_MIN, Math.max(1, settings.defaultDurationMin)))
   );
@@ -253,6 +302,10 @@ export default function AdminDashboard({
   const [downloadStatus, setDownloadStatus] = useState<"idle" | "inprogress">("idle");
   const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [emailCopyStatus, setEmailCopyStatus] = useState<{
+    target: "create" | "detail" | "reissue";
+    message: string;
+  } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
   const [selectedChat, setSelectedChat] = useState<ChatItem[]>([]);
@@ -263,6 +316,7 @@ export default function AdminDashboard({
   const playbackRequestIdRef = useRef<string | null>(null);
   const autoPlayRef = useRef(false);
   const downloadRequestIdRef = useRef<string | null>(null);
+  const emailCopyTimerRef = useRef<number | null>(null);
   const [editApplicationCandidateName, setEditApplicationCandidateName] = useState("");
   const [editApplicationEmail, setEditApplicationEmail] = useState("");
   const [editApplicationNotes, setEditApplicationNotes] = useState("");
@@ -314,6 +368,10 @@ export default function AdminDashboard({
   const [settingsExpiresWeeks, setSettingsExpiresWeeks] = useState(
     String(settings.defaultExpiresWeeks)
   );
+
+  useEffect(() => {
+    setSystemEmailTemplate(systemCandidateEmailTemplate);
+  }, [systemCandidateEmailTemplate]);
   const [settingsExpiresDays, setSettingsExpiresDays] = useState(
     String(settings.defaultExpiresDays)
   );
@@ -585,7 +643,6 @@ export default function AdminDashboard({
           setTemplateEditName("");
           setTemplateEditBody(seedBody);
           setTemplateEditOpeningMessage(seedOpeningMessage);
-          setTemplateEditDefault(false);
         }
         if (
           selectedTemplateId &&
@@ -689,7 +746,6 @@ export default function AdminDashboard({
         setTemplateEditName("");
         setTemplateEditBody(seedBody);
         setTemplateEditOpeningMessage(seedOpeningMessage);
-        setTemplateEditDefault(false);
         return;
       }
       setTemplateEditError("削除に失敗しました");
@@ -722,7 +778,11 @@ export default function AdminDashboard({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const data = (await res.json()) as { settings?: OrgSettings; error?: string };
+      const data = (await res.json()) as {
+        settings?: OrgSettings;
+        systemCandidateEmailTemplate?: string;
+        error?: string;
+      };
       if (!res.ok || !data.settings) {
         setSettingsError("保存に失敗しました");
         return;
@@ -736,8 +796,90 @@ export default function AdminDashboard({
       setExpiresWeeks(String(data.settings.defaultExpiresWeeks));
       setExpiresDays(String(data.settings.defaultExpiresDays));
       setExpiresHours(String(data.settings.defaultExpiresHours));
+      if (typeof data.systemCandidateEmailTemplate === "string") {
+        setSystemEmailTemplate(data.systemCandidateEmailTemplate);
+        if (!data.settings.candidateEmailTemplate) {
+          setCandidateEmailTemplate(data.systemCandidateEmailTemplate);
+        }
+      }
     } finally {
       setSettingsSaving(false);
+    }
+  }
+
+  async function saveCandidateEmailTemplate() {
+    if (candidateEmailTemplateSaving) return;
+    setCandidateEmailTemplateError(null);
+    const trimmed = candidateEmailTemplate.trim();
+    if (!trimmed) {
+      setCandidateEmailTemplateError("本文が空です");
+      return;
+    }
+    if (trimmed.length > 8000) {
+      setCandidateEmailTemplateError("本文が長すぎます");
+      return;
+    }
+    const systemTrimmed = systemEmailTemplate.trim();
+    const payloadTemplate = trimmed === systemTrimmed ? null : trimmed;
+    setCandidateEmailTemplateSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateEmailTemplate: payloadTemplate })
+      });
+      const data = (await res.json()) as {
+        settings?: OrgSettings;
+        systemCandidateEmailTemplate?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.settings) {
+        setCandidateEmailTemplateError("保存に失敗しました");
+        return;
+      }
+      setOrgSettings(data.settings);
+      if (typeof data.systemCandidateEmailTemplate === "string") {
+        setSystemEmailTemplate(data.systemCandidateEmailTemplate);
+      }
+      setCandidateEmailTemplate(
+        data.settings.candidateEmailTemplate ??
+          (typeof data.systemCandidateEmailTemplate === "string"
+            ? data.systemCandidateEmailTemplate
+            : systemEmailTemplate)
+      );
+    } finally {
+      setCandidateEmailTemplateSaving(false);
+    }
+  }
+
+  async function resetCandidateEmailTemplate() {
+    if (candidateEmailTemplateSaving) return;
+    setCandidateEmailTemplateError(null);
+    setCandidateEmailTemplateSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateEmailTemplate: null })
+      });
+      const data = (await res.json()) as {
+        settings?: OrgSettings;
+        systemCandidateEmailTemplate?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.settings) {
+        setCandidateEmailTemplateError("リセットに失敗しました");
+        return;
+      }
+      setOrgSettings(data.settings);
+      if (typeof data.systemCandidateEmailTemplate === "string") {
+        setSystemEmailTemplate(data.systemCandidateEmailTemplate);
+        setCandidateEmailTemplate(data.systemCandidateEmailTemplate);
+        return;
+      }
+      setCandidateEmailTemplate(systemEmailTemplate);
+    } finally {
+      setCandidateEmailTemplateSaving(false);
     }
   }
 
@@ -1497,6 +1639,64 @@ export default function AdminDashboard({
     settingsExpiresWeeks !== String(orgSettings.defaultExpiresWeeks) ||
     settingsExpiresDays !== String(orgSettings.defaultExpiresDays) ||
     settingsExpiresHours !== String(orgSettings.defaultExpiresHours);
+  const emailTemplateBaseline =
+    orgSettings.candidateEmailTemplate ?? systemEmailTemplate;
+  const emailTemplateDirty = candidateEmailTemplate !== emailTemplateBaseline;
+  const canResetEmailTemplate = Boolean(orgSettings.candidateEmailTemplate);
+  const orgNameForEmail = organization?.name ?? EMAIL_FALLBACK_ORG_NAME;
+  const userNameForEmail =
+    user?.fullName ?? user?.firstName ?? user?.lastName ?? EMAIL_FALLBACK_USER_NAME;
+
+  const buildEmailBody = (url: string, expiresAt: string | null) => {
+    const templateText =
+      candidateEmailTemplate.trim() || systemEmailTemplate.trim();
+    const expiresText = expiresAt
+      ? formatDateTimeJst(expiresAt)
+      : EMAIL_FALLBACK_EXPIRES_AT;
+    return buildCandidateEmailBody(templateText, {
+      orgName: orgNameForEmail,
+      userName: userNameForEmail,
+      interviewUrl: url,
+      expiresAt: expiresText
+    });
+  };
+
+  const copyCandidateEmail = async (
+    target: "create" | "detail" | "reissue",
+    url: string,
+    expiresAt: string | null
+  ) => {
+    const templateText =
+      candidateEmailTemplate.trim() || systemEmailTemplate.trim();
+    if (!templateText) {
+      setEmailCopyStatus({ target, message: "メール本文が未設定です" });
+      return;
+    }
+    try {
+      const emailBody = buildEmailBody(url, expiresAt);
+      const ok = await copyToClipboard(emailBody);
+      setEmailCopyStatus({
+        target,
+        message: ok ? "メール本文をコピーしました" : "コピーに失敗しました"
+      });
+    } catch {
+      setEmailCopyStatus({ target, message: "コピーに失敗しました" });
+    }
+    if (emailCopyTimerRef.current !== null) {
+      window.clearTimeout(emailCopyTimerRef.current);
+    }
+    emailCopyTimerRef.current = window.setTimeout(() => {
+      setEmailCopyStatus((prev) => (prev?.target === target ? null : prev));
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (emailCopyTimerRef.current !== null) {
+        window.clearTimeout(emailCopyTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedRow) {
@@ -1963,10 +2163,28 @@ export default function AdminDashboard({
                   <div className="result">
                     <div className="result-row">
                       <span>面接URL</span>
-                      <a href={createResult.url} target="_blank" rel="noreferrer">
-                        {createResult.url}
-                      </a>
+                      <div className="result-actions">
+                        <a href={createResult.url} target="_blank" rel="noreferrer">
+                          {createResult.url}
+                        </a>
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() =>
+                            void copyCandidateEmail(
+                              "create",
+                              createResult.url,
+                              createResult.expiresAt ?? null
+                            )
+                          }
+                        >
+                          メール本文をコピー
+                        </button>
+                      </div>
                     </div>
+                    {emailCopyStatus?.target === "create" && (
+                      <p className="helper">{emailCopyStatus.message}</p>
+                    )}
                     <div className="result-row">
                       <span>候補者名</span>
                       <strong>{createResult.candidateName ?? "未設定"}</strong>
@@ -2437,19 +2655,42 @@ export default function AdminDashboard({
                               </div>
                             </div>
                             {isDecisionLocked && (
-                              <div className="interview-url">
-                                面接URL:{" "}
-                                <a href={selectedRow.url} target="_blank" rel="noreferrer">
-                                  {selectedRow.url}
-                                </a>
-                                {selectedRow.expiresAt && (
-                                  <span>
-                                    {" "}
-                                    （有効期限:{" "}
-                                    {formatDateTimeJst(selectedRow.expiresAt)})
+                              <>
+                                <div className="interview-url">
+                                  <span>面接URL:</span>
+                                  <span className="interview-url-actions">
+                                    <a
+                                      href={selectedRow.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {selectedRow.url}
+                                    </a>
+                                    <button
+                                      className="ghost"
+                                      type="button"
+                                      onClick={() =>
+                                        void copyCandidateEmail(
+                                          "detail",
+                                          selectedRow.url,
+                                          selectedRow.expiresAt ?? null
+                                        )
+                                      }
+                                    >
+                                      メール本文をコピー
+                                    </button>
                                   </span>
+                                  {selectedRow.expiresAt && (
+                                    <span>
+                                      （有効期限:{" "}
+                                      {formatDateTimeJst(selectedRow.expiresAt)})
+                                    </span>
+                                  )}
+                                </div>
+                                {emailCopyStatus?.target === "detail" && (
+                                  <p className="helper">{emailCopyStatus.message}</p>
                                 )}
-                              </div>
+                              </>
                             )}
                             {selectedRow.hasRecording && downloadError && (
                               <p className="error">{downloadError}</p>
@@ -2557,10 +2798,34 @@ export default function AdminDashboard({
                                   <div className="result">
                                     <div className="result-row">
                                       <span>面接URL</span>
-                                      <a href={reissueResult.url} target="_blank" rel="noreferrer">
-                                        {reissueResult.url}
-                                      </a>
+                                      <div className="result-actions">
+                                        <a
+                                          href={reissueResult.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                        >
+                                          {reissueResult.url}
+                                        </a>
+                                        <button
+                                          className="ghost"
+                                          type="button"
+                                          onClick={() =>
+                                            void copyCandidateEmail(
+                                              "reissue",
+                                              reissueResult.url,
+                                              reissueResult.expiresAt ?? null
+                                            )
+                                          }
+                                        >
+                                          メール本文をコピー
+                                        </button>
+                                      </div>
                                     </div>
+                                    {emailCopyStatus?.target === "reissue" && (
+                                      <p className="helper">
+                                        {emailCopyStatus.message}
+                                      </p>
+                                    )}
                                     {reissueResult.expiresAt && (
                                       <div className="result-row">
                                         <span>有効期限</span>
@@ -2764,6 +3029,45 @@ export default function AdminDashboard({
                     {overageNoteText && (
                       <p className="settings-note">{overageNoteText}</p>
                     )}
+                  </div>
+                  <div className="settings-section">
+                    <h3>候補者送信メール</h3>
+                    <div className="form-row">
+                      <label>本文</label>
+                      <textarea
+                        value={candidateEmailTemplate}
+                        onChange={(e) => {
+                          setCandidateEmailTemplate(e.target.value);
+                          if (candidateEmailTemplateError) {
+                            setCandidateEmailTemplateError(null);
+                          }
+                        }}
+                        placeholder="候補者に送信するメール本文を入力してください"
+                        rows={12}
+                      />
+                      <p className="helper">
+                        使用できる変数: {EMAIL_TEMPLATE_VARIABLE_LABELS}
+                      </p>
+                    </div>
+                    {candidateEmailTemplateError && (
+                      <p className="error">{candidateEmailTemplateError}</p>
+                    )}
+                    <div className="edit-actions">
+                      <button
+                        className="ghost"
+                        onClick={() => void resetCandidateEmailTemplate()}
+                        disabled={!canResetEmailTemplate || candidateEmailTemplateSaving}
+                      >
+                        デフォルトに戻す
+                      </button>
+                      <button
+                        className="primary"
+                        onClick={() => void saveCandidateEmailTemplate()}
+                        disabled={!emailTemplateDirty || candidateEmailTemplateSaving}
+                      >
+                        {candidateEmailTemplateSaving ? "保存中..." : "保存"}
+                      </button>
+                    </div>
                   </div>
                   <div className="settings-section">
                     <h3>プロンプトテンプレート</h3>
@@ -3410,6 +3714,15 @@ export default function AdminDashboard({
           flex: 1;
           font-size: 12px;
           color: #4b5c72;
+          word-break: normal;
+        }
+        .interview-url-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .interview-url a {
           word-break: break-all;
         }
         .decision-select {
@@ -3740,6 +4053,17 @@ export default function AdminDashboard({
           justify-content: space-between;
           gap: 12px;
           font-size: 13px;
+        }
+        .result-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          text-align: right;
+        }
+        .result-actions a {
+          word-break: break-all;
         }
         .result-row span {
           color: #5a6a82;

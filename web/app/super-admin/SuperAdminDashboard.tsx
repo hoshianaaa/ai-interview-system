@@ -11,6 +11,7 @@ import {
 } from "@/lib/billing";
 import { formatDateJst } from "@/lib/datetime";
 import { DEFAULT_INTERVIEW_PROMPT, SHARED_TEMPLATE_SEED_NAME } from "@/lib/prompts";
+import { CANDIDATE_EMAIL_TEMPLATE_VARIABLES } from "@/lib/email-templates";
 
 type OrgSubscriptionRow = {
   orgId: string;
@@ -32,6 +33,7 @@ type OrgSubscriptionRow = {
 
 type SystemSettings = {
   maxConcurrentInterviews: number;
+  candidateEmailTemplate: string;
 };
 
 type PromptTemplate = {
@@ -115,6 +117,10 @@ const planLabel = (planId: OrgPlan | null) => {
 
 const formatTemplateLabel = (template: PromptTemplate) => template.name;
 
+const EMAIL_TEMPLATE_VARIABLE_LABELS = CANDIDATE_EMAIL_TEMPLATE_VARIABLES.map(
+  (item) => `{{${item.key}}}（${item.label}）`
+).join(" / ");
+
 const getTemplateSeedBody = (templates: PromptTemplate[]) => {
   const seed = templates.find((row) => row.name === SHARED_TEMPLATE_SEED_NAME);
   return seed ? seed.body : DEFAULT_INTERVIEW_PROMPT;
@@ -144,8 +150,13 @@ export default function SuperAdminDashboard({
   const [systemLimitInput, setSystemLimitInput] = useState(
     String(systemSettings.maxConcurrentInterviews)
   );
+  const [systemEmailTemplate, setSystemEmailTemplate] = useState(
+    systemSettings.candidateEmailTemplate
+  );
   const [systemSaving, setSystemSaving] = useState(false);
   const [systemError, setSystemError] = useState<string | null>(null);
+  const [systemEmailSaving, setSystemEmailSaving] = useState(false);
+  const [systemEmailError, setSystemEmailError] = useState<string | null>(null);
   const [planByOrg, setPlanByOrg] = useState<Record<string, PlanSelectValue>>(() => {
     const next: Record<string, PlanSelectValue> = {};
     for (const row of initialRows) {
@@ -1001,9 +1012,11 @@ export default function SuperAdminDashboard({
     }
   };
 
-  const systemDirty =
+  const systemLimitDirty =
     systemLimitInput.trim() !==
     String(currentSystemSettings.maxConcurrentInterviews);
+  const systemEmailDirty =
+    systemEmailTemplate !== currentSystemSettings.candidateEmailTemplate;
 
   const saveSystemSettings = async () => {
     if (systemSaving) return;
@@ -1026,19 +1039,66 @@ export default function SuperAdminDashboard({
         body: JSON.stringify({ maxConcurrentInterviews: parsed })
       });
       const data = (await res.json()) as
-        | { maxConcurrentInterviews: number }
+        | { maxConcurrentInterviews: number; candidateEmailTemplate: string }
         | { error: string };
       if (!res.ok || "error" in data) {
         setSystemError("設定の更新に失敗しました。");
         return;
       }
-      setCurrentSystemSettings(data);
+      setCurrentSystemSettings((prev) => ({
+        ...prev,
+        maxConcurrentInterviews: data.maxConcurrentInterviews
+      }));
       setSystemLimitInput(String(data.maxConcurrentInterviews));
     } catch {
       setSystemError("設定の更新に失敗しました。");
     } finally {
       setSystemSaving(false);
     }
+  };
+
+  const saveSystemEmailTemplate = async () => {
+    if (systemEmailSaving) return;
+    setSystemEmailError(null);
+    const emailTemplateValue = systemEmailTemplate.trim();
+    if (!emailTemplateValue) {
+      setSystemEmailError("候補者送信メールの本文を入力してください。");
+      return;
+    }
+    if (emailTemplateValue.length > 8000) {
+      setSystemEmailError("候補者送信メールの本文が長すぎます。");
+      return;
+    }
+    setSystemEmailSaving(true);
+    try {
+      const res = await fetch("/api/super-admin/system-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ candidateEmailTemplate: emailTemplateValue })
+      });
+      const data = (await res.json()) as
+        | { maxConcurrentInterviews: number; candidateEmailTemplate: string }
+        | { error: string };
+      if (!res.ok || "error" in data) {
+        setSystemEmailError("設定の更新に失敗しました。");
+        return;
+      }
+      setCurrentSystemSettings((prev) => ({
+        ...prev,
+        candidateEmailTemplate: data.candidateEmailTemplate
+      }));
+      setSystemEmailTemplate(data.candidateEmailTemplate);
+    } catch {
+      setSystemEmailError("設定の更新に失敗しました。");
+    } finally {
+      setSystemEmailSaving(false);
+    }
+  };
+
+  const cancelSystemEmailTemplate = () => {
+    if (systemEmailSaving) return;
+    setSystemEmailError(null);
+    setSystemEmailTemplate(currentSystemSettings.candidateEmailTemplate);
   };
 
   return (
@@ -1081,10 +1141,44 @@ export default function SuperAdminDashboard({
               <button
                 type="button"
                 className="primary"
-                disabled={!systemDirty || systemSaving}
+                disabled={!systemLimitDirty || systemSaving}
                 onClick={() => void saveSystemSettings()}
               >
                 {systemSaving ? "更新中..." : "保存"}
+              </button>
+            </div>
+          </div>
+          <div className="system-row">
+            <label htmlFor="system-candidate-email" className="label">
+              候補者送信メール本文
+            </label>
+            <textarea
+              id="system-candidate-email"
+              value={systemEmailTemplate}
+              onChange={(e) => {
+                setSystemEmailTemplate(e.target.value);
+                if (systemEmailError) setSystemEmailError(null);
+              }}
+              rows={12}
+            />
+            <p className="helper">使用できる変数: {EMAIL_TEMPLATE_VARIABLE_LABELS}</p>
+            {systemEmailError && <p className="error">{systemEmailError}</p>}
+            <div className="edit-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={cancelSystemEmailTemplate}
+                disabled={!systemEmailDirty || systemEmailSaving}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void saveSystemEmailTemplate()}
+                disabled={!systemEmailDirty || systemEmailSaving}
+              >
+                {systemEmailSaving ? "保存中..." : "保存"}
               </button>
             </div>
           </div>

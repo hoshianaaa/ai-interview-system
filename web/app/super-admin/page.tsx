@@ -5,7 +5,11 @@ import { isSuperAdminOrgId, SUPER_ADMIN_ORG_ID } from "@/lib/super-admin";
 import { SHARED_TEMPLATE_SEED_NAME } from "@/lib/prompts";
 import type { OrgPlan } from "@/lib/billing";
 import { refreshOrgSubscription } from "@/lib/subscription";
-import { getSystemMaxConcurrentInterviews } from "@/lib/system-settings";
+import { DEFAULT_CANDIDATE_EMAIL_TEMPLATE } from "@/lib/email-templates";
+import {
+  DEFAULT_MAX_CONCURRENT_INTERVIEWS,
+  SYSTEM_SETTINGS_ID
+} from "@/lib/system-settings";
 import OrganizationGate from "../admin/OrganizationGate";
 import SuperAdminDashboard from "./SuperAdminDashboard";
 import SuperAdminGate from "./SuperAdminGate";
@@ -127,7 +131,13 @@ export default async function SuperAdminPage() {
     refreshedSubscriptions.map((row) => [row.orgId, row])
   );
 
-  const maxConcurrentInterviews = await getSystemMaxConcurrentInterviews(prisma);
+  const systemSettings = await prisma.systemSetting.findUnique({
+    where: { id: SYSTEM_SETTINGS_ID }
+  });
+  const maxConcurrentInterviews =
+    systemSettings?.maxConcurrentInterviews ?? DEFAULT_MAX_CONCURRENT_INTERVIEWS;
+  const candidateEmailTemplate =
+    systemSettings?.candidateEmailTemplate ?? DEFAULT_CANDIDATE_EMAIL_TEMPLATE;
   const activeInterviewCounts = await prisma.interview.groupBy({
     by: ["orgId"],
     _count: { _all: true },
@@ -197,7 +207,7 @@ export default async function SuperAdminPage() {
     <SuperAdminDashboard
       initialRows={rows}
       orgsLoadError={orgsLoadError}
-      systemSettings={{ maxConcurrentInterviews }}
+      systemSettings={{ maxConcurrentInterviews, candidateEmailTemplate }}
       promptTemplates={templateData}
     />
   );

@@ -119,6 +119,7 @@ model OrgSetting {
   defaultExpiresWeeks Int      @default(1)
   defaultExpiresDays  Int      @default(0)
   defaultExpiresHours Int      @default(0)
+  candidateEmailTemplate String? @db.Text
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -142,6 +143,7 @@ model OrgSubscription {
 model SystemSetting {
   id                      Int      @id @default(1)
   maxConcurrentInterviews Int      @default(5)
+  candidateEmailTemplate  String?  @db.Text
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 }
