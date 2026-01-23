@@ -54,11 +54,11 @@ fly secrets set \
   AGENT_NAME=... \
   OPENAI_API_KEY=... \
   DEEPGRAM_API_KEY=... \
-  ELEVENLABS_API_KEY=... \
-  ELEVENLABS_VOICE=...
+  ELEVENLABS_API_KEY=...
 ```
 
 ※ `AGENT_NAME` は Web 側の `LIVEKIT_AGENT_NAME` と一致必須です。
+※ 日本語での読み上げ品質を上げるには、`agent/app.py` の `ELEVENLABS_VOICE` を日本語対応のボイスIDにしてください。
 
 ## 4) デプロイ
 ```bash

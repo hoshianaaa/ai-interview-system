@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import AsyncIterable
 
 from dotenv import load_dotenv
 
@@ -11,6 +12,7 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    ModelSettings,
     cli,
     inference,
 )
@@ -26,6 +28,9 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv(".env.local")
 
 AGENT_NAME = os.getenv("AGENT_NAME", "Sage-266e")
+ELEVENLABS_MODEL = "elevenlabs/eleven_multilingual_v2"
+ELEVENLABS_VOICE = "XrExE9yKIg1WjnnlVkGX"
+ELEVENLABS_LANGUAGE = "ja"
 
 
 DEFAULT_INTERVIEW_PROMPT = (
@@ -42,6 +47,13 @@ DEFAULT_INTERVIEW_PROMPT = (
 )
 
 
+async def strip_asterisks(text: AsyncIterable[str]) -> AsyncIterable[str]:
+    async for chunk in text:
+        if "*" in chunk:
+            chunk = chunk.replace("*", "")
+        yield chunk
+
+
 class DefaultInterviewAgent(Agent):
     """
     Minimal interview agent instructions.
@@ -50,6 +62,10 @@ class DefaultInterviewAgent(Agent):
 
     def __init__(self, prompt: str = DEFAULT_INTERVIEW_PROMPT) -> None:
         super().__init__(instructions=prompt)
+
+    def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
+        filtered_text = strip_asterisks(text)
+        return Agent.default.tts_node(self, filtered_text, model_settings)
 
 
 def resolve_prompt(ctx: JobContext) -> str:
@@ -121,7 +137,7 @@ async def entrypoint(ctx: JobContext):
     # Example choices:
     #   STT: deepgram/nova-2
     #   LLM: openai/gpt-4o
-    #   TTS: elevenlabs/eleven_turbo_v2_5
+    #   TTS: elevenlabs/eleven_multilingual_v2
     #
     # If you want to start without external providers, you can still keep the
     # structure and later fill these in. However, a voice agent typically needs all.
@@ -130,10 +146,10 @@ async def entrypoint(ctx: JobContext):
         stt=inference.STT(model="deepgram/nova-2", language="ja"),
         llm=inference.LLM(model="openai/gpt-4o"),
         tts=inference.TTS(
-            model="elevenlabs/eleven_turbo_v2_5",
+            model=ELEVENLABS_MODEL,
             # Set a default voice ID; change to your preferred voice
-            voice=os.getenv("ELEVENLABS_VOICE", "XrExE9yKIg1WjnnlVkGX"),
-            language="ja",
+            voice=ELEVENLABS_VOICE,
+            language=ELEVENLABS_LANGUAGE,
         ),
         # Optional: turn detection
         # turn_detection=MultilingualModel(),

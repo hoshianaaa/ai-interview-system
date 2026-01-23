@@ -21,6 +21,12 @@ pip install -r requirements.txt
 cp .env.local.example .env.local
 ```
 
+日本語読み上げの品質を上げる場合は、`agent/app.py` の以下を変更してください。
+
+- `ELEVENLABS_MODEL`
+- `ELEVENLABS_VOICE`
+- `ELEVENLABS_LANGUAGE`
+
 ## Run
 ```bash
 python app.py start
