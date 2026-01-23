@@ -1836,10 +1836,10 @@ export default function AdminDashboard({
               type="button"
               className="brand-button"
               onClick={() => window.location.reload()}
-              aria-label="AI Interview"
+              aria-label="PM1"
             >
-              <img src="/logo.png" alt="" className="brand-logo" />
-              {!menuCollapsed && <span className="brand-text">AI Interview</span>}
+              <span className="brand-text">PM1</span>
+              {!menuCollapsed && <span className="brand-subtext">AI面接</span>}
             </button>
             <button
               className="collapse-button"
@@ -3366,14 +3366,16 @@ export default function AdminDashboard({
           outline-offset: 4px;
           border-radius: 6px;
         }
-        .brand-logo {
-          width: 28px;
-          height: 28px;
-        }
         .brand-text {
+          color: #000;
+          font-weight: 700;
+          font-size: 17px;
+          white-space: nowrap;
+        }
+        .brand-subtext {
           color: #1f4fb2;
           font-weight: 600;
-          font-size: 16px;
+          font-size: 17px;
           white-space: nowrap;
         }
         .nav {
@@ -3448,11 +3450,6 @@ export default function AdminDashboard({
         .sidebar.collapsed .nav-item {
           justify-content: center;
           padding: 10px;
-        }
-        .sidebar.collapsed .brand-logo {
-          margin-left: 0;
-          margin-right: 0;
-          display: block;
         }
         .collapse-button {
           display: flex;
